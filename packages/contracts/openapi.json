@@ -1387,6 +1387,99 @@
         "x-pollek-tenant-scoped": false
       }
     },
+    "/api/persistence/flush": {
+      "post": {
+        "tags": [
+          "pollek.cloud.runtime"
+        ],
+        "summary": "Pollek Cloud POST /api/persistence/flush",
+        "operationId": "postApiPersistenceFlush",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [],
+        "x-pollek-direction": [],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/api/persistence/status": {
+      "get": {
+        "tags": [
+          "pollek.cloud.runtime"
+        ],
+        "summary": "Pollek Cloud GET /api/persistence/status",
+        "operationId": "getApiPersistenceStatus",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [],
+        "x-pollek-direction": [],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
     "/api/policy/assist": {
       "post": {
         "tags": [

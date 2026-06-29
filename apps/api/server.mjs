@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,12 +10,32 @@ const rootDir = path.resolve(__dirname, "../..");
 const webDir = path.join(rootDir, "apps/web/static");
 const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
 const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
+const stateFilePath = process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
 
 const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
 const sseClients = new Set();
-const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status"]);
+const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush"]);
+const persistedFleetKeys = [
+  "tree",
+  "localControlPlanes",
+  "relationships",
+  "policyBundles",
+  "alarms",
+  "policyDrafts",
+  "policySimulations",
+  "policySandboxes",
+  "breakglassRequests",
+  "evidenceExports",
+  "enrollmentSessions",
+  "deviceUsers",
+  "localEntities",
+  "localEntityRelationships",
+  "localEntitySyncRuns",
+  "rolloutPlans",
+  "hotReloadEvents"
+];
 
 const ADAPTER_CATALOG = [
   {
@@ -784,6 +804,22 @@ const state = {
   fleet: createFleetState()
 };
 
+const persistence = {
+  schema_version: "pollek.cloud.runtime-persistence.v1",
+  mode: process.env.POLLEK_CLOUD_PERSISTENCE || "file-snapshot-dev",
+  enabled: process.env.POLLEK_CLOUD_PERSISTENCE !== "disabled",
+  file_path: stateFilePath,
+  loaded: false,
+  load_status: "seeded",
+  last_loaded_at: null,
+  last_saved_at: null,
+  last_reason: null,
+  save_count: 0,
+  last_error: null
+};
+
+let persistTimer = null;
+
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "*",
@@ -800,6 +836,136 @@ function sendJson(res, status, body, extraHeaders = {}) {
 function sendText(res, status, text, contentType = "text/plain; charset=utf-8") {
   res.writeHead(status, { "content-type": contentType });
   res.end(text);
+}
+
+function mapToEntries(map) {
+  return [...map.entries()].map(([key, value]) => ({ key, value }));
+}
+
+function entriesToMap(entries = []) {
+  const map = new Map();
+  for (const entry of entries) {
+    if (entry && Object.hasOwn(entry, "key")) map.set(entry.key, entry.value);
+  }
+  return map;
+}
+
+function runtimePersistenceStatus() {
+  return {
+    ...persistence,
+    postgres_migration: "packages/db/migrations/0001_foundation.sql",
+    production_target: "postgresql",
+    persisted_collections: {
+      fleet: persistedFleetKeys,
+      root: ["tenant", "devices", "events", "auditEvents", "tasks", "probes", "enrollmentCodes"]
+    },
+    record_counts: {
+      devices: state.devices.size,
+      telemetry_events: state.events.length,
+      audit_events: state.auditEvents.length,
+      tasks: state.tasks.length,
+      probes: state.probes.length,
+      policy_drafts: state.fleet.policyDrafts.length,
+      policy_bundles: state.fleet.policyBundles.length,
+      rollouts: state.fleet.rolloutPlans.length,
+      hot_reload_events: state.fleet.hotReloadEvents.length,
+      breakglass_requests: state.fleet.breakglassRequests.length,
+      local_entities: state.fleet.localEntities.length,
+      entity_sync_runs: state.fleet.localEntitySyncRuns.length,
+      evidence_exports: state.fleet.evidenceExports.length,
+      enrollment_sessions: state.fleet.enrollmentSessions.length
+    }
+  };
+}
+
+function runtimeStateSnapshot() {
+  const fleet = {};
+  for (const key of persistedFleetKeys) {
+    fleet[key] = state.fleet[key];
+  }
+  return {
+    schema_version: "pollek.cloud.runtime-state-snapshot.v1",
+    saved_at: new Date().toISOString(),
+    cloud_version: "0.1.0-dev",
+    tenant: state.tenant,
+    devices: mapToEntries(state.devices),
+    events: state.events,
+    auditEvents: state.auditEvents,
+    tasks: state.tasks,
+    probes: state.probes,
+    enrollmentCodes: mapToEntries(state.enrollmentCodes),
+    fleet
+  };
+}
+
+function applyRuntimeStateSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  if (snapshot.tenant && typeof snapshot.tenant === "object") {
+    state.tenant = { ...state.tenant, ...snapshot.tenant };
+  }
+  if (Array.isArray(snapshot.devices)) state.devices = entriesToMap(snapshot.devices);
+  if (Array.isArray(snapshot.enrollmentCodes)) state.enrollmentCodes = entriesToMap(snapshot.enrollmentCodes);
+  if (Array.isArray(snapshot.events)) state.events = snapshot.events.slice(0, 100);
+  if (Array.isArray(snapshot.auditEvents)) state.auditEvents = snapshot.auditEvents.slice(0, 100);
+  if (Array.isArray(snapshot.tasks)) state.tasks = snapshot.tasks.slice(0, 25);
+  if (Array.isArray(snapshot.probes)) state.probes = snapshot.probes.slice(0, 20);
+  if (snapshot.fleet && typeof snapshot.fleet === "object") {
+    for (const key of persistedFleetKeys) {
+      if (Array.isArray(snapshot.fleet[key])) state.fleet[key] = snapshot.fleet[key];
+    }
+  }
+}
+
+async function loadRuntimeState() {
+  if (!persistence.enabled) {
+    persistence.load_status = "disabled";
+    return;
+  }
+  try {
+    const snapshot = JSON.parse(await readFile(stateFilePath, "utf8"));
+    applyRuntimeStateSnapshot(snapshot);
+    persistence.loaded = true;
+    persistence.load_status = "loaded";
+    persistence.last_loaded_at = new Date().toISOString();
+    persistence.last_saved_at = snapshot.saved_at || null;
+    persistence.last_error = null;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      persistence.load_status = "seeded";
+      persistence.last_error = null;
+      return;
+    }
+    persistence.load_status = "load_failed";
+    persistence.last_error = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function persistRuntimeState(reason = "manual") {
+  if (!persistence.enabled) return runtimePersistenceStatus();
+  try {
+    const snapshot = runtimeStateSnapshot();
+    const payload = JSON.stringify(snapshot, null, 2);
+    const tmpPath = `${stateFilePath}.tmp`;
+    await mkdir(path.dirname(stateFilePath), { recursive: true });
+    await writeFile(tmpPath, `${payload}\n`, "utf8");
+    await rename(tmpPath, stateFilePath);
+    persistence.last_saved_at = snapshot.saved_at;
+    persistence.last_reason = reason;
+    persistence.save_count += 1;
+    persistence.last_error = null;
+  } catch (error) {
+    persistence.last_error = error instanceof Error ? error.message : String(error);
+  }
+  return runtimePersistenceStatus();
+}
+
+function scheduleRuntimePersist(reason = "mutation") {
+  if (!persistence.enabled) return;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void persistRuntimeState(reason);
+  }, 40);
 }
 
 function sendSse(res, event, data) {
@@ -855,6 +1021,7 @@ function addTask(type, status, summary, details = {}) {
   state.tasks.unshift(task);
   state.tasks = state.tasks.slice(0, 25);
   broadcastSse("task.updated", task);
+  scheduleRuntimePersist(`task.${type}`);
   return task;
 }
 
@@ -864,6 +1031,7 @@ function completeTask(task, patch = {}) {
     updated_at: new Date().toISOString()
   });
   broadcastSse("task.updated", task);
+  scheduleRuntimePersist(`task.${task.type}.completed`);
   return task;
 }
 
@@ -875,6 +1043,7 @@ function recordEvent(event) {
   state.events.unshift(normalized);
   state.events = state.events.slice(0, 100);
   broadcastSse("telemetry.event", normalized);
+  scheduleRuntimePersist(`event.${normalized.event_type || "unknown"}`);
   return normalized;
 }
 
@@ -891,6 +1060,7 @@ function recordAudit(action, targetType, targetId, payload = {}) {
   };
   state.auditEvents.unshift(event);
   state.auditEvents = state.auditEvents.slice(0, 100);
+  scheduleRuntimePersist(`audit.${action}`);
   return event;
 }
 
@@ -2183,6 +2353,23 @@ async function handleApi(req, res) {
     return true;
   }
 
+  if (req.method === "GET" && pathname === "/api/persistence/status") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.persistence-status.v1",
+      status: runtimePersistenceStatus()
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/persistence/flush") {
+    const status = await persistRuntimeState("manual.flush");
+    sendJson(res, status.last_error ? 500 : 200, {
+      schema_version: "pollek.cloud.persistence-flush.v1",
+      status
+    });
+    return true;
+  }
+
   if (req.method === "GET" && pathname.startsWith("/contracts/")) {
     const contract = await contractDiscovery();
     sendJson(res, 200, {
@@ -2391,6 +2578,7 @@ async function handleApi(req, res) {
       audit_events: state.auditEvents.slice(0, 30),
       tasks: state.tasks.slice(0, 30),
       probes: state.probes.slice(0, 10),
+      persistence: runtimePersistenceStatus(),
       contract: await contractDiscovery()
     });
     return true;
@@ -3036,6 +3224,7 @@ async function handleApi(req, res) {
         local_control_planes: state.fleet.localControlPlanes,
         alarms: state.fleet.alarms
       },
+      persistence: runtimePersistenceStatus(),
       contract: await contractDiscovery()
     });
     return true;
@@ -3191,7 +3380,18 @@ const server = createServer(async (req, res) => {
   }
 });
 
+await loadRuntimeState();
+
+process.on("SIGINT", () => {
+  void persistRuntimeState("process.sigint").finally(() => process.exit(0));
+});
+
+process.on("SIGTERM", () => {
+  void persistRuntimeState("process.sigterm").finally(() => process.exit(0));
+});
+
 server.listen(port, host, () => {
   console.log(`Pollek Cloud dev console: ${publicUrl}`);
   console.log(`Contract Hub: ${publicUrl}/.well-known/pollek-contract`);
+  console.log(`Runtime persistence: ${persistence.enabled ? persistence.file_path : "disabled"}`);
 });

@@ -17,6 +17,7 @@ Open:
 - OpenAPI artifact: `http://127.0.0.1:8790/contracts/openapi.json`
 - Contract drift report: `http://127.0.0.1:8790/api/contract-hub/drift`
 - Contract Hub SSE stream: `http://127.0.0.1:8790/api/events`
+- Runtime persistence status: `http://127.0.0.1:8790/api/persistence/status`
 - API health: `http://127.0.0.1:8790/health`
 
 Default ports can be changed with:
@@ -93,7 +94,16 @@ npm run contracts:check
 
 Production will use PostgreSQL. Development should also use PostgreSQL through `deploy/docker-compose/docker-compose.yml` so Row Level Security, JSONB, indexing, tenant context, and migrations behave like production.
 
-The current local protocol server can run without a database to keep the first local URL easy to test. Durable product state should be implemented against `packages/db/migrations/0001_foundation.sql`.
+The current local protocol server can run without a database to keep the first local URL easy to test. It persists local runtime state to `pollek-cloud-dev-state.json` by default, including telemetry events, audit events, tasks, probes, policy drafts, sandbox runs, breakglass requests, entity syncs, rollouts, hot-reload events, evidence exports, enrollments, and current fleet status. The file is ignored by git.
+
+Useful local persistence commands:
+
+```powershell
+curl.exe http://127.0.0.1:8790/api/persistence/status
+curl.exe -X POST http://127.0.0.1:8790/api/persistence/flush
+```
+
+Set `POLLEK_CLOUD_STATE_FILE` to move the dev state file, or set `POLLEK_CLOUD_PERSISTENCE=disabled` for a seed-only run. Production durable product state should be implemented against `packages/db/migrations/0001_foundation.sql`.
 
 ## Research Basis
 

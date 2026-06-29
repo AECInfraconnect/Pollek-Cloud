@@ -7,12 +7,14 @@ const rootDir = path.resolve(__dirname, "..");
 const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
 const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
 
-const RUNTIME_PATHS = ["/health", "/api/cloud/status", "/api/contract-hub/drift"];
+const RUNTIME_PATHS = ["/health", "/api/cloud/status", "/api/contract-hub/drift", "/api/persistence/status", "/api/persistence/flush"];
 
 const PATH_METHODS = {
   "/health": ["get"],
   "/api/cloud/status": ["get"],
   "/api/contract-hub/drift": ["get"],
+  "/api/persistence/status": ["get"],
+  "/api/persistence/flush": ["post"],
   "/.well-known/pollek-contract": ["get"],
   "/contracts/openapi.json": ["get"],
   "/api/events": ["get"],

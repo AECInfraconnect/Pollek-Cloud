@@ -48,7 +48,7 @@ test("openapi artifact covers every contract discovery path", async () => {
     Object.values(contract.interfaces).flatMap((spec) => spec.paths || [])
   );
   const openApiPaths = new Set(Object.keys(openapi.paths || {}));
-  const allowedRuntimePaths = new Set(["/health", "/api/cloud/status"]);
+  const allowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush"]);
   const missing = [...declaredPaths].filter((apiPath) => !openApiPaths.has(apiPath)).sort();
   const extra = [...openApiPaths]
     .filter((apiPath) => !declaredPaths.has(apiPath) && !allowedRuntimePaths.has(apiPath))
@@ -58,6 +58,8 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.equal(openapi["x-pollek-contract-version"], contract.contract_version);
   assert.ok(openapi.paths["/contracts/openapi.json"].get);
   assert.ok(openapi.paths["/api/contract-hub/drift"].get);
+  assert.ok(openapi.paths["/api/persistence/status"].get);
+  assert.ok(openapi.paths["/api/persistence/flush"].post);
   assert.ok(openapi.paths["/api/events"].get);
   assert.ok(openapi.paths["/api/hot-reload/stream"].get);
   assert.deepEqual(missing, []);
@@ -124,6 +126,8 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /pathname === "\/api\/services\/endpoints"/);
   assert.match(server, /pathname === "\/api\/contract-hub\/connection-updates"/);
   assert.match(server, /pathname === "\/api\/contract-hub\/drift"/);
+  assert.match(server, /pathname === "\/api\/persistence\/status"/);
+  assert.match(server, /pathname === "\/api\/persistence\/flush"/);
   assert.match(server, /pathname === "\/contracts\/openapi\.json"/);
   assert.match(server, /pathname === "\/api\/events"/);
   assert.match(server, /pathname === "\/api\/hot-reload\/stream"/);
@@ -135,6 +139,9 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /function openEventStream/);
   assert.match(server, /broadcastSse\("hot_reload\.event"/);
   assert.match(server, /contractDriftReport/);
+  assert.match(server, /function runtimeStateSnapshot/);
+  assert.match(server, /async function loadRuntimeState/);
+  assert.match(server, /async function persistRuntimeState/);
   assert.match(server, /pullLocalEntitySnapshot/);
   assert.match(server, /ingestLocalEntitySnapshot/);
   assert.match(server, /\/api\\\/alarms\\\/\(\[\^\/\]\+\)\\\/ack/);

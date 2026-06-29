@@ -17,6 +17,7 @@ This file maps the local MVP repository state to the SRS so later work can conti
 - Staged rollout actions and hot-reload event records aligned with Local Pollek bundle manifest and SSE `bundle_ready` delivery.
 - SSE event stream at `/api/events` and `/api/hot-reload/stream` for Contract Hub task, telemetry, and hot-reload push updates with console EventSource fallback to polling.
 - Generated OpenAPI artifact at `/contracts/openapi.json`, contract drift status at `/api/contract-hub/drift`, and local drift checker script for Contract Hub path coverage.
+- Durable local runtime persistence snapshot at `pollek-cloud-dev-state.json`, persistence status/flush endpoints, and automatic save hooks for telemetry, audit, tasks, probes, policy authoring, sandbox, breakglass, entity sync, rollouts, hot-reload events, evidence exports, enrollments, and fleet state.
 - PostgreSQL foundation migration with RLS-ready tenant-scoped tables for inventory, telemetry, audit, enrollment, policy drafts, simulations, bundles, rollouts, integrations, trust scopes, service endpoints, local entities, local entity relationships, sync runs, enterprise compliance bundles, sandbox runs, breakglass, hot-reload events, and evidence exports.
 - AI-assisted policy editor MVP using deterministic local generation, Policy IR, generated source, tests, simulation, and human approval gate.
 - Telemetry ingest MVP for Pollek envelopes/batches plus Cloud-side sample telemetry for UI testing while LCP builds.
@@ -25,7 +26,7 @@ This file maps the local MVP repository state to the SRS so later work can conti
 
 ## Still Pending
 
-- Durable PostgreSQL runtime persistence instead of in-memory dev state.
+- Production PostgreSQL runtime repository implementation beyond the current dependency-light local state snapshot.
 - Full TypeSpec source model and generated SDK pipeline beyond the current OpenAPI artifact and drift checker.
 - Real OIDC login, tenant switcher, RBAC/ReBAC/Cedar authorization checks, and OpenFGA tuple storage.
 - Real SPIRE Server deployment, tenant trust-domain provisioning, SPIFFE ID issuance, and mTLS enforcement.
