@@ -31,7 +31,7 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/api/entities", "/api/entities/health", "/api/entities/dedupe", "/api/entities/ingest", "/api/entities/sync", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync"],
+      "paths": ["/api/entities", "/api/entities/health", "/api/entities/dedupe", "/api/entities/ingest", "/api/entities/sync", "/api/entities/watch", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync"],
       "entity_types": ["registered_agent", "found_agent", "policy", "enforcement", "observability"]
     },
     "pollek.cloud.contract_artifacts": {
@@ -98,8 +98,16 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates", "/api/hot-reload/events", "/api/events", "/api/hot-reload/stream"],
+      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates", "/api/lcp/config/dispatch", "/api/lcp/hot-reload/dispatch", "/api/hot-reload/events", "/api/events", "/api/hot-reload/stream"],
       "purpose": "Contract Hub mediates endpoint, trust scope, registry sync, telemetry, bundle, enterprise entitlement, and hot reload connection updates for many Local Pollek instances."
+    },
+    "pollek.cloud.secure_control_channel": {
+      "direction": "bidirectional",
+      "requires_oauth": true,
+      "requires_spiffe": true,
+      "requires_mtls": true,
+      "paths": ["/api/entities/watch", "/api/lcp/config/dispatch", "/api/lcp/hot-reload/dispatch"],
+      "controls": ["signed-control-envelope", "nonce", "expiry", "payload_hash", "allowlisted_paths", "audit_event", "least_privilege_scope", "secret_redaction"]
     }
   },
   "features": {
@@ -124,6 +132,9 @@
     "openapi_artifact": true,
     "contract_drift_guard": true,
     "sse_event_stream": true,
+    "near_real_time_lcp_watch": true,
+    "secure_cloud_to_local_dispatch": true,
+    "signed_control_envelopes": true,
     "dev_loopback_protocol_test": true
   }
 }

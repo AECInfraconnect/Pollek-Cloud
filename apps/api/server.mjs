@@ -15,8 +15,10 @@ const stateFilePath = process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, 
 const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
+const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
+const lcpWatchIntervalMs = Math.max(2000, Number(process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 5000));
 const sseClients = new Set();
-const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush"]);
+const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush", "/api/entities/watch"]);
 const persistedFleetKeys = [
   "tree",
   "localControlPlanes",
@@ -33,6 +35,8 @@ const persistedFleetKeys = [
   "localEntities",
   "localEntityRelationships",
   "localEntitySyncRuns",
+  "localConfigurationSnapshots",
+  "cloudToLocalDispatches",
   "rolloutPlans",
   "hotReloadEvents"
 ];
@@ -520,7 +524,7 @@ function createLocalEntityState(now) {
 
 function createFleetState() {
   const now = new Date().toISOString();
-  const localEndpoint = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
+  const localEndpoint = defaultLcpUrl;
   const localEntityState = createLocalEntityState(now);
   return {
     tree: [
@@ -779,6 +783,8 @@ function createFleetState() {
     localEntities: localEntityState.entities,
     localEntityRelationships: localEntityState.relationships,
     localEntitySyncRuns: localEntityState.syncRuns,
+    localConfigurationSnapshots: [],
+    cloudToLocalDispatches: [],
     adapterCatalog: ADAPTER_CATALOG,
     rolloutPlans: [],
     hotReloadEvents: []
@@ -819,6 +825,26 @@ const persistence = {
 };
 
 let persistTimer = null;
+
+const lcpEntityWatch = {
+  schema_version: "pollek.cloud.lcp-entity-watch.v1",
+  enabled: process.env.POLLEK_LCP_WATCH !== "disabled",
+  interval_ms: lcpWatchIntervalMs,
+  lcp_url: defaultLcpUrl,
+  lcp_id: "lcp_local",
+  status: "starting",
+  running: false,
+  poll_count: 0,
+  change_count: 0,
+  last_poll_at: null,
+  last_change_at: null,
+  last_success_at: null,
+  last_error: null,
+  last_snapshot_hash: null,
+  last_entity_count: 0
+};
+
+let lcpWatchTimer = null;
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -966,6 +992,148 @@ function scheduleRuntimePersist(reason = "mutation") {
     persistTimer = null;
     void persistRuntimeState(reason);
   }, 40);
+}
+
+function stableJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function stripVolatileFields(value) {
+  if (Array.isArray(value)) return value.map((item) => stripVolatileFields(item));
+  if (!value || typeof value !== "object") return value;
+  const volatileKeys = new Set(["received_at", "last_seen", "last_seen_at", "last_event_at", "generated_at", "updated_at", "created_at", "latency_ms"]);
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !volatileKeys.has(key) && !key.endsWith("_at") && !key.endsWith("_ms"))
+    .map(([key, item]) => [key, stripVolatileFields(item)]));
+}
+
+function watchFingerprintPayload(entitySnapshot, configSnapshot) {
+  const stableEntityKeys = [
+    "agents",
+    "candidates",
+    "agent_inventory",
+    "policies",
+    "tools",
+    "resources",
+    "entities",
+    "relationships",
+    "telemetry_resources",
+    "telemetry_tools",
+    "telemetry_identities",
+    "bundles",
+    "capability"
+  ];
+  const entities = {};
+  for (const key of stableEntityKeys) {
+    if (entitySnapshot && Object.hasOwn(entitySnapshot, key)) entities[key] = entitySnapshot[key];
+  }
+  return stripVolatileFields({
+    entities,
+    configuration: configSnapshot
+  });
+}
+
+function signControlEnvelope(fields) {
+  const signingKey = process.env.POLLEK_CLOUD_CONTROL_SIGNING_KEY || "local-dev-ephemeral-control-key";
+  return crypto.createHmac("sha256", signingKey).update(stableJson(fields)).digest("base64url");
+}
+
+function redactSensitive(value) {
+  if (Array.isArray(value)) return value.map((item) => redactSensitive(item));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+    if (/token|secret|password|private|credential|authorization/i.test(key)) return [key, "[redacted]"];
+    return [key, redactSensitive(item)];
+  }));
+}
+
+function securityPostureStatus() {
+  const loopbackOnly = defaultLcpUrl.startsWith("http://127.0.0.1") || defaultLcpUrl.startsWith("http://localhost");
+  return {
+    schema_version: "pollek.cloud.secure-control-channel-posture.v1",
+    model: "zero-trust-signed-intent",
+    transport: loopbackOnly ? "dev-http-loopback" : "mtls-required",
+    production_requirements: [
+      "OAuth2/OIDC audience-restricted tokens",
+      "mTLS certificate-bound access tokens",
+      "SPIFFE/SPIRE workload identity with short-lived SVIDs",
+      "signed control envelopes with nonce, expiry, payload hash, and audit id",
+      "allowlisted Cloud-to-Local control paths",
+      "least-privilege scopes per action",
+      "fail-closed dispatch and immutable audit evidence"
+    ],
+    dev_mode_warnings: loopbackOnly ? ["Local HTTP loopback is allowed only for development protocol testing."] : [],
+    controls: {
+      no_arbitrary_lcp_url_dispatch: true,
+      no_secret_persistence: true,
+      replay_fields: ["control_id", "nonce", "issued_at", "expires_at", "payload_hash"],
+      sensitive_log_redaction: true
+    }
+  };
+}
+
+function controlScopeForAction(action) {
+  return {
+    "connection.update": ["contract.read", "connection.update"],
+    "config.update": ["configuration.write", "contract.read"],
+    "policy.hot_reload": ["bundle.read", "policy.rollout", "hot_reload.dispatch"],
+    "entity.watch": ["registry.sync", "telemetry.read"]
+  }[action] || ["control.dispatch"];
+}
+
+function allowedControlPaths(action, bundleId = "bnd_local_dev_baseline") {
+  const common = ["/v1/tenants/local/pdp/cloud"];
+  if (action === "policy.hot_reload") {
+    return [
+      ...common,
+      "/v1/tenants/local/bundles/hot-reload",
+      "/v1/tenants/local/policy-bundles/hot-reload",
+      `/v1/policy-bundles/${bundleId}/hot-reload`
+    ];
+  }
+  return common;
+}
+
+function createControlEnvelope({ action, lcp, payload, allowed_paths = [] }) {
+  const issuedAt = new Date();
+  const expiresAt = new Date(issuedAt.getTime() + 5 * 60 * 1000);
+  const payloadHash = sha256(stableJson(payload));
+  const unsigned = {
+    schema_version: "pollek.cloud.signed-control-envelope.v1",
+    control_id: `ctrl_${crypto.randomUUID()}`,
+    tenant_id: "local",
+    issuer: "pollek-cloud",
+    audience: lcp?.spiffe_id || lcp?.id || "lcp_local",
+    lcp_id: lcp?.id || "lcp_local",
+    action,
+    scope: controlScopeForAction(action),
+    allowed_paths,
+    issued_at: issuedAt.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    nonce: crypto.randomBytes(16).toString("base64url"),
+    payload_hash: payloadHash,
+    signer: {
+      alg: "HS256-dev",
+      kid: process.env.POLLEK_CLOUD_CONTROL_SIGNING_KEY ? "env:POLLEK_CLOUD_CONTROL_SIGNING_KEY" : "local-dev-ephemeral"
+    }
+  };
+  return {
+    ...unsigned,
+    signature: signControlEnvelope(unsigned)
+  };
+}
+
+function lcpWatchStatus() {
+  return {
+    ...lcpEntityWatch,
+    security: securityPostureStatus()
+  };
 }
 
 function sendSse(res, event, data) {
@@ -1305,6 +1473,52 @@ function findDeviceName(deviceId) {
   return lcp?.device_name || deviceId || "unknown-device";
 }
 
+function localEntityMergeKey(entity = {}) {
+  return [
+    entity.lcp_id || "lcp_local",
+    entity.device_id || entity.device_name || "unknown-device",
+    entity.entity_type || "observability",
+    entity.class || "object",
+    entity.source || "unknown-source",
+    normalizedKey(entity.name || entity.display_name || entity.local_object_id || entity.id)
+  ].join("|");
+}
+
+function compactLocalEntities() {
+  const seen = new Set();
+  const compacted = [];
+  for (const entity of state.fleet.localEntities) {
+    const key = localEntityMergeKey(entity);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compacted.push(entity);
+  }
+  state.fleet.localEntities = compacted.slice(0, 500);
+}
+
+function canonicalLocalEntityState(lcpId = "lcp_local") {
+  return state.fleet.localEntities
+    .filter((entity) => !lcpId || entity.lcp_id === lcpId)
+    .filter((entity) => {
+      if (entity.entity_type !== "observability") return true;
+      return !["resource", "telemetry_observation"].includes(entity.class);
+    })
+    .map((entity) => ({
+      key: localEntityMergeKey(entity),
+      entity_type: entity.entity_type,
+      class: entity.class,
+      status: entity.status,
+      risk: entity.risk,
+      policy_ids: entity.policy_ids || [],
+      enforcement: stripVolatileFields(entity.enforcement || {}),
+      observability_streams: entity.observability?.telemetry_streams || [],
+      wasm_hot_reload: Boolean(entity.wasm?.hot_reload),
+      wasm_generation: entity.wasm?.generation || 0,
+      spiffe_id: entity.class === "identity" ? null : (entity.trace?.spiffe_id || entity.identity?.spiffe_id || null)
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
 function defaultLocalTrace(entity) {
   const identity = entity.identity || {};
   const binding = Array.isArray(identity.token_bindings) ? identity.token_bindings[0] : null;
@@ -1327,7 +1541,6 @@ function upsertLocalEntity(entity) {
     user_subject: userSubject,
     oidc_subject: entity.trace?.oidc_subject
   });
-  const existingIndex = state.fleet.localEntities.findIndex((item) => item.id === entity.id);
   const normalized = {
     tenant_id: "local",
     device_id: "device_local_windows",
@@ -1345,8 +1558,11 @@ function upsertLocalEntity(entity) {
     ...entity
   };
   if (!normalized.trace) normalized.trace = defaultLocalTrace(normalized);
+  const mergeKey = localEntityMergeKey(normalized);
+  const existingIndex = state.fleet.localEntities.findIndex((item) => item.id === entity.id || localEntityMergeKey(item) === mergeKey);
   if (existingIndex >= 0) {
-    state.fleet.localEntities[existingIndex] = { ...state.fleet.localEntities[existingIndex], ...normalized };
+    const existing = state.fleet.localEntities[existingIndex];
+    state.fleet.localEntities[existingIndex] = { ...existing, ...normalized, id: existing.id || normalized.id };
   } else {
     state.fleet.localEntities.unshift(normalized);
   }
@@ -1656,14 +1872,30 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
     count += 1;
   }
 
-  for (const observation of normalizeItems(snapshot.observations)) {
-    const eventId = observation.event_id || observation.id || observation.trace_id || observation.received_at;
+  const observations = normalizeItems(snapshot.observations);
+  if (observations.length) {
+    state.fleet.localEntities = state.fleet.localEntities.filter((entity) => !(entity.lcp_id === lcpId && entity.source === "telemetry/observations"));
+  }
+  const seenObservationIds = new Set();
+  for (const observation of observations) {
+    const eventType = observation.event_type || observation.kind || "observation";
+    const stableTarget = observation.entity_id
+      || observation.local_object_id
+      || observation.payload?.object_id
+      || observation.payload?.agent
+      || observation.payload?.resource_id
+      || observation.payload?.resource
+      || observation.payload?.policy
+      || `${eventType}_${observation.device_id || deviceId}_${observation.user_subject || userSubject}`;
+    const eventId = `${eventType}_${stableTarget}`;
+    if (seenObservationIds.has(eventId)) continue;
+    seenObservationIds.add(eventId);
     upsertLocalEntity({
       id: entityIdFrom("observation", eventId),
       local_object_id: eventId,
       entity_type: "observability",
       class: "telemetry_observation",
-      name: observation.event_type || observation.kind || "Telemetry Observation",
+      name: eventType,
       device_id: observation.device_id || deviceId,
       device_name: findDeviceName(observation.device_id || deviceId),
       lcp_id: observation.payload?.lcp_id || lcpId,
@@ -1696,6 +1928,7 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
     addLocalEntityRelationship(entityRef("agent", from), entityRef("observed", to), label);
   }
 
+  compactLocalEntities();
   return count;
 }
 
@@ -1728,6 +1961,135 @@ async function pullLocalEntitySnapshot(lcpUrl, headers = {}) {
     }
   }
   return { snapshot, results, ok: results.some((item) => item.ok) };
+}
+
+async function pullLocalConfigurationSnapshot(lcpUrl, headers = {}) {
+  const endpoints = [
+    ["contract", "/.well-known/pollek-contract"],
+    ["cloud_profile", "/v1/tenants/local/pdp/cloud"],
+    ["capability", "/v1/tenants/local/devices/local/capability-snapshot-v2"]
+  ];
+  const snapshot = {};
+  const results = [];
+  for (const [key, endpoint] of endpoints) {
+    try {
+      const result = await fetchJson(`${lcpUrl}${endpoint}`, { headers, timeoutMs: 3500 });
+      results.push({ key, endpoint, ok: result.ok, status: result.status, latency_ms: result.latency_ms });
+      if (result.ok) snapshot[key] = result.body;
+    } catch (error) {
+      results.push({ key, endpoint, ok: false, error: String(error) });
+    }
+  }
+  return { snapshot, results, ok: results.some((item) => item.ok) };
+}
+
+function recordConfigurationSnapshot({ lcpUrl, lcpId, pulled, mode = "watch_poll" }) {
+  const record = {
+    id: `config_sync_${crypto.randomUUID()}`,
+    schema_version: "pollek.cloud.local-configuration-snapshot.v1",
+    tenant_id: "local",
+    mode,
+    lcp_id: lcpId,
+    lcp_url: lcpUrl,
+    status: pulled.ok ? "completed" : "failed",
+    results: pulled.results,
+    snapshot_hash: sha256(stableJson(redactSensitive(pulled.snapshot))),
+    snapshot: redactSensitive(pulled.snapshot),
+    created_at: new Date().toISOString()
+  };
+  state.fleet.localConfigurationSnapshots.unshift(record);
+  state.fleet.localConfigurationSnapshots = state.fleet.localConfigurationSnapshots.slice(0, 20);
+  return record;
+}
+
+async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
+  if (!lcpEntityWatch.enabled || lcpEntityWatch.running) return lcpWatchStatus();
+  lcpEntityWatch.running = true;
+  lcpEntityWatch.poll_count += 1;
+  lcpEntityWatch.last_poll_at = new Date().toISOString();
+  const localLcp = state.fleet.localControlPlanes.find((item) => item.id === lcpEntityWatch.lcp_id)
+    || state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+  const lcpUrl = (localLcp?.endpoint || lcpEntityWatch.lcp_url || defaultLcpUrl).replace(/\/+$/, "");
+  lcpEntityWatch.lcp_url = lcpUrl;
+  try {
+    const [pulledEntities, pulledConfig] = await Promise.all([
+      pullLocalEntitySnapshot(lcpUrl),
+      pullLocalConfigurationSnapshot(lcpUrl)
+    ]);
+    lcpEntityWatch.status = pulledEntities.ok || pulledConfig.ok ? "watching" : "degraded";
+    lcpEntityWatch.last_success_at = pulledEntities.ok || pulledConfig.ok ? new Date().toISOString() : lcpEntityWatch.last_success_at;
+    lcpEntityWatch.last_error = null;
+    const count = ingestLocalEntitySnapshot(pulledEntities.snapshot, {
+      device_id: localLcp?.device_id || "device_local_windows",
+      lcp_id: localLcp?.id || lcpEntityWatch.lcp_id,
+      user_subject: "unknown"
+    });
+    const snapshotHash = sha256(stableJson({
+      entities: canonicalLocalEntityState(localLcp?.id || lcpEntityWatch.lcp_id),
+      configuration: watchFingerprintPayload({}, pulledConfig.snapshot).configuration
+    }));
+    lcpEntityWatch.last_entity_count = state.fleet.localEntities.length;
+    const changed = force || snapshotHash !== lcpEntityWatch.last_snapshot_hash;
+    if (changed) {
+      const configRecord = recordConfigurationSnapshot({
+        lcpUrl,
+        lcpId: localLcp?.id || lcpEntityWatch.lcp_id,
+        pulled: pulledConfig,
+        mode: force ? "manual_watch_refresh" : "watch_poll"
+      });
+      const run = {
+        id: `entity_sync_${crypto.randomUUID()}`,
+        mode: force ? "manual_watch_refresh" : "near_real_time_watch",
+        reason,
+        status: pulledEntities.ok ? "completed" : "failed",
+        entity_count: count,
+        lcp_url: lcpUrl,
+        lcp_id: localLcp?.id || lcpEntityWatch.lcp_id,
+        device_id: localLcp?.device_id || "device_local_windows",
+        snapshot_hash: snapshotHash,
+        config_snapshot_id: configRecord.id,
+        results: pulledEntities.results,
+        created_at: new Date().toISOString()
+      };
+      state.fleet.localEntitySyncRuns.unshift(run);
+      state.fleet.localEntitySyncRuns = state.fleet.localEntitySyncRuns.slice(0, 20);
+      lcpEntityWatch.change_count += 1;
+      lcpEntityWatch.last_change_at = run.created_at;
+      lcpEntityWatch.last_snapshot_hash = snapshotHash;
+      recordAudit("local_entities.watch_updated", "lcp", run.lcp_id, { status: run.status, entity_count: count, config_snapshot_id: configRecord.id });
+      recordEvent({
+        event_id: `evt_${crypto.randomUUID()}`,
+        tenant_id: "local",
+        device_id: run.device_id,
+        event_type: "local_entities.updated.v1",
+        severity: run.status === "completed" ? "info" : "warning",
+        payload: { run_id: run.id, lcp_id: run.lcp_id, entity_count: count, config_snapshot_id: configRecord.id }
+      });
+      addTask("local_entity_watch", run.status, run.status === "completed" ? `Live LCP update detected: ${count} records` : "Live LCP update failed", { run_id: run.id, lcp_url: lcpUrl });
+      broadcastSse("local_entities.updated", { run, watch: lcpWatchStatus(), summary: fleetSummary() });
+      scheduleRuntimePersist("local_entity_watch.updated");
+    }
+  } catch (error) {
+    lcpEntityWatch.status = "degraded";
+    lcpEntityWatch.last_error = error instanceof Error ? error.message : String(error);
+  } finally {
+    lcpEntityWatch.running = false;
+  }
+  return lcpWatchStatus();
+}
+
+function startLcpEntityWatch() {
+  if (!lcpEntityWatch.enabled || lcpWatchTimer) return;
+  const tick = async () => {
+    await pollLcpEntityWatch({ reason: "timer" });
+    lcpWatchTimer = setTimeout(tick, lcpEntityWatch.interval_ms);
+  };
+  lcpWatchTimer = setTimeout(tick, 1000);
+}
+
+function stopLcpEntityWatch() {
+  if (lcpWatchTimer) clearTimeout(lcpWatchTimer);
+  lcpWatchTimer = null;
 }
 
 function policySlug(value) {
@@ -2224,6 +2586,163 @@ async function fetchJson(url, options = {}) {
   }
 }
 
+function resolveLcpTarget(body = {}) {
+  const localLcp = state.fleet.localControlPlanes.find((item) => item.id === (body.lcp_id || "lcp_local"))
+    || state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+  if (!localLcp) throw new Error("lcp_not_found");
+  const endpoint = String(localLcp.endpoint || defaultLcpUrl).replace(/\/+$/, "");
+  const requested = body.lcpUrl ? String(body.lcpUrl).replace(/\/+$/, "") : endpoint;
+  const allowedTargets = new Set([
+    endpoint,
+    defaultLcpUrl.replace(/\/+$/, ""),
+    "http://127.0.0.1:43891",
+    "http://localhost:43891"
+  ]);
+  if (!allowedTargets.has(requested)) {
+    throw new Error("lcp_url_not_allowlisted");
+  }
+  return { lcp: localLcp, lcpUrl: requested };
+}
+
+function bundleForDispatch(bundleId) {
+  return state.fleet.policyBundles.find((item) => item.id === bundleId)
+    || state.fleet.policyBundles.find((item) => item.status === "active")
+    || state.fleet.policyBundles[0];
+}
+
+function connectionUpdatePayload({ lcp, action, bundle, body = {} }) {
+  const profile = state.fleet.connectionProfiles.find((item) => item.applies_to?.lcp_ids?.includes(lcp.id))
+    || state.fleet.connectionProfiles[0];
+  return {
+    schema_version: "pollek.cloud.connection-update.v1",
+    tenant_id: "local",
+    lcp_id: lcp.id,
+    device_id: lcp.device_id,
+    pdp_endpoint: publicUrl,
+    cloud_url: publicUrl,
+    contract_version: "2026.06.29",
+    auth_method: "spiffe-oauth-mtls-required",
+    status: "configured",
+    manual_override_enabled: false,
+    health: {
+      status: "configured",
+      detail: `Configured by signed Pollek Cloud control dispatch for ${action}.`,
+      contract_url: `${publicUrl}/.well-known/pollek-contract`
+    },
+    action,
+    connection_profile: profile,
+    trust_scopes: state.fleet.tenantTrustScopes.filter((scope) => scope.tenant_id === "local"),
+    service_endpoints: state.fleet.serviceEndpoints.filter((endpoint) => endpoint.tenant_id === "local"),
+    policy_bundle: bundle ? {
+      bundle_id: bundle.id,
+      name: bundle.name,
+      revision: bundle.revision,
+      manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/manifest`,
+      latest_url: `${publicUrl}/v1/tenants/local/bundles/latest`,
+      hot_reload: Boolean(bundle.hot_reload ?? true),
+      signed: Boolean(bundle.signed ?? true)
+    } : null,
+    runtime_configuration: {
+      poll_seconds: Math.round(lcpWatchIntervalMs / 1000),
+      event_stream: `${publicUrl}/api/events`,
+      entity_sync: `${publicUrl}/api/entities/ingest`,
+      telemetry_batches: `${publicUrl}/v1/telemetry/batches`
+    },
+    requested_by: body.requested_by || "local-dev-admin",
+    requested_at: new Date().toISOString()
+  };
+}
+
+async function dispatchControlToLcp(body = {}, action = "config.update") {
+  const { lcp, lcpUrl } = resolveLcpTarget(body);
+  const bundle = bundleForDispatch(body.bundle_id || body.bundleId);
+  const paths = allowedControlPaths(action, bundle?.id);
+  const payload = connectionUpdatePayload({ lcp, action, bundle, body });
+  const envelope = createControlEnvelope({ action, lcp, payload, allowed_paths: paths });
+  const controlMessage = {
+    schema_version: "pollek.cloud.secure-control-message.v1",
+    envelope,
+    payload,
+    security_posture: securityPostureStatus()
+  };
+  const results = [];
+
+  for (const pathName of paths) {
+    const method = pathName === "/v1/tenants/local/pdp/cloud" ? "PATCH" : "POST";
+    try {
+      const result = await fetchJson(`${lcpUrl}${pathName}`, {
+        method,
+        timeoutMs: 5000,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(pathName === "/v1/tenants/local/pdp/cloud" ? {
+          ...payload,
+          control_envelope: envelope
+        } : controlMessage)
+      });
+      results.push({ path: pathName, method, ok: result.ok, status: result.status, latency_ms: result.latency_ms, body: redactSensitive(result.body) });
+    } catch (error) {
+      results.push({ path: pathName, method, ok: false, error: String(error) });
+    }
+  }
+
+  const applied = results.filter((item) => item.ok);
+  const unsupported = results.filter((item) => item.status === 404 || item.status === 405);
+  const status = applied.length && unsupported.length ? "partially_applied"
+    : applied.length ? "applied"
+      : "failed";
+  const record = {
+    id: `dispatch_${crypto.randomUUID()}`,
+    schema_version: "pollek.cloud.cloud-to-local-dispatch.v1",
+    tenant_id: "local",
+    action,
+    status,
+    lcp_id: lcp.id,
+    lcp_url: lcpUrl,
+    bundle_id: bundle?.id || null,
+    envelope,
+    payload_hash: envelope.payload_hash,
+    results,
+    unsupported_paths: unsupported.map((item) => item.path),
+    created_at: new Date().toISOString()
+  };
+  state.fleet.cloudToLocalDispatches.unshift(record);
+  state.fleet.cloudToLocalDispatches = state.fleet.cloudToLocalDispatches.slice(0, 50);
+  if (action === "policy.hot_reload") {
+    const hotReload = {
+      id: `hotreload_${crypto.randomUUID()}`,
+      tenant_id: "local",
+      rollout_id: body.rollout_id || null,
+      lcp_id: lcp.id,
+      bundle_id: bundle?.id || null,
+      event_type: "policy_bundle.hot_reload.dispatch_attempted.v1",
+      component: "policy_bundle",
+      status,
+      stage_index: Number(body.stage_index || 0),
+      wasm_generation: Number(body.wasm_generation || 1),
+      contract_hub_path: "/v1/policy-bundles/{bundle_id}/manifest",
+      dispatch_id: record.id,
+      unsupported_paths: record.unsupported_paths,
+      created_at: record.created_at
+    };
+    state.fleet.hotReloadEvents.unshift(hotReload);
+    state.fleet.hotReloadEvents = state.fleet.hotReloadEvents.slice(0, 50);
+    broadcastSse("hot_reload.event", hotReload);
+  }
+  recordAudit("cloud_to_local.dispatch", "lcp", lcp.id, { action, status, dispatch_id: record.id, bundle_id: record.bundle_id, unsupported_paths: record.unsupported_paths });
+  recordEvent({
+    event_id: `evt_${crypto.randomUUID()}`,
+    tenant_id: "local",
+    device_id: lcp.device_id,
+    event_type: "cloud_to_local.dispatch.v1",
+    severity: status === "failed" ? "warning" : "info",
+    payload: { dispatch_id: record.id, action, status, lcp_id: lcp.id, bundle_id: record.bundle_id }
+  });
+  addTask("cloud_to_local_dispatch", status === "failed" ? "failed" : "completed", `Cloud-to-Local ${action}: ${status}`, { dispatch_id: record.id, lcp_id: lcp.id });
+  broadcastSse("cloud_to_local.dispatched", { dispatch: record, summary: fleetSummary() });
+  scheduleRuntimePersist(`cloud_to_local.${action}`);
+  return record;
+}
+
 function collectContractPaths(contract) {
   const paths = new Set();
   for (const spec of Object.values(contract.interfaces || {})) {
@@ -2367,6 +2886,55 @@ async function handleApi(req, res) {
       schema_version: "pollek.cloud.persistence-flush.v1",
       status
     });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/entities/watch") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.local-entity-watch-status.v1",
+      watch: lcpWatchStatus(),
+      recent_sync_runs: state.fleet.localEntitySyncRuns.slice(0, 5),
+      recent_configuration_snapshots: state.fleet.localConfigurationSnapshots.slice(0, 5)
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/entities/watch") {
+    const status = await pollLcpEntityWatch({ force: true, reason: "manual_refresh" });
+    sendJson(res, status.last_error ? 502 : 202, {
+      schema_version: "pollek.cloud.local-entity-watch-refresh.v1",
+      watch: status,
+      summary: fleetSummary(),
+      recent_sync_runs: state.fleet.localEntitySyncRuns.slice(0, 5)
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/lcp/config/dispatch") {
+    try {
+      const body = await readBody(req);
+      const dispatch = await dispatchControlToLcp(body, "config.update");
+      sendJson(res, dispatch.status === "failed" ? 502 : 202, {
+        schema_version: "pollek.cloud.config-dispatch-response.v1",
+        dispatch
+      });
+    } catch (error) {
+      sendJson(res, 400, { error: "config_dispatch_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/lcp/hot-reload/dispatch") {
+    try {
+      const body = await readBody(req);
+      const dispatch = await dispatchControlToLcp(body, "policy.hot_reload");
+      sendJson(res, dispatch.status === "failed" ? 502 : 202, {
+        schema_version: "pollek.cloud.hot-reload-dispatch-response.v1",
+        dispatch
+      });
+    } catch (error) {
+      sendJson(res, 400, { error: "hot_reload_dispatch_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
     return true;
   }
 
@@ -2569,6 +3137,8 @@ async function handleApi(req, res) {
       local_entities: state.fleet.localEntities,
       local_entity_relationships: state.fleet.localEntityRelationships,
       local_entity_sync_runs: state.fleet.localEntitySyncRuns,
+      local_configuration_snapshots: state.fleet.localConfigurationSnapshots,
+      cloud_to_local_dispatches: state.fleet.cloudToLocalDispatches,
       evidence_exports: state.fleet.evidenceExports,
       enrollment_sessions: state.fleet.enrollmentSessions,
       rollout_plans: state.fleet.rolloutPlans,
@@ -2579,6 +3149,8 @@ async function handleApi(req, res) {
       tasks: state.tasks.slice(0, 30),
       probes: state.probes.slice(0, 10),
       persistence: runtimePersistenceStatus(),
+      lcp_watch: lcpWatchStatus(),
+      security_posture: securityPostureStatus(),
       contract: await contractDiscovery()
     });
     return true;
@@ -3222,9 +3794,12 @@ async function handleApi(req, res) {
       fleet: {
         summary: fleetSummary(),
         local_control_planes: state.fleet.localControlPlanes,
-        alarms: state.fleet.alarms
+        alarms: state.fleet.alarms,
+        lcp_watch: lcpWatchStatus(),
+        cloud_to_local_dispatches: state.fleet.cloudToLocalDispatches.slice(0, 10)
       },
       persistence: runtimePersistenceStatus(),
+      security_posture: securityPostureStatus(),
       contract: await contractDiscovery()
     });
     return true;
@@ -3381,12 +3956,15 @@ const server = createServer(async (req, res) => {
 });
 
 await loadRuntimeState();
+startLcpEntityWatch();
 
 process.on("SIGINT", () => {
+  stopLcpEntityWatch();
   void persistRuntimeState("process.sigint").finally(() => process.exit(0));
 });
 
 process.on("SIGTERM", () => {
+  stopLcpEntityWatch();
   void persistRuntimeState("process.sigterm").finally(() => process.exit(0));
 });
 
@@ -3394,4 +3972,5 @@ server.listen(port, host, () => {
   console.log(`Pollek Cloud dev console: ${publicUrl}`);
   console.log(`Contract Hub: ${publicUrl}/.well-known/pollek-contract`);
   console.log(`Runtime persistence: ${persistence.enabled ? persistence.file_path : "disabled"}`);
+  console.log(`LCP entity/config watch: ${lcpEntityWatch.enabled ? `${lcpEntityWatch.lcp_url} every ${lcpEntityWatch.interval_ms}ms` : "disabled"}`);
 });

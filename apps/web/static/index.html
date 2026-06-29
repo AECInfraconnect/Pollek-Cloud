@@ -54,6 +54,7 @@
               <span id="objectStatus" class="status-pill neutral">Unknown</span>
               <span id="objectRisk" class="risk-pill">Risk pending</span>
             </div>
+            <div id="objectContext" class="object-context"></div>
           </div>
           <div class="object-actions">
             <button id="probeVisibleButton" class="secondary-button">Probe Visible LCP</button>
@@ -123,6 +124,7 @@
                   </select>
                 </div>
               </div>
+              <div id="operationsFocus" class="focus-board" aria-label="Operations focus"></div>
               <div class="table-wrap">
                 <table class="fleet-table">
                   <thead>
@@ -189,6 +191,7 @@
                 </select>
                 <input id="entitySearch" aria-label="Entity search" placeholder="Search entity, SPIFFE, policy, source" />
               </div>
+              <div id="entityInsightStrip" class="insight-strip" aria-label="Entity insights"></div>
               <div class="entity-grid">
                 <section class="inline-panel">
                   <div class="pane-header compact">
@@ -475,6 +478,26 @@
                     <label for="lcpToken">Bearer token</label>
                     <input id="lcpToken" placeholder="Optional in local auth-disabled mode" />
                     <div id="probeResult" class="probe-result">No probe in this session.</div>
+                  </div>
+                </section>
+
+                <section class="ops-panel" data-ops-section="live-sync">
+                  <div class="ops-panel-head with-action">
+                    <button class="ops-panel-toggle" data-ops-section-toggle="live-sync" aria-expanded="true" aria-controls="opsLiveSync">
+                      <span>
+                        <span class="eyebrow">Live Sync</span>
+                        <strong>Entities / Config</strong>
+                      </span>
+                      <span class="ops-toggle-glyph">-</span>
+                    </button>
+                    <button id="liveRefreshButton" class="primary-button">Refresh</button>
+                  </div>
+                  <div id="opsLiveSync" class="ops-panel-body">
+                    <div id="liveSyncStatus" class="probe-result">Waiting for live watch status.</div>
+                    <div class="button-row compact-actions">
+                      <button id="pushConfigButton" class="secondary-button">Push Config</button>
+                      <button id="hotReloadButton" class="secondary-button">Hot Reload</button>
+                    </div>
                   </div>
                 </section>
 

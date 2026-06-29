@@ -7,7 +7,7 @@ const rootDir = path.resolve(__dirname, "..");
 const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
 const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
 
-const RUNTIME_PATHS = ["/health", "/api/cloud/status", "/api/contract-hub/drift", "/api/persistence/status", "/api/persistence/flush"];
+const RUNTIME_PATHS = ["/health", "/api/cloud/status", "/api/contract-hub/drift", "/api/persistence/status", "/api/persistence/flush", "/api/entities/watch"];
 
 const PATH_METHODS = {
   "/health": ["get"],
@@ -15,6 +15,7 @@ const PATH_METHODS = {
   "/api/contract-hub/drift": ["get"],
   "/api/persistence/status": ["get"],
   "/api/persistence/flush": ["post"],
+  "/api/entities/watch": ["get", "post"],
   "/.well-known/pollek-contract": ["get"],
   "/contracts/openapi.json": ["get"],
   "/api/events": ["get"],
@@ -29,6 +30,8 @@ const PATH_METHODS = {
   "/api/entities/dedupe": ["get"],
   "/api/entities/ingest": ["post"],
   "/api/entities/sync": ["post"],
+  "/api/lcp/config/dispatch": ["post"],
+  "/api/lcp/hot-reload/dispatch": ["post"],
   "/api/contract-hub/connection-updates": ["get"],
   "/v1/tenants/{tenant_id}/registry/sync": ["post"],
   "/v1/tenants/{tenant_id}/bundles/latest": ["get"],

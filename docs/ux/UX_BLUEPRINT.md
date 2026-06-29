@@ -29,5 +29,8 @@ The local dev console implements the first object-management shell:
 - Contract Hub belongs in the operational flow, not as a hidden developer artifact. The console should expose connection profiles, tenant trust scopes, and Cloud service endpoints so administrators can understand which settings many Local Pollek instances will pick up.
 - The Policy tab keeps the SRS guardrail that AI-assisted output cannot deploy directly. A draft must be simulated and human-approved before rollout.
 - The Telemetry tab can ingest a synthetic Cloud-side sample so Observe Center behavior can be tested while a real LCP build is still pending.
+- Object icons are semantic, not decorative color blocks: tenant/site/device/LCP/agent/policy/enforcement/observe/identity/telemetry/rollout/compliance all use one shared visual vocabulary.
+- Summary includes an operations focus board for triage: open alarms, worst LCP, found agents, identity trace coverage, policy binding coverage, and WASM hot-reload readiness.
+- Entities are sorted for operator triage rather than raw ingest order: found/unregistered agents first, registered agents next, then policy, enforcement, and observability records.
 
 Future app-framework work should keep this master-detail pattern and add real CRUD, table virtualization, relationship graphs, policy diff viewers, rollout timelines, and evidence exports.

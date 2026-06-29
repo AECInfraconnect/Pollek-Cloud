@@ -11,6 +11,7 @@ const refs = {
   objectTitle: document.querySelector("#objectTitle"),
   objectStatus: document.querySelector("#objectStatus"),
   objectRisk: document.querySelector("#objectRisk"),
+  objectContext: document.querySelector("#objectContext"),
   metricLcpTotal: document.querySelector("#metricLcpTotal"),
   metricConnected: document.querySelector("#metricConnected"),
   metricDegraded: document.querySelector("#metricDegraded"),
@@ -19,12 +20,14 @@ const refs = {
   metricEntities: document.querySelector("#metricEntities"),
   metricCoverage: document.querySelector("#metricCoverage"),
   fleetRows: document.querySelector("#fleetRows"),
+  operationsFocus: document.querySelector("#operationsFocus"),
   statusFilter: document.querySelector("#statusFilter"),
   entitySyncButton: document.querySelector("#entitySyncButton"),
   entityTypeFilter: document.querySelector("#entityTypeFilter"),
   entityDeviceFilter: document.querySelector("#entityDeviceFilter"),
   entityUserFilter: document.querySelector("#entityUserFilter"),
   entitySearch: document.querySelector("#entitySearch"),
+  entityInsightStrip: document.querySelector("#entityInsightStrip"),
   entityList: document.querySelector("#entityList"),
   entityTracePanel: document.querySelector("#entityTracePanel"),
   connectionProfileList: document.querySelector("#connectionProfileList"),
@@ -33,6 +36,10 @@ const refs = {
   eventTable: document.querySelector("#eventTable"),
   probeButton: document.querySelector("#probeButton"),
   probeVisibleButton: document.querySelector("#probeVisibleButton"),
+  liveRefreshButton: document.querySelector("#liveRefreshButton"),
+  pushConfigButton: document.querySelector("#pushConfigButton"),
+  hotReloadButton: document.querySelector("#hotReloadButton"),
+  liveSyncStatus: document.querySelector("#liveSyncStatus"),
   rolloutButton: document.querySelector("#rolloutButton"),
   evidenceButton: document.querySelector("#evidenceButton"),
   lcpUrl: document.querySelector("#lcpUrl"),
@@ -122,6 +129,113 @@ function statusClass(status) {
   if (["offline", "critical", "failed", "untrusted", "denied", "deny"].includes(status)) return "bad";
   if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp", "warning", "pending_approval", "warn"].includes(status)) return "warn";
   return "neutral";
+}
+
+const kindLabels = {
+  tenant: "Tenant",
+  site: "Site",
+  device_group: "Group",
+  device: "Device",
+  lcp: "LCP",
+  agent: "Agent",
+  registered_agent: "Registered agent",
+  found_agent: "Found agent",
+  policy: "Policy",
+  enforcement: "Enforcement",
+  observability: "Observe",
+  resource: "Resource",
+  policy_bundle: "Bundle",
+  alarm: "Alarm",
+  task: "Task",
+  integration: "Integration",
+  identity: "Identity",
+  telemetry: "Telemetry",
+  rollout: "Rollout",
+  compliance: "Compliance",
+  sandbox: "Sandbox",
+  breakglass: "Breakglass",
+  object: "Object"
+};
+
+function normalizeKind(kind) {
+  return String(kind || "object").replaceAll("_", "-").replace(/[^a-z0-9-]/gi, "").toLowerCase() || "object";
+}
+
+function kindLabel(kind) {
+  return kindLabels[kind] || kindLabels[String(kind || "").replaceAll("-", "_")] || String(kind || "Object").replaceAll("_", " ");
+}
+
+function iconHtml(kind, status = "neutral", extraClass = "") {
+  return `<span class="object-icon icon-${normalizeKind(kind)} ${statusClass(status)} ${escapeHtml(extraClass)}" aria-hidden="true"></span>`;
+}
+
+function chipHtml(label, status = "neutral", title = "") {
+  return `<span class="mini-chip ${statusClass(status)}" title="${escapeHtml(title || label)}">${escapeHtml(label)}</span>`;
+}
+
+function riskStatus(risk) {
+  if (risk === "high" || risk === "critical") return "bad";
+  if (risk === "medium" || risk === "warning") return "warn";
+  return "ok";
+}
+
+function objectKind(object) {
+  return object?.entity_type || object?.type || object?.class || "object";
+}
+
+function entitiesForLcp(lcp) {
+  return (app.data.local_entities || []).filter((entity) => (
+    entity.lcp_id === lcp.id || entity.device_id === lcp.device_id || entity.device_name === lcp.device_name
+  ));
+}
+
+function alarmsForObject(id) {
+  return (app.data.alarms || []).filter((alarm) => alarm.state === "open" && (alarm.object_id === id || alarm.payload?.object_id === id));
+}
+
+function entityReadiness(entity) {
+  const trace = entity.trace || {};
+  const identity = entity.identity || {};
+  const token = Array.isArray(identity.token_bindings) ? identity.token_bindings[0] : null;
+  const identityReady = Boolean(trace.spiffe_id || identity.spiffe_id || trace.oidc_subject || token?.subject);
+  const telemetryReady = Boolean(entity.observability?.telemetry_streams?.length);
+  const policyReady = Boolean(entity.enforcement?.mode === "Enforce" || entity.policy_ids?.length || entity.status === "published");
+  const wasmReady = Boolean(entity.wasm?.hot_reload);
+  return { identityReady, telemetryReady, policyReady, wasmReady };
+}
+
+function entityHealthStatus(entity) {
+  if (entity.risk === "high" || entity.status === "offline" || entity.status === "failed") return "bad";
+  if (entity.status === "found_unregistered" || entity.risk === "medium" || !entityReadiness(entity).identityReady) return "warn";
+  return "ok";
+}
+
+function entityChips(entity) {
+  const ready = entityReadiness(entity);
+  return [
+    chipHtml(ready.identityReady ? "Identity ready" : "Identity gap", ready.identityReady ? "ok" : "warn"),
+    chipHtml(ready.policyReady ? "Policy bound" : "Policy gap", ready.policyReady ? "ok" : "warn"),
+    chipHtml(ready.telemetryReady ? "Telemetry" : "No stream", ready.telemetryReady ? "ok" : "warn"),
+    chipHtml(ready.wasmReady ? "WASM hot reload" : "WASM pending", ready.wasmReady ? "ok" : "warn")
+  ].join("");
+}
+
+function countByKind(entities) {
+  return entities.reduce((acc, entity) => {
+    const key = entity.entity_type || entity.class || "object";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function lcpNarrative(lcp) {
+  const entities = entitiesForLcp(lcp);
+  const counts = countByKind(entities);
+  const openAlarms = alarmsForObject(lcp.id).length;
+  const found = counts.found_agent || 0;
+  const policies = counts.policy || 0;
+  const observe = counts.observability || 0;
+  return `${entities.length} entities, ${found} found, ${policies} policies, ${observe} observe, ${openAlarms} alarms`;
 }
 
 function setCloudStatus(ok, text) {
@@ -238,6 +352,8 @@ function connectEventStream() {
   stream.addEventListener("task.updated", scheduleStreamRefresh);
   stream.addEventListener("telemetry.event", scheduleStreamRefresh);
   stream.addEventListener("hot_reload.event", scheduleStreamRefresh);
+  stream.addEventListener("local_entities.updated", scheduleStreamRefresh);
+  stream.addEventListener("cloud_to_local.dispatched", scheduleStreamRefresh);
   stream.onerror = () => {
     app.streamConnected = false;
     setCloudStatus(Boolean(app.data), app.data ? "Cloud API polling" : "Cloud API reconnecting");
@@ -249,8 +365,10 @@ function render() {
   renderSummary(app.data.summary);
   renderTree();
   renderObjectHeader();
+  renderOperationsFocus();
   renderFleetRows();
   renderEntityFilters();
+  renderEntityInsights();
   renderEntities();
   renderConnectionProfiles();
   renderServiceEndpoints();
@@ -262,6 +380,7 @@ function render() {
   renderTasks();
   renderPolicyPacks();
   renderIntegrations();
+  renderLiveSyncStatus();
   renderPolicyWorkspace();
   renderTelemetryExplorer();
   renderTimeline();
@@ -278,6 +397,88 @@ function renderSummary(summary) {
   refs.metricAgents.textContent = summary.agents;
   refs.metricEntities.textContent = summary.local_entities || 0;
   refs.metricCoverage.textContent = `${summary.policy_coverage}%`;
+}
+
+function renderOperationsFocus() {
+  if (!refs.operationsFocus) return;
+  const lcps = app.data.local_control_planes || [];
+  const entities = app.data.local_entities || [];
+  const alarms = (app.data.alarms || []).filter((alarm) => alarm.state === "open");
+  const foundAgents = entities.filter((entity) => entity.entity_type === "found_agent" || entity.status === "found_unregistered");
+  const traceReady = entities.filter((entity) => entityReadiness(entity).identityReady).length;
+  const policyReady = entities.filter((entity) => entityReadiness(entity).policyReady).length;
+  const wasmReady = entities.filter((entity) => entityReadiness(entity).wasmReady).length;
+  const worstLcp = [...lcps].sort((a, b) => {
+    const score = (item) => (
+      (item.status === "offline" ? 100 : item.status === "degraded" || item.status === "unknown" ? 60 : 0)
+      + (100 - Number(item.policy_coverage || 0))
+      + alarmsForObject(item.id).length * 30
+    );
+    return score(b) - score(a);
+  })[0];
+  const traceCoverage = entities.length ? Math.round((traceReady / entities.length) * 100) : 0;
+  const policyCoverage = entities.length ? Math.round((policyReady / entities.length) * 100) : 0;
+  const wasmCoverage = entities.length ? Math.round((wasmReady / entities.length) * 100) : 0;
+  const cards = [
+    {
+      kind: "alarm",
+      status: alarms.length ? "bad" : "ok",
+      title: `${alarms.length} open alarms`,
+      detail: alarms[0]?.summary || "No active incident queue",
+      objectId: alarms[0]?.object_id
+    },
+    {
+      kind: "lcp",
+      status: worstLcp?.status || "neutral",
+      title: worstLcp ? worstLcp.name : "No LCP inventory",
+      detail: worstLcp ? lcpNarrative(worstLcp) : "Register a Local Control Plane",
+      objectId: worstLcp?.id
+    },
+    {
+      kind: "found_agent",
+      status: foundAgents.length ? "warn" : "ok",
+      title: `${foundAgents.length} found agents`,
+      detail: foundAgents[0] ? `${foundAgents[0].name} on ${foundAgents[0].device_name || foundAgents[0].device_id}` : "No unregistered agents detected",
+      objectId: foundAgents[0]?.id
+    },
+    {
+      kind: "identity",
+      status: traceCoverage >= 80 ? "ok" : traceCoverage >= 50 ? "warn" : "bad",
+      title: `${traceCoverage}% identity trace`,
+      detail: "OAuth, OIDC, SPIFFE and mTLS continuity across entities",
+      objectId: null
+    },
+    {
+      kind: "policy",
+      status: policyCoverage >= 80 ? "ok" : policyCoverage >= 50 ? "warn" : "bad",
+      title: `${policyCoverage}% policy bound`,
+      detail: "Agents, resources and enforcement points with active policy context",
+      objectId: null
+    },
+    {
+      kind: "rollout",
+      status: wasmCoverage >= 80 ? "ok" : wasmCoverage >= 50 ? "warn" : "bad",
+      title: `${wasmCoverage}% WASM ready`,
+      detail: "Hot reload coverage for fast policy bundle updates",
+      objectId: null
+    }
+  ];
+
+  refs.operationsFocus.innerHTML = cards.map((card) => `
+    <button class="focus-card ${statusClass(card.status)}" ${card.objectId ? `data-object-id="${escapeHtml(card.objectId)}"` : ""}>
+      ${iconHtml(card.kind, card.status)}
+      <span>
+        <strong>${escapeHtml(card.title)}</strong>
+        <small>${escapeHtml(card.detail)}</small>
+      </span>
+    </button>
+  `).join("");
+  refs.operationsFocus.querySelectorAll("[data-object-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      app.selectedObjectId = button.dataset.objectId;
+      render();
+    });
+  });
 }
 
 function childrenOf(parentId) {
@@ -303,8 +504,11 @@ function renderTree() {
     button.style.setProperty("--depth", depth);
     button.style.paddingLeft = `${7 + depth * 16}px`;
     button.innerHTML = `
-      <span class="node-icon ${escapeHtml(item.type)}"></span>
-      <span class="node-name">${escapeHtml(item.name)}</span>
+      ${iconHtml(item.type, item.status, "node-icon")}
+      <span class="node-name">
+        <strong>${escapeHtml(item.name)}</strong>
+        <small>${escapeHtml(kindLabel(item.type))}</small>
+      </span>
       <span class="node-state ${statusClass(item.status)}"></span>
     `;
     button.addEventListener("click", () => {
@@ -335,12 +539,23 @@ function pathToObject(id) {
 
 function renderObjectHeader() {
   const object = selectedObject();
+  const kind = objectKind(object);
+  const contextParts = [
+    kindLabel(kind),
+    object.device_name || object.site || object.group || object.tenant_id,
+    object.user_subject,
+    object.spiffe_id || object.trace?.spiffe_id || object.identity?.spiffe_id,
+    object.endpoint
+  ].filter(Boolean);
   refs.breadcrumb.textContent = pathToObject(object.id).join(" / ");
-  refs.objectTitle.textContent = object.name || object.id;
+  refs.objectTitle.innerHTML = `${iconHtml(kind, object.status)}<span>${escapeHtml(object.name || object.id)}</span>`;
   refs.objectStatus.className = `status-pill ${statusClass(object.status)}`;
   refs.objectStatus.textContent = object.status || "unknown";
   refs.objectRisk.className = `risk-pill ${object.risk === "high" ? "bad" : object.risk === "medium" ? "warn" : "ok"}`;
   refs.objectRisk.textContent = `${object.risk || "low"} risk`;
+  if (refs.objectContext) {
+    refs.objectContext.innerHTML = contextParts.slice(0, 5).map((part) => `<span>${escapeHtml(part)}</span>`).join("");
+  }
 
   if (object.type === "lcp" && object.endpoint) {
     refs.lcpUrl.value = object.endpoint;
@@ -365,17 +580,24 @@ function renderFleetRows() {
   }
 
   for (const lcp of rows) {
+    const entities = entitiesForLcp(lcp);
+    const counts = countByKind(entities);
+    const openAlarms = alarmsForObject(lcp.id).length;
+    const traceReady = entities.filter((entity) => entityReadiness(entity).identityReady).length;
+    const traceCoverage = entities.length ? Math.round((traceReady / entities.length) * 100) : 0;
     const tr = document.createElement("tr");
     tr.className = app.selectedObjectId === lcp.id ? "selected" : "";
     tr.innerHTML = `
-      <td><span class="status-dot ${statusClass(lcp.status)}"></span>${escapeHtml(lcp.status)}</td>
-      <td><button class="link-button" data-object-id="${escapeHtml(lcp.id)}">${escapeHtml(lcp.name)}</button><small>${escapeHtml(lcp.device_name)}</small></td>
+      <td><span class="status-dot ${statusClass(lcp.status)}"></span><strong>${escapeHtml(lcp.status)}</strong>${openAlarms ? `<small>${openAlarms} open alarm${openAlarms > 1 ? "s" : ""}</small>` : ""}</td>
+      <td>
+        <div class="object-cell">${iconHtml("lcp", lcp.status)}<span><button class="link-button" data-object-id="${escapeHtml(lcp.id)}">${escapeHtml(lcp.name)}</button><small>${escapeHtml(lcp.device_name)}</small></span></div>
+      </td>
       <td>${escapeHtml(lcp.site)}<small>${escapeHtml(lcp.group)}</small></td>
       <td>${escapeHtml(lcp.version)}</td>
       <td>${escapeHtml(lcp.contract_version)}</td>
       <td>${escapeHtml(lcp.active_bundle)}</td>
-      <td>${lcp.agents}</td>
-      <td><div class="coverage"><span style="width:${Math.max(0, Math.min(100, lcp.policy_coverage))}%"></span></div>${lcp.policy_coverage}%</td>
+      <td>${lcp.agents}<small>${escapeHtml(counts.found_agent || 0)} found / ${escapeHtml(counts.policy || 0)} policies</small></td>
+      <td><div class="coverage"><span style="width:${Math.max(0, Math.min(100, lcp.policy_coverage))}%"></span></div>${lcp.policy_coverage}%<small>${traceCoverage}% trace</small></td>
       <td>${escapeHtml(fmtTime(lcp.last_seen_at))}</td>
     `;
     tr.addEventListener("click", () => {
@@ -401,7 +623,13 @@ function renderRelationships(container = refs.relationshipMap, limit = 6) {
   container.innerHTML = "";
   const center = document.createElement("div");
   center.className = "relationship-node center";
-  center.innerHTML = `<strong>${escapeHtml(object.name || object.id)}</strong><span>${escapeHtml(object.type || "object")}</span>`;
+  center.innerHTML = `
+    ${iconHtml(objectKind(object), object.status)}
+    <span>
+      <strong>${escapeHtml(object.name || object.id)}</strong>
+      <small>${escapeHtml(kindLabel(objectKind(object)))} | ${escapeHtml(object.status || "unknown")}</small>
+    </span>
+  `;
   container.append(center);
 
   const visible = (relations.length ? relations : relationships).slice(0, limit);
@@ -410,7 +638,13 @@ function renderRelationships(container = refs.relationshipMap, limit = 6) {
     const related = app.data.objects[relatedId] || { id: relatedId, name: relatedId, type: "object", status: "unknown" };
     const node = document.createElement("button");
     node.className = "relationship-node";
-    node.innerHTML = `<strong>${escapeHtml(related.name || related.id)}</strong><span>${escapeHtml(rel.label)}</span>`;
+    node.innerHTML = `
+      ${iconHtml(objectKind(related), related.status)}
+      <span>
+        <strong>${escapeHtml(related.name || related.id)}</strong>
+        <small>${escapeHtml(rel.label)} | ${escapeHtml(kindLabel(objectKind(related)))}</small>
+      </span>
+    `;
     node.addEventListener("click", () => {
       if (app.data.objects[relatedId]) {
         app.selectedObjectId = relatedId;
@@ -433,8 +667,13 @@ function renderRelationshipDetails() {
     const row = document.createElement("div");
     row.className = "detail-row";
     row.innerHTML = `
-      <strong>${escapeHtml(from.name)} -> ${escapeHtml(to.name)}</strong>
-      <span>${escapeHtml(rel.label)} | ${escapeHtml(from.type)} to ${escapeHtml(to.type)}</span>
+      <div class="relationship-line">
+        ${iconHtml(objectKind(from), from.status)}
+        <span><strong>${escapeHtml(from.name)}</strong><small>${escapeHtml(kindLabel(objectKind(from)))}</small></span>
+        <b>${escapeHtml(rel.label)}</b>
+        ${iconHtml(objectKind(to), to.status)}
+        <span><strong>${escapeHtml(to.name)}</strong><small>${escapeHtml(kindLabel(objectKind(to)))}</small></span>
+      </div>
     `;
     refs.relationshipDetailList.append(row);
   }
@@ -482,6 +721,37 @@ function renderEntityFilters() {
   );
 }
 
+function renderEntityInsights() {
+  if (!refs.entityInsightStrip) return;
+  const entities = filteredEntities();
+  const counts = countByKind(entities);
+  const found = counts.found_agent || 0;
+  const registered = counts.registered_agent || 0;
+  const policies = counts.policy || 0;
+  const enforcement = counts.enforcement || 0;
+  const observe = counts.observability || 0;
+  const identityReady = entities.filter((entity) => entityReadiness(entity).identityReady).length;
+  const telemetryReady = entities.filter((entity) => entityReadiness(entity).telemetryReady).length;
+  const wasmReady = entities.filter((entity) => entityReadiness(entity).wasmReady).length;
+  const total = Math.max(1, entities.length);
+  const items = [
+    { kind: "registered_agent", label: "Registered", value: registered, status: registered ? "ok" : "warn" },
+    { kind: "found_agent", label: "Found", value: found, status: found ? "warn" : "ok" },
+    { kind: "policy", label: "Policies", value: policies, status: policies ? "ok" : "warn" },
+    { kind: "enforcement", label: "Enforcement", value: enforcement, status: enforcement ? "ok" : "warn" },
+    { kind: "observability", label: "Observe", value: observe, status: observe ? "ok" : "warn" },
+    { kind: "identity", label: "Identity trace", value: `${Math.round((identityReady / total) * 100)}%`, status: identityReady === entities.length ? "ok" : "warn" },
+    { kind: "telemetry", label: "Telemetry", value: `${Math.round((telemetryReady / total) * 100)}%`, status: telemetryReady === entities.length ? "ok" : "warn" },
+    { kind: "rollout", label: "WASM", value: `${Math.round((wasmReady / total) * 100)}%`, status: wasmReady === entities.length ? "ok" : "warn" }
+  ];
+  refs.entityInsightStrip.innerHTML = items.map((item) => `
+    <div class="insight-card ${statusClass(item.status)}">
+      ${iconHtml(item.kind, item.status)}
+      <span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.label)}</small></span>
+    </div>
+  `).join("");
+}
+
 function filteredEntities() {
   const query = app.entityQuery.trim().toLowerCase();
   return (app.data.local_entities || []).filter((entity) => {
@@ -493,6 +763,39 @@ function filteredEntities() {
   });
 }
 
+function sortedEntitiesForDisplay(entities) {
+  const kindPriority = {
+    found_agent: 0,
+    registered_agent: 1,
+    policy: 2,
+    enforcement: 3,
+    observability: 4,
+    resource: 4
+  };
+  const score = (entity) => {
+    const kind = entity.entity_type || entity.class || "object";
+    const readiness = entityReadiness(entity);
+    return [
+      kindPriority[kind] ?? 9,
+      entity.status === "found_unregistered" ? -3 : 0,
+      entity.risk === "high" ? -2 : entity.risk === "medium" ? -1 : 0,
+      readiness.identityReady ? 1 : -1,
+      String(entity.device_name || entity.device_id || ""),
+      String(entity.user_subject || ""),
+      String(entity.name || entity.local_object_id || entity.id || "")
+    ];
+  };
+  return [...entities].sort((a, b) => {
+    const left = score(a);
+    const right = score(b);
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] < right[index]) return -1;
+      if (left[index] > right[index]) return 1;
+    }
+    return 0;
+  });
+}
+
 function selectedLocalEntity(entities) {
   const object = selectedObject();
   if (object?.id && (app.data.local_entities || []).some((entity) => entity.id === object.id)) return object;
@@ -501,7 +804,7 @@ function selectedLocalEntity(entities) {
 
 function renderEntities() {
   if (!refs.entityList) return;
-  const entities = filteredEntities();
+  const entities = sortedEntitiesForDisplay(filteredEntities());
   const activeEntity = selectedLocalEntity(entities);
   refs.entityList.innerHTML = "";
 
@@ -513,11 +816,24 @@ function renderEntities() {
 
   for (const entity of entities.slice(0, 80)) {
     const row = document.createElement("button");
-    row.className = `detail-row ${statusClass(entity.status)} ${activeEntity?.id === entity.id ? "selected" : ""}`;
+    const health = entityHealthStatus(entity);
+    row.className = `detail-row entity-row ${health} ${activeEntity?.id === entity.id ? "selected" : ""}`;
     const streams = entity.observability?.telemetry_streams || [];
+    const subtitle = [
+      kindLabel(entity.entity_type || entity.class),
+      entity.status,
+      entity.device_name || entity.device_id,
+      entity.user_subject || "unknown user"
+    ].filter(Boolean).join(" | ");
     row.innerHTML = `
-      <strong>${escapeHtml(entity.name || entity.local_object_id || entity.id)}</strong>
-      <span>${escapeHtml(entity.entity_type)} | ${escapeHtml(entity.status)} | ${escapeHtml(entity.device_name || entity.device_id)} | ${escapeHtml(entity.user_subject || "unknown user")}</span>
+      <div class="entity-main">
+        ${iconHtml(entity.entity_type || entity.class, entity.status)}
+        <span>
+          <strong>${escapeHtml(entity.name || entity.local_object_id || entity.id)}</strong>
+          <small>${escapeHtml(subtitle)}</small>
+        </span>
+      </div>
+      <div class="chip-row">${entityChips(entity)}</div>
       <code>${escapeHtml(entity.trace?.spiffe_id || entity.identity?.spiffe_id || entity.source || "trace pending")} | ${escapeHtml(streams.join(", ") || "no telemetry stream")}</code>
     `;
     row.addEventListener("click", () => {
@@ -573,8 +889,8 @@ function renderEntityTrace(entity) {
 
   for (const item of rows) {
     const row = document.createElement("div");
-    row.className = `detail-row ${item.status}`;
-    row.innerHTML = `<strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span>`;
+    row.className = `detail-row trace-row ${item.status}`;
+    row.innerHTML = `${iconHtml(item.title.toLowerCase().includes("oauth") || item.title.toLowerCase().includes("spiffe") ? "identity" : item.title.toLowerCase().includes("policy") ? "policy" : item.title.toLowerCase().includes("observability") ? "telemetry" : item.title.toLowerCase().includes("wasm") ? "rollout" : "device", item.status)}<span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span>`;
     refs.entityTracePanel.append(row);
   }
 }
@@ -586,10 +902,13 @@ function renderConnectionProfiles() {
   for (const profile of profiles) {
     const endpoints = Object.keys(profile.endpoints || {});
     const row = document.createElement("div");
-    row.className = `detail-row ${statusClass(profile.status)}`;
+    row.className = `detail-row trace-row ${statusClass(profile.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(profile.name)}</strong>
-      <span>${escapeHtml(profile.status)} | contract ${escapeHtml(profile.contract_version)} | trust ${escapeHtml(profile.trust_scope_id)}</span>
+      ${iconHtml("integration", profile.status)}
+      <span>
+        <strong>${escapeHtml(profile.name)}</strong>
+        <small>${escapeHtml(profile.status)} | contract ${escapeHtml(profile.contract_version)} | trust ${escapeHtml(profile.trust_scope_id)}</small>
+      </span>
       <code>${escapeHtml(profile.endpoints?.contract_hub || "/.well-known/pollek-contract")} | ${escapeHtml(endpoints.join(", "))}</code>
     `;
     refs.connectionProfileList.append(row);
@@ -605,10 +924,13 @@ function renderServiceEndpoints() {
   const endpoints = app.data.service_endpoints || [];
   for (const endpoint of endpoints) {
     const row = document.createElement("div");
-    row.className = `detail-row ${statusClass(endpoint.status)}`;
+    row.className = `detail-row trace-row ${statusClass(endpoint.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(endpoint.name)}</strong>
-      <span>${escapeHtml(endpoint.type)} | ${escapeHtml(endpoint.status)} | ${escapeHtml(endpoint.scope)}</span>
+      ${iconHtml(endpoint.type || "integration", endpoint.status)}
+      <span>
+        <strong>${escapeHtml(endpoint.name)}</strong>
+        <small>${escapeHtml(endpoint.type)} | ${escapeHtml(endpoint.status)} | ${escapeHtml(endpoint.scope)}</small>
+      </span>
       <code>${escapeHtml(endpoint.endpoint)}</code>
     `;
     refs.serviceEndpointList.append(row);
@@ -625,8 +947,9 @@ function renderEvents() {
   }];
   for (const event of events.slice(0, 8)) {
     const row = document.createElement("div");
-    row.className = "event-row";
+    row.className = `event-row ${statusClass(event.severity === "warning" ? "warn" : event.severity === "critical" ? "bad" : "ok")}`;
     row.innerHTML = `
+      ${iconHtml("telemetry", event.severity)}
       <span>${escapeHtml(fmtTime(event.received_at))}</span>
       <code>${escapeHtml(event.event_type)}</code>
       <span>${escapeHtml(event.severity || "info")}</span>
@@ -653,10 +976,13 @@ function renderTelemetryExplorer() {
   }];
   for (const event of visible.slice(0, 30)) {
     const row = document.createElement("div");
-    row.className = `detail-row ${statusClass(event.severity === "critical" ? "failed" : event.severity === "warning" ? "degraded" : "connected")}`;
+    row.className = `detail-row trace-row ${statusClass(event.severity === "critical" ? "failed" : event.severity === "warning" ? "degraded" : "connected")}`;
     row.innerHTML = `
-      <strong>${escapeHtml(event.event_type)}</strong>
-      <span>${escapeHtml(fmtTime(event.received_at))} | ${escapeHtml(event.severity || "info")} | ${escapeHtml(event.device_id || "cloud")}</span>
+      ${iconHtml("telemetry", event.severity)}
+      <span>
+        <strong>${escapeHtml(event.event_type)}</strong>
+        <small>${escapeHtml(fmtTime(event.received_at))} | ${escapeHtml(event.severity || "info")} | ${escapeHtml(event.device_id || "cloud")}</small>
+      </span>
       <code>${escapeHtml(JSON.stringify(event.payload || {}, null, 2))}</code>
     `;
     refs.telemetryExplorer.append(row);
@@ -686,8 +1012,11 @@ function createAlarmRow(alarm, verbose = false) {
   row.className = `alarm-row ${alarm.severity}`;
   row.innerHTML = `
     <button class="alarm-target" data-object-id="${escapeHtml(alarm.object_id)}">
-      <strong>${escapeHtml(alarm.summary)}</strong>
-      <span>${escapeHtml(alarm.object_name)} - ${escapeHtml(fmtTime(alarm.created_at))}${verbose ? ` - ${escapeHtml(alarm.state)}` : ""}</span>
+      ${iconHtml("alarm", alarm.severity)}
+      <span>
+        <strong>${escapeHtml(alarm.summary)}</strong>
+        <small>${escapeHtml(alarm.object_name)} - ${escapeHtml(fmtTime(alarm.created_at))}${verbose ? ` - ${escapeHtml(alarm.state)}` : ""}</small>
+      </span>
     </button>
     <button class="mini-button" data-alarm-id="${escapeHtml(alarm.id)}">Ack</button>
   `;
@@ -706,8 +1035,8 @@ function renderTasks() {
   const tasks = app.data.tasks.length ? app.data.tasks : [{ summary: "No recent tasks", status: "idle", created_at: "" }];
   for (const task of tasks.slice(0, 8)) {
     const row = document.createElement("div");
-    row.className = "task-row";
-    row.innerHTML = `<strong>${escapeHtml(task.summary)}</strong><span>${escapeHtml(task.status)}${task.created_at ? ` - ${fmtTime(task.created_at)}` : ""}</span>`;
+    row.className = `task-row ${statusClass(task.status)}`;
+    row.innerHTML = `${iconHtml("task", task.status)}<span><strong>${escapeHtml(task.summary)}</strong><small>${escapeHtml(task.status)}${task.created_at ? ` - ${fmtTime(task.created_at)}` : ""}</small></span>`;
     refs.taskList.append(row);
   }
 }
@@ -718,10 +1047,13 @@ function renderPolicyPacks() {
   refs.policyPackList.innerHTML = "";
   for (const pack of packs) {
     const row = document.createElement("div");
-    row.className = "compact-row";
+    row.className = `compact-row ${statusClass(pack.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(pack.name)}</strong>
-      <span>${escapeHtml(pack.default_mode)} - ${escapeHtml(pack.engines.join(", "))}</span>
+      ${iconHtml("policy", pack.status)}
+      <span>
+        <strong>${escapeHtml(pack.name)}</strong>
+        <small>${escapeHtml(pack.default_mode)} - ${escapeHtml(pack.engines.join(", "))}</small>
+      </span>
     `;
     refs.policyPackList.append(row);
   }
@@ -732,13 +1064,34 @@ function renderIntegrations() {
   refs.integrationList.innerHTML = "";
   for (const item of integrations) {
     const row = document.createElement("div");
-    row.className = "compact-row";
+    row.className = `compact-row ${statusClass(item.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(item.name)}</strong>
-      <span>${escapeHtml(item.type)} - ${escapeHtml(item.status)}</span>
+      ${iconHtml(item.type || "integration", item.status)}
+      <span>
+        <strong>${escapeHtml(item.name)}</strong>
+        <small>${escapeHtml(item.type)} - ${escapeHtml(item.status)}</small>
+      </span>
     `;
     refs.integrationList.append(row);
   }
+}
+
+function renderLiveSyncStatus() {
+  if (!refs.liveSyncStatus) return;
+  const watch = app.data.lcp_watch || {};
+  const security = app.data.security_posture || watch.security || {};
+  const latestRun = app.data.local_entity_sync_runs?.[0];
+  const latestConfig = app.data.local_configuration_snapshots?.[0];
+  const latestDispatch = app.data.cloud_to_local_dispatches?.[0];
+  refs.liveSyncStatus.className = `probe-result ${statusClass(watch.status === "watching" ? "connected" : watch.status === "degraded" ? "degraded" : "unknown")}`;
+  refs.liveSyncStatus.innerHTML = `
+    <strong>${escapeHtml(watch.enabled === false ? "Live watch disabled" : `Live watch ${watch.status || "starting"}`)}</strong>
+    <span>${escapeHtml(watch.lcp_url || refs.lcpUrl?.value || "no LCP URL")} | interval ${escapeHtml(Math.round((watch.interval_ms || 0) / 1000))}s | changes ${escapeHtml(watch.change_count || 0)}</span>
+    <span>${escapeHtml(latestRun ? `${latestRun.mode}: ${latestRun.entity_count} records at ${fmtTime(latestRun.created_at)}` : "No live entity run yet.")}</span>
+    <span>${escapeHtml(latestConfig ? `Local config hash ${String(latestConfig.snapshot_hash || "").slice(0, 12)}` : "No local config snapshot yet.")}</span>
+    <span>${escapeHtml(latestDispatch ? `Last dispatch ${latestDispatch.action}: ${latestDispatch.status}` : "No Cloud-to-Local dispatch yet.")}</span>
+    <code>${escapeHtml((security.production_requirements || []).slice(0, 4).join(" | ") || "Security posture pending")}</code>
+  `;
 }
 
 function renderPolicyWorkspace() {
@@ -747,10 +1100,13 @@ function renderPolicyWorkspace() {
   const drafts = app.data.policy_drafts || [];
   for (const draft of drafts.slice(0, 8)) {
     const row = document.createElement("button");
-    row.className = `detail-row ${draft.status === "approved" ? "ok" : draft.status === "requires_human_review" ? "warn" : ""}`;
+    row.className = `detail-row trace-row ${draft.status === "approved" ? "ok" : draft.status === "requires_human_review" ? "warn" : ""}`;
     row.innerHTML = `
-      <strong>${escapeHtml(draft.title)}</strong>
-      <span>${escapeHtml(draft.status)} | ${escapeHtml(draft.recommended_engine)} | ${escapeHtml(fmtTime(draft.updated_at || draft.created_at))}</span>
+      ${iconHtml("policy", draft.status)}
+      <span>
+        <strong>${escapeHtml(draft.title)}</strong>
+        <small>${escapeHtml(draft.status)} | ${escapeHtml(draft.recommended_engine)} | ${escapeHtml(fmtTime(draft.updated_at || draft.created_at))}</small>
+      </span>
       <code>${escapeHtml(draft.intent)}</code>
     `;
     row.addEventListener("click", () => {
@@ -771,10 +1127,13 @@ function renderPolicyWorkspace() {
 
   for (const bundle of app.data.policy_bundles.slice(0, 8)) {
     const row = document.createElement("div");
-    row.className = `detail-row ${bundle.status === "active" ? "ok" : bundle.status === "stale" ? "warn" : ""}`;
+    row.className = `detail-row trace-row ${bundle.status === "active" ? "ok" : bundle.status === "stale" ? "warn" : ""}`;
     row.innerHTML = `
-      <strong>${escapeHtml(bundle.name)}</strong>
-      <span>${escapeHtml(bundle.status)} | revision ${escapeHtml(bundle.revision)} | coverage ${escapeHtml(bundle.coverage)}%</span>
+      ${iconHtml("policy_bundle", bundle.status)}
+      <span>
+        <strong>${escapeHtml(bundle.name)}</strong>
+        <small>${escapeHtml(bundle.status)} | revision ${escapeHtml(bundle.revision)} | coverage ${escapeHtml(bundle.coverage)}%</small>
+      </span>
       <code>${escapeHtml(bundle.id)}${bundle.signed ? " | signed | hot reload" : ""}</code>
     `;
     refs.bundleStatusList.append(row);
@@ -789,10 +1148,13 @@ function renderTimeline() {
   const rollouts = app.data.rollout_plans || [];
   for (const rollout of (rollouts.length ? rollouts : [{ bundle_id: "No rollout planned", status: "idle", target_ids: [], created_at: "" }]).slice(0, 8)) {
     const row = document.createElement("div");
-    row.className = `detail-row ${rollout.status === "planned" ? "warn" : ""}`;
+    row.className = `detail-row trace-row ${rollout.status === "planned" ? "warn" : statusClass(rollout.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(rollout.bundle_id)}</strong>
-      <span>${escapeHtml(rollout.status)} | stage ${escapeHtml((rollout.current_stage ?? -1) + 1)}/${escapeHtml(rollout.total_stages || 0)} | targets ${escapeHtml((rollout.target_ids || []).length)} | ${escapeHtml(fmtTime(rollout.created_at))}</span>
+      ${iconHtml("rollout", rollout.status)}
+      <span>
+        <strong>${escapeHtml(rollout.bundle_id)}</strong>
+        <small>${escapeHtml(rollout.status)} | stage ${escapeHtml((rollout.current_stage ?? -1) + 1)}/${escapeHtml(rollout.total_stages || 0)} | targets ${escapeHtml((rollout.target_ids || []).length)} | ${escapeHtml(fmtTime(rollout.created_at))}</small>
+      </span>
       <code>${escapeHtml(rollout.wave_strategy || "not scheduled")} | ${escapeHtml(rollout.local_pollek_compatibility?.lcp_manifest_path || "manifest pending")}</code>
     `;
     refs.rolloutTimeline.append(row);
@@ -800,10 +1162,13 @@ function renderTimeline() {
 
   for (const event of (app.data.hot_reload_events || []).slice(0, 5)) {
     const row = document.createElement("div");
-    row.className = `detail-row ${statusClass(event.status)}`;
+    row.className = `detail-row trace-row ${statusClass(event.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(event.event_type)}</strong>
-      <span>${escapeHtml(event.lcp_id)} | ${escapeHtml(event.status)} | stage ${escapeHtml(event.stage_index ?? 0)}</span>
+      ${iconHtml("rollout", event.status)}
+      <span>
+        <strong>${escapeHtml(event.event_type)}</strong>
+        <small>${escapeHtml(event.lcp_id)} | ${escapeHtml(event.status)} | stage ${escapeHtml(event.stage_index ?? 0)}</small>
+      </span>
       <code>${escapeHtml(event.local_pollek_paths?.sse_bundle_ready || "")}</code>
     `;
     refs.rolloutTimeline.append(row);
@@ -812,10 +1177,13 @@ function renderTimeline() {
   const enrollments = app.data.enrollment_sessions || [];
   for (const session of (enrollments.length ? enrollments : [{ user_code: "No enrollment", status: "idle", command: "Create an enrollment when a new LCP is ready.", created_at: "" }]).slice(0, 6)) {
     const row = document.createElement("div");
-    row.className = `detail-row ${session.status === "waiting_for_lcp" ? "warn" : ""}`;
+    row.className = `detail-row trace-row ${session.status === "waiting_for_lcp" ? "warn" : statusClass(session.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(session.user_code)}</strong>
-      <span>${escapeHtml(session.status)} | ${escapeHtml(fmtTime(session.created_at))}</span>
+      ${iconHtml("identity", session.status)}
+      <span>
+        <strong>${escapeHtml(session.user_code)}</strong>
+        <small>${escapeHtml(session.status)} | ${escapeHtml(fmtTime(session.created_at))}</small>
+      </span>
       <code>${escapeHtml(session.command)}</code>
     `;
     refs.enrollmentList.append(row);
@@ -824,10 +1192,13 @@ function renderTimeline() {
   const exports = app.data.evidence_exports || [];
   for (const item of (exports.length ? exports : [{ id: "No evidence exports", status: "idle", scope: "none", requested_at: "" }]).slice(0, 6)) {
     const row = document.createElement("div");
-    row.className = `detail-row ${item.status === "ready" ? "ok" : ""}`;
+    row.className = `detail-row trace-row ${item.status === "ready" ? "ok" : ""}`;
     row.innerHTML = `
-      <strong>${escapeHtml(item.id)}</strong>
-      <span>${escapeHtml(item.status)} | ${escapeHtml(item.scope)} | ${escapeHtml(fmtTime(item.requested_at))}</span>
+      ${iconHtml("compliance", item.status)}
+      <span>
+        <strong>${escapeHtml(item.id)}</strong>
+        <small>${escapeHtml(item.status)} | ${escapeHtml(item.scope)} | ${escapeHtml(fmtTime(item.requested_at))}</small>
+      </span>
     `;
     refs.evidenceExportList.append(row);
   }
@@ -843,10 +1214,13 @@ function renderComplianceWorkspace() {
   const bundles = app.data.compliance_policy_bundles || [];
   for (const bundle of (bundles.length ? bundles : [{ name: "No compliance bundles", frameworks: [], controls: [], status: "enterprise_required" }]).slice(0, 8)) {
     const row = document.createElement("button");
-    row.className = `detail-row ${bundle.deployable ? "ok" : "warn"}`;
+    row.className = `detail-row trace-row ${bundle.deployable ? "ok" : "warn"}`;
     row.innerHTML = `
-      <strong>${escapeHtml(bundle.name)}</strong>
-      <span>${escapeHtml((bundle.frameworks || []).join(", ") || "no framework")} | ${escapeHtml(bundle.edition || "enterprise")} | ${escapeHtml(bundle.default_mode || "n/a")}</span>
+      ${iconHtml("compliance", bundle.deployable ? "ready" : "planned")}
+      <span>
+        <strong>${escapeHtml(bundle.name)}</strong>
+        <small>${escapeHtml((bundle.frameworks || []).join(", ") || "no framework")} | ${escapeHtml(bundle.edition || "enterprise")} | ${escapeHtml(bundle.default_mode || "n/a")}</small>
+      </span>
       <code>${escapeHtml((bundle.controls || []).join(", ") || "no controls")}</code>
     `;
     row.addEventListener("click", () => {
@@ -867,14 +1241,14 @@ function renderComplianceWorkspace() {
   ];
   for (const [label, value, status] of scoreRows) {
     const row = document.createElement("div");
-    row.className = `detail-row ${statusClass(status)}`;
-    row.innerHTML = `<strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}%</span>`;
+    row.className = `detail-row trace-row ${statusClass(status)}`;
+    row.innerHTML = `${iconHtml("compliance", status)}<span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(value)}%</small></span>`;
     refs.complianceScoreList.append(row);
   }
   for (const gap of score.gaps || []) {
     const row = document.createElement("div");
-    row.className = "detail-row warn";
-    row.innerHTML = `<strong>Gap</strong><span>${escapeHtml(gap)}</span>`;
+    row.className = "detail-row trace-row warn";
+    row.innerHTML = `${iconHtml("alarm", "warning")}<span><strong>Gap</strong><small>${escapeHtml(gap)}</small></span>`;
     refs.complianceScoreList.append(row);
   }
 
@@ -882,10 +1256,13 @@ function renderComplianceWorkspace() {
   for (const run of (runs.length ? runs : [{ id: "No sandbox runs", status: "idle", mode: "Run simulation before rollout", blast_radius: {} }]).slice(0, 6)) {
     const blast = run.blast_radius || {};
     const row = document.createElement("div");
-    row.className = `detail-row ${statusClass(run.status)}`;
+    row.className = `detail-row trace-row ${statusClass(run.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(run.id)}</strong>
-      <span>${escapeHtml(run.mode)} | ${escapeHtml(run.status)}</span>
+      ${iconHtml("sandbox", run.status)}
+      <span>
+        <strong>${escapeHtml(run.id)}</strong>
+        <small>${escapeHtml(run.mode)} | ${escapeHtml(run.status)}</small>
+      </span>
       <code>allow ${escapeHtml(blast.allow || 0)} | warn ${escapeHtml(blast.warn || 0)} | deny ${escapeHtml(blast.deny || 0)}</code>
     `;
     refs.sandboxRunList.append(row);
@@ -894,10 +1271,13 @@ function renderComplianceWorkspace() {
   const requests = app.data.breakglass_requests || [];
   for (const request of (requests.length ? requests : [{ id: "No breakglass requests", status: "idle", target_id: "none", reason: "Request only for audited emergency access." }]).slice(0, 6)) {
     const row = document.createElement("div");
-    row.className = `detail-row ${statusClass(request.status)}`;
+    row.className = `detail-row trace-row ${statusClass(request.status)}`;
     row.innerHTML = `
-      <strong>${escapeHtml(request.target_id || request.id)}</strong>
-      <span>${escapeHtml(request.status)} | expires ${escapeHtml(fmtTime(request.expires_at))}</span>
+      ${iconHtml("breakglass", request.status)}
+      <span>
+        <strong>${escapeHtml(request.target_id || request.id)}</strong>
+        <small>${escapeHtml(request.status)} | expires ${escapeHtml(fmtTime(request.expires_at))}</small>
+      </span>
       <code>${escapeHtml(request.reason || "")}</code>
     `;
     refs.breakglassList.append(row);
@@ -916,10 +1296,13 @@ function renderAudit() {
   }));
   for (const event of (auditRows.length ? auditRows : [{ action: "No audit events", target_type: "audit", target_id: "none", occurred_at: "", payload: {} }]).slice(0, 12)) {
     const row = document.createElement("div");
-    row.className = "detail-row";
+    row.className = "detail-row trace-row";
     row.innerHTML = `
-      <strong>${escapeHtml(event.action)}</strong>
-      <span>${escapeHtml(event.target_type)} | ${escapeHtml(event.target_id)} | ${escapeHtml(fmtTime(event.occurred_at))}</span>
+      ${iconHtml("task", "neutral")}
+      <span>
+        <strong>${escapeHtml(event.action)}</strong>
+        <small>${escapeHtml(event.target_type)} | ${escapeHtml(event.target_id)} | ${escapeHtml(fmtTime(event.occurred_at))}</small>
+      </span>
       <code>${escapeHtml(JSON.stringify(event.payload || {}, null, 2))}</code>
     `;
     refs.auditList.append(row);
@@ -927,10 +1310,13 @@ function renderAudit() {
 
   for (const item of app.data.integrations) {
     const row = document.createElement("div");
-    row.className = `detail-row ${item.status === "configured" ? "ok" : item.status === "needs_secret" ? "warn" : ""}`;
+    row.className = `detail-row trace-row ${item.status === "configured" ? "ok" : item.status === "needs_secret" ? "warn" : ""}`;
     row.innerHTML = `
-      <strong>${escapeHtml(item.name)}</strong>
-      <span>${escapeHtml(item.type)} | ${escapeHtml(item.direction)} | ${escapeHtml(item.status)}</span>
+      ${iconHtml(item.type || "integration", item.status)}
+      <span>
+        <strong>${escapeHtml(item.name)}</strong>
+        <small>${escapeHtml(item.type)} | ${escapeHtml(item.direction)} | ${escapeHtml(item.status)}</small>
+      </span>
       <button class="mini-button" data-integration-id="${escapeHtml(item.id)}">Test</button>
     `;
     row.querySelector(".mini-button").addEventListener("click", async () => {
@@ -1180,6 +1566,71 @@ async function syncEntities() {
   }
 }
 
+async function refreshLiveWatch() {
+  refs.liveRefreshButton.disabled = true;
+  refs.liveRefreshButton.textContent = "Refreshing";
+  try {
+    const payload = await postJson("/api/entities/watch", {});
+    refs.probeResult.innerHTML = `
+      <strong>Live watch refreshed</strong>
+      <span>${escapeHtml(payload.watch.status)} | entities ${escapeHtml(payload.summary.local_entities)} | changes ${escapeHtml(payload.watch.change_count)}</span>
+      <code>${escapeHtml(payload.watch.lcp_url || "")}</code>
+    `;
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.liveRefreshButton.disabled = false;
+    refs.liveRefreshButton.textContent = "Refresh";
+  }
+}
+
+async function dispatchConfigUpdate() {
+  refs.pushConfigButton.disabled = true;
+  refs.pushConfigButton.textContent = "Pushing";
+  try {
+    const payload = await postJson("/api/lcp/config/dispatch", {
+      lcp_id: selectedObject().type === "lcp" ? selectedObject().id : "lcp_local",
+      requested_by: "local-dev-admin"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Config dispatch ${escapeHtml(payload.dispatch.status)}</strong>
+      <span>${escapeHtml(payload.dispatch.lcp_id)} | ${escapeHtml(payload.dispatch.action)} | ${escapeHtml(payload.dispatch.id)}</span>
+      <code>${escapeHtml(JSON.stringify(payload.dispatch.results.map((item) => ({ path: item.path, ok: item.ok, status: item.status })), null, 2))}</code>
+    `;
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.pushConfigButton.disabled = false;
+    refs.pushConfigButton.textContent = "Push Config";
+  }
+}
+
+async function dispatchHotReload() {
+  refs.hotReloadButton.disabled = true;
+  refs.hotReloadButton.textContent = "Dispatching";
+  try {
+    const payload = await postJson("/api/lcp/hot-reload/dispatch", {
+      lcp_id: selectedObject().type === "lcp" ? selectedObject().id : "lcp_local",
+      bundle_id: app.data.policy_bundles?.[0]?.id || "bnd_ai_data_protection",
+      requested_by: "local-dev-admin"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Hot reload dispatch ${escapeHtml(payload.dispatch.status)}</strong>
+      <span>${escapeHtml(payload.dispatch.bundle_id || "bundle pending")} | unsupported ${escapeHtml((payload.dispatch.unsupported_paths || []).length)}</span>
+      <code>${escapeHtml(JSON.stringify(payload.dispatch.results.map((item) => ({ path: item.path, ok: item.ok, status: item.status })), null, 2))}</code>
+    `;
+    await refresh();
+    setActiveTab("timeline");
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.hotReloadButton.disabled = false;
+    refs.hotReloadButton.textContent = "Hot Reload";
+  }
+}
+
 async function testIntegration(integrationId) {
   const payload = await postJson(`/api/integrations/${encodeURIComponent(integrationId)}/test`, {});
   refs.probeResult.innerHTML = `
@@ -1307,6 +1758,9 @@ refs.telemetryQueryButton.addEventListener("click", queryTelemetry);
 refs.telemetrySampleButton.addEventListener("click", sendSampleTelemetry);
 refs.enrollmentButton.addEventListener("click", createEnrollment);
 refs.entitySyncButton.addEventListener("click", syncEntities);
+refs.liveRefreshButton.addEventListener("click", refreshLiveWatch);
+refs.pushConfigButton.addEventListener("click", dispatchConfigUpdate);
+refs.hotReloadButton.addEventListener("click", dispatchHotReload);
 refs.sandboxButton.addEventListener("click", runComplianceSandbox);
 refs.breakglassButton.addEventListener("click", requestBreakglass);
 refs.complianceDeployButton.addEventListener("click", deployComplianceBundle);

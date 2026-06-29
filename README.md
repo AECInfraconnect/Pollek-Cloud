@@ -18,6 +18,7 @@ Open:
 - Contract drift report: `http://127.0.0.1:8790/api/contract-hub/drift`
 - Contract Hub SSE stream: `http://127.0.0.1:8790/api/events`
 - Runtime persistence status: `http://127.0.0.1:8790/api/persistence/status`
+- Live LCP entity/config watch: `http://127.0.0.1:8790/api/entities/watch`
 - API health: `http://127.0.0.1:8790/health`
 
 Default ports can be changed with:
@@ -71,6 +72,14 @@ Contract Hub is the mediator for connection updates across many Local Pollek ins
 - `GET /api/contract-hub/connection-updates?tenant_id=local&lcp_id=lcp_local` returns tenant trust scope, service endpoints, identity requirements, and per-LCP connection profile.
 - `POST /api/entities/ingest` accepts push snapshots from Local Pollek.
 - `POST /api/entities/sync` pulls from Local Pollek protocol endpoints when the LCP is running.
+- `GET /api/entities/watch` reports the near-real-time Cloud watcher for Local Pollek entity/config changes.
+- `POST /api/entities/watch` forces a signed/audited manual refresh cycle.
+- `POST /api/lcp/config/dispatch` sends an allowlisted, signed Cloud-to-Local configuration update to the LCP cloud profile endpoint.
+- `POST /api/lcp/hot-reload/dispatch` sends a signed hot-reload intent and records which LCP apply endpoints are supported or missing.
+
+For the current Local Pollek build, Cloud-to-Local config dispatch applies successfully through `PATCH /v1/tenants/local/pdp/cloud`. Hot-reload dispatch currently records `partially_applied`: the Cloud profile update succeeds, while Local Pollek still needs a signed bundle apply endpoint for actual WASM/policy activation.
+
+Security design for this bidirectional channel is documented in `docs/architecture/SECURE_CONTROL_CHANNEL.md`. Production must enforce OAuth/OIDC audience-bound tokens, SPIFFE/SPIRE identity, mTLS certificate-bound access tokens, signed control envelopes, replay protection, allowlisted paths, secret redaction, and fail-closed dispatch.
 
 ## Current Scope
 
@@ -121,5 +130,6 @@ The first console is now inventory-first:
 - Observe Center MVP: telemetry query and synthetic sample ingest for Cloud-side testing while LCP is still building.
 - Timeline MVP: rollout records, enrollment sessions, and evidence export records.
 - Operations rail: secure-channel probe, policy packs, open alarms, recent tasks, integration status.
+- Live Sync rail: near-real-time entity/config watch status, manual refresh, config dispatch, and hot-reload dispatch outcomes.
 
 Design research and the Pollek mapping are in `docs/research/VCENTER_UX_RESEARCH.md`.

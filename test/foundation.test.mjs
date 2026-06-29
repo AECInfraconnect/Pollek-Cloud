@@ -15,6 +15,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.local_entities"]);
   assert.ok(contract.interfaces["pollek.cloud.trust_scope"]);
   assert.ok(contract.interfaces["pollek.cloud.connection_update"]);
+  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"]);
   assert.ok(contract.interfaces["pollek.cloud.policy_authoring"]);
   assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"]);
   assert.ok(contract.interfaces["pollek.cloud.enterprise_compliance"]);
@@ -37,8 +38,15 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.openapi_artifact, true);
   assert.equal(contract.features.contract_drift_guard, true);
   assert.equal(contract.features.sse_event_stream, true);
+  assert.equal(contract.features.near_real_time_lcp_watch, true);
+  assert.equal(contract.features.secure_cloud_to_local_dispatch, true);
+  assert.equal(contract.features.signed_control_envelopes, true);
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/hot-reload/stream"));
+  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/entities/watch"));
+  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/config/dispatch"));
+  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/hot-reload/dispatch"));
+  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("signed-control-envelope"));
 });
 
 test("openapi artifact covers every contract discovery path", async () => {
@@ -60,6 +68,10 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/api/contract-hub/drift"].get);
   assert.ok(openapi.paths["/api/persistence/status"].get);
   assert.ok(openapi.paths["/api/persistence/flush"].post);
+  assert.ok(openapi.paths["/api/entities/watch"].get);
+  assert.ok(openapi.paths["/api/entities/watch"].post);
+  assert.ok(openapi.paths["/api/lcp/config/dispatch"].post);
+  assert.ok(openapi.paths["/api/lcp/hot-reload/dispatch"].post);
   assert.ok(openapi.paths["/api/events"].get);
   assert.ok(openapi.paths["/api/hot-reload/stream"].get);
   assert.deepEqual(missing, []);
@@ -121,6 +133,9 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /pathname === "\/api\/entities\/dedupe"/);
   assert.match(server, /pathname === "\/api\/entities\/ingest"/);
   assert.match(server, /pathname === "\/api\/entities\/sync"/);
+  assert.match(server, /pathname === "\/api\/entities\/watch"/);
+  assert.match(server, /pathname === "\/api\/lcp\/config\/dispatch"/);
+  assert.match(server, /pathname === "\/api\/lcp\/hot-reload\/dispatch"/);
   assert.match(server, /pathname === "\/api\/adapters\/catalog"/);
   assert.match(server, /pathname === "\/api\/trust\/scopes"/);
   assert.match(server, /pathname === "\/api\/services\/endpoints"/);
@@ -142,7 +157,13 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /function runtimeStateSnapshot/);
   assert.match(server, /async function loadRuntimeState/);
   assert.match(server, /async function persistRuntimeState/);
+  assert.match(server, /function securityPostureStatus/);
+  assert.match(server, /function createControlEnvelope/);
+  assert.match(server, /async function pollLcpEntityWatch/);
+  assert.match(server, /async function dispatchControlToLcp/);
+  assert.match(server, /function allowedControlPaths/);
   assert.match(server, /pullLocalEntitySnapshot/);
+  assert.match(server, /pullLocalConfigurationSnapshot/);
   assert.match(server, /ingestLocalEntitySnapshot/);
   assert.match(server, /\/api\\\/alarms\\\/\(\[\^\/\]\+\)\\\/ack/);
   assert.match(server, /\/api\\\/policy\\\/drafts\\\/\(\[\^\/\]\+\)\\\/simulate/);
@@ -164,6 +185,7 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /id="policyPackList"/);
   assert.match(html, /data-ops-section="policy-packs"/);
   assert.match(html, /data-ops-section="secure-channel"/);
+  assert.match(html, /data-ops-section="live-sync"/);
   assert.match(html, /data-ops-section="alarms"/);
   assert.match(html, /data-ops-section="tasks"/);
   assert.match(html, /data-ops-section="integrations"/);
@@ -174,6 +196,10 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /id="entityList"/);
   assert.match(html, /id="entityTracePanel"/);
   assert.match(html, /id="entitySyncButton"/);
+  assert.match(html, /id="liveRefreshButton"/);
+  assert.match(html, /id="pushConfigButton"/);
+  assert.match(html, /id="hotReloadButton"/);
+  assert.match(html, /id="liveSyncStatus"/);
   assert.match(html, /id="connectionProfileList"/);
   assert.match(html, /id="serviceEndpointList"/);
   assert.match(html, /id="aiPolicyButton"/);
@@ -188,6 +214,10 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /function setActiveTab/);
   assert.match(app, /function renderEntities/);
   assert.match(app, /async function syncEntities/);
+  assert.match(app, /async function refreshLiveWatch/);
+  assert.match(app, /async function dispatchConfigUpdate/);
+  assert.match(app, /async function dispatchHotReload/);
+  assert.match(app, /function renderLiveSyncStatus/);
   assert.match(app, /function renderConnectionProfiles/);
   assert.match(app, /function renderServiceEndpoints/);
   assert.match(app, /async function generatePolicyDraft/);
@@ -205,6 +235,8 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /pollek\.cloud\.nav\.collapsed/);
   assert.match(app, /pollek\.cloud\.ops\.collapsed/);
   assert.match(app, /new EventSource\("\/api\/events"\)/);
+  assert.match(app, /local_entities\.updated/);
+  assert.match(app, /cloud_to_local\.dispatched/);
   assert.match(app, /Cloud API streaming/);
 });
 
