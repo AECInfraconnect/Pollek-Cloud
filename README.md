@@ -60,7 +60,7 @@ This repository is intentionally starting with a dependency-light local foundati
 - `packages/contracts` for Contract Hub artifacts.
 - `docs` for architecture, SRS, UX, and runbooks.
 
-The next implementation phase should add TypeSpec/OpenAPI generation, Drizzle/PostgreSQL schemas, tenant isolation tests, and the Next.js enterprise console.
+The next implementation phase should add TypeSpec/OpenAPI generation, Drizzle schema generation, durable PostgreSQL persistence, tenant isolation integration tests, and the Next.js enterprise console.
 
 ## Database Direction
 
@@ -78,7 +78,10 @@ The first console is now inventory-first:
 
 - Left navigator: tenant, site, device group, device, Local Control Plane, agents.
 - Main fleet datagrid: status, site, version, contract, active bundle, agent count, coverage, heartbeat.
-- Object detail model: summary, relationships, policies, telemetry, alarms, audit.
-- Operations rail: secure-channel probe, open alarms, recent tasks.
+- Working object detail tabs: Summary, Relationships, Policies, Telemetry, Alarms, Timeline, Audit.
+- Policy Center MVP: AI-assisted deterministic draft generation, simulation, human approval gate, signed-bundle-ready state.
+- Observe Center MVP: telemetry query and synthetic sample ingest for Cloud-side testing while LCP is still building.
+- Timeline MVP: rollout records, enrollment sessions, and evidence export records.
+- Operations rail: secure-channel probe, policy packs, open alarms, recent tasks, integration status.
 
 Design research and the Pollek mapping are in `docs/research/VCENTER_UX_RESEARCH.md`.

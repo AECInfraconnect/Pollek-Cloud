@@ -13,3 +13,5 @@ Key invariants applied to this first implementation:
 - The UX should feel like an enterprise fleet console with inventory, object detail, tasks, alerts, telemetry, policy rollout, and evidence workflows.
 
 This file is a pointer so the source SRS can remain unchanged while the repo stores implementation-facing decisions and generated artifacts.
+
+Implementation progress is tracked in `docs/srs/IMPLEMENTATION_STATUS.md`.

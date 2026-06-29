@@ -9,15 +9,23 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.hot_reload, true);
   assert.equal(contract.features.signed_bundles, true);
   assert.equal(contract.features.oauth_device_flow, true);
+  assert.equal(contract.features.ai_policy_editor, true);
   assert.ok(contract.supported_transports.includes("mtls"));
   assert.ok(contract.interfaces["pollek.cloud.telemetry"]);
+  assert.ok(contract.interfaces["pollek.cloud.policy_authoring"]);
+  assert.equal(contract.interfaces["pollek.cloud.policy_authoring"].human_approval_required, true);
 });
 
 test("postgres foundation migration includes tenant RLS policies", async () => {
   const migration = await readFile("packages/db/migrations/0001_foundation.sql", "utf8");
 
   assert.match(migration, /ALTER TABLE devices ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_drafts/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS enrollment_sessions/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS integrations/);
   assert.match(migration, /CREATE POLICY tenant_isolation_devices/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_policy_drafts/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_enrollment_sessions/);
   assert.match(migration, /current_setting\('app\.tenant_id'/);
 });
 
@@ -35,7 +43,13 @@ test("dev server exposes fleet operations endpoints", async () => {
 
   assert.match(server, /pathname === "\/api\/rollouts"/);
   assert.match(server, /pathname === "\/api\/evidence\/exports"/);
+  assert.match(server, /pathname === "\/api\/policy\/assist"/);
+  assert.match(server, /pathname === "\/api\/enrollments"/);
+  assert.match(server, /pathname === "\/api\/telemetry\/query"/);
+  assert.match(server, /pathname === "\/api\/telemetry\/sample"/);
   assert.match(server, /\/api\\\/alarms\\\/\(\[\^\/\]\+\)\\\/ack/);
+  assert.match(server, /\/api\\\/policy\\\/drafts\\\/\(\[\^\/\]\+\)\\\/simulate/);
+  assert.match(server, /\/api\\\/policy\\\/drafts\\\/\(\[\^\/\]\+\)\\\/approve/);
   assert.match(server, /pathname === "\/api\/policy\/packs"/);
   assert.match(server, /pathname === "\/api\/integrations\/summary"/);
 });
@@ -47,9 +61,20 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="policyPackList"/);
+  assert.match(html, /data-tab-panel="policies"/);
+  assert.match(html, /data-tab-panel="telemetry"/);
+  assert.match(html, /id="aiPolicyButton"/);
+  assert.match(html, /id="telemetryQueryButton"/);
+  assert.match(html, /id="enrollmentButton"/);
   assert.match(app, /async function createRollout/);
   assert.match(app, /async function exportEvidence/);
   assert.match(app, /async function acknowledgeAlarm/);
+  assert.match(app, /function setActiveTab/);
+  assert.match(app, /async function generatePolicyDraft/);
+  assert.match(app, /async function simulateLatestPolicy/);
+  assert.match(app, /async function approveLatestPolicy/);
+  assert.match(app, /async function queryTelemetry/);
+  assert.match(app, /async function createEnrollment/);
 });
 
 test("static console assets stay ascii-only", async () => {

@@ -32,6 +32,19 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+    },
+    "pollek.cloud.policy_authoring": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "human_approval_required": true,
+      "paths": ["/api/policy/assist", "/api/policy/drafts", "/api/policy/drafts/{draft_id}/simulate", "/api/policy/drafts/{draft_id}/approve"]
+    },
+    "pollek.cloud.integrations": {
+      "direction": "cloud_to_siem",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "paths": ["/api/integrations/summary", "/api/integrations/{integration_id}/test", "/api/evidence/exports"]
     }
   },
   "features": {
@@ -40,7 +53,7 @@
     "spiffe_mtls": true,
     "oauth_device_flow": true,
     "telemetry_otlp": true,
-    "ai_policy_editor": false,
+    "ai_policy_editor": true,
     "dev_loopback_protocol_test": true
   }
 }

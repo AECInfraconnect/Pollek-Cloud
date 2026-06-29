@@ -29,14 +29,40 @@ const refs = {
   taskList: document.querySelector("#taskList"),
   policyPackCount: document.querySelector("#policyPackCount"),
   policyPackList: document.querySelector("#policyPackList"),
-  integrationList: document.querySelector("#integrationList")
+  integrationList: document.querySelector("#integrationList"),
+  relationshipMapFull: document.querySelector("#relationshipMapFull"),
+  relationshipDetailList: document.querySelector("#relationshipDetailList"),
+  policyDraftList: document.querySelector("#policyDraftList"),
+  bundleStatusList: document.querySelector("#bundleStatusList"),
+  policyIntent: document.querySelector("#policyIntent"),
+  policyEngineHint: document.querySelector("#policyEngineHint"),
+  aiPolicyButton: document.querySelector("#aiPolicyButton"),
+  simulatePolicyButton: document.querySelector("#simulatePolicyButton"),
+  approvePolicyButton: document.querySelector("#approvePolicyButton"),
+  policyAssistantResult: document.querySelector("#policyAssistantResult"),
+  telemetrySeverity: document.querySelector("#telemetrySeverity"),
+  telemetryType: document.querySelector("#telemetryType"),
+  telemetrySearch: document.querySelector("#telemetrySearch"),
+  telemetryQueryButton: document.querySelector("#telemetryQueryButton"),
+  telemetrySampleButton: document.querySelector("#telemetrySampleButton"),
+  telemetryExplorer: document.querySelector("#telemetryExplorer"),
+  alarmTabList: document.querySelector("#alarmTabList"),
+  enrollmentButton: document.querySelector("#enrollmentButton"),
+  enrollmentList: document.querySelector("#enrollmentList"),
+  evidenceExportList: document.querySelector("#evidenceExportList"),
+  rolloutTimeline: document.querySelector("#rolloutTimeline"),
+  auditList: document.querySelector("#auditList"),
+  integrationHealthList: document.querySelector("#integrationHealthList")
 };
 
 const app = {
   data: null,
   selectedObjectId: "tenant_local_lab",
+  activeTab: "summary",
   query: "",
-  statusFilter: "all"
+  statusFilter: "all",
+  telemetryResults: [],
+  latestPolicyDraftId: null
 };
 
 function escapeHtml(value) {
@@ -64,11 +90,43 @@ function setCloudStatus(ok, text) {
   refs.cloudStatus.textContent = text;
 }
 
+function tabFromHash() {
+  const match = location.hash.match(/tab=([a-z_]+)/);
+  return match ? match[1] : "summary";
+}
+
+function setActiveTab(tabName, options = {}) {
+  const panel = document.querySelector(`[data-tab-panel="${tabName}"]`);
+  const nextTab = panel ? tabName : "summary";
+  app.activeTab = nextTab;
+
+  document.querySelectorAll(".tab").forEach((button) => {
+    const active = button.dataset.tab === nextTab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.querySelectorAll("[data-tab-panel]").forEach((item) => {
+    item.hidden = item.dataset.tabPanel !== nextTab;
+    item.classList.toggle("active", item.dataset.tabPanel === nextTab);
+  });
+  document.querySelectorAll(".view-button").forEach((button) => {
+    const target = button.dataset.targetTab || "summary";
+    button.classList.toggle("active", target === nextTab);
+  });
+
+  if (options.updateHash !== false) {
+    history.replaceState(null, "", `#tab=${nextTab}`);
+  }
+}
+
 async function refresh() {
   try {
     const response = await fetch("/api/fleet");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     app.data = await response.json();
+    if (!app.latestPolicyDraftId && app.data.policy_drafts?.length) {
+      app.latestPolicyDraftId = app.data.policy_drafts[0].id;
+    }
     setCloudStatus(true, "Cloud API online");
     render();
   } catch (error) {
@@ -83,12 +141,19 @@ function render() {
   renderTree();
   renderObjectHeader();
   renderFleetRows();
-  renderRelationships();
+  renderRelationships(refs.relationshipMap, 6);
+  renderRelationships(refs.relationshipMapFull, 24);
+  renderRelationshipDetails();
   renderEvents();
   renderAlarms();
   renderTasks();
   renderPolicyPacks();
   renderIntegrations();
+  renderPolicyWorkspace();
+  renderTelemetryExplorer();
+  renderTimeline();
+  renderAudit();
+  setActiveTab(app.activeTab, { updateHash: false });
 }
 
 function renderSummary(summary) {
@@ -202,16 +267,17 @@ function renderFleetRows() {
   }
 }
 
-function renderRelationships() {
+function renderRelationships(container = refs.relationshipMap, limit = 6) {
+  if (!container) return;
   const object = selectedObject();
   const relations = app.data.relationships.filter((rel) => rel.from === object.id || rel.to === object.id);
-  refs.relationshipMap.innerHTML = "";
+  container.innerHTML = "";
   const center = document.createElement("div");
   center.className = "relationship-node center";
   center.innerHTML = `<strong>${escapeHtml(object.name || object.id)}</strong><span>${escapeHtml(object.type || "object")}</span>`;
-  refs.relationshipMap.append(center);
+  container.append(center);
 
-  const visible = relations.length ? relations : app.data.relationships.slice(0, 6);
+  const visible = (relations.length ? relations : app.data.relationships).slice(0, limit);
   for (const rel of visible) {
     const relatedId = rel.from === object.id ? rel.to : rel.from;
     const related = app.data.objects[relatedId] || { id: relatedId, name: relatedId, type: "object", status: "unknown" };
@@ -224,7 +290,25 @@ function renderRelationships() {
         render();
       }
     });
-    refs.relationshipMap.append(node);
+    container.append(node);
+  }
+}
+
+function renderRelationshipDetails() {
+  refs.relationshipDetailList.innerHTML = "";
+  const object = selectedObject();
+  const relations = app.data.relationships.filter((rel) => rel.from === object.id || rel.to === object.id);
+  const rows = relations.length ? relations : app.data.relationships.slice(0, 8);
+  for (const rel of rows) {
+    const from = app.data.objects[rel.from] || { name: rel.from, type: "object" };
+    const to = app.data.objects[rel.to] || { name: rel.to, type: "object" };
+    const row = document.createElement("div");
+    row.className = "detail-row";
+    row.innerHTML = `
+      <strong>${escapeHtml(from.name)} -> ${escapeHtml(to.name)}</strong>
+      <span>${escapeHtml(rel.label)} | ${escapeHtml(from.type)} to ${escapeHtml(to.type)}</span>
+    `;
+    refs.relationshipDetailList.append(row);
   }
 }
 
@@ -248,29 +332,70 @@ function renderEvents() {
   }
 }
 
+function eventMatchesObject(event, object) {
+  if (!object?.id || object.id === "tenant_local_lab") return true;
+  return event.device_id === object.id || event.payload?.lcp_id === object.id || event.payload?.object_id === object.id;
+}
+
+function renderTelemetryExplorer() {
+  refs.telemetryExplorer.innerHTML = "";
+  const object = selectedObject();
+  const source = app.telemetryResults.length ? app.telemetryResults : app.data.events;
+  const events = source.filter((event) => eventMatchesObject(event, object));
+  const visible = events.length ? events : [{
+    received_at: new Date().toISOString(),
+    event_type: "waiting",
+    severity: "info",
+    payload: { detail: "No telemetry matches this object. Use Send Sample while LCP is still building." }
+  }];
+  for (const event of visible.slice(0, 30)) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${statusClass(event.severity === "critical" ? "failed" : event.severity === "warning" ? "degraded" : "connected")}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(event.event_type)}</strong>
+      <span>${escapeHtml(fmtTime(event.received_at))} | ${escapeHtml(event.severity || "info")} | ${escapeHtml(event.device_id || "cloud")}</span>
+      <code>${escapeHtml(JSON.stringify(event.payload || {}, null, 2))}</code>
+    `;
+    refs.telemetryExplorer.append(row);
+  }
+}
+
 function renderAlarms() {
   const alarms = app.data.alarms.filter((alarm) => alarm.state === "open");
   refs.alarmCount.textContent = alarms.length;
   refs.alarmList.innerHTML = "";
+  refs.alarmTabList.innerHTML = "";
   for (const alarm of alarms) {
-    const row = document.createElement("div");
-    row.className = `alarm-row ${alarm.severity}`;
-    row.innerHTML = `
-      <button class="alarm-target" data-object-id="${escapeHtml(alarm.object_id)}">
-        <strong>${escapeHtml(alarm.summary)}</strong>
-        <span>${escapeHtml(alarm.object_name)} - ${escapeHtml(fmtTime(alarm.created_at))}</span>
-      </button>
-      <button class="mini-button" data-alarm-id="${escapeHtml(alarm.id)}">Ack</button>
-    `;
-    row.querySelector(".alarm-target").addEventListener("click", () => {
-      app.selectedObjectId = alarm.object_id;
-      render();
-    });
-    row.querySelector(".mini-button").addEventListener("click", async () => {
-      await acknowledgeAlarm(alarm.id);
-    });
-    refs.alarmList.append(row);
+    refs.alarmList.append(createAlarmRow(alarm));
+    refs.alarmTabList.append(createAlarmRow(alarm, true));
   }
+  if (!alarms.length) {
+    const row = document.createElement("div");
+    row.className = "detail-row ok";
+    row.innerHTML = "<strong>No open alarms</strong><span>The incident queue is clear.</span>";
+    refs.alarmList.append(row);
+    refs.alarmTabList.append(row.cloneNode(true));
+  }
+}
+
+function createAlarmRow(alarm, verbose = false) {
+  const row = document.createElement("div");
+  row.className = `alarm-row ${alarm.severity}`;
+  row.innerHTML = `
+    <button class="alarm-target" data-object-id="${escapeHtml(alarm.object_id)}">
+      <strong>${escapeHtml(alarm.summary)}</strong>
+      <span>${escapeHtml(alarm.object_name)} - ${escapeHtml(fmtTime(alarm.created_at))}${verbose ? ` - ${escapeHtml(alarm.state)}` : ""}</span>
+    </button>
+    <button class="mini-button" data-alarm-id="${escapeHtml(alarm.id)}">Ack</button>
+  `;
+  row.querySelector(".alarm-target").addEventListener("click", () => {
+    app.selectedObjectId = alarm.object_id;
+    render();
+  });
+  row.querySelector(".mini-button").addEventListener("click", async () => {
+    await acknowledgeAlarm(alarm.id);
+  });
+  return row;
 }
 
 function renderTasks() {
@@ -310,6 +435,123 @@ function renderIntegrations() {
       <span>${escapeHtml(item.type)} - ${escapeHtml(item.status)}</span>
     `;
     refs.integrationList.append(row);
+  }
+}
+
+function renderPolicyWorkspace() {
+  refs.policyDraftList.innerHTML = "";
+  refs.bundleStatusList.innerHTML = "";
+  const drafts = app.data.policy_drafts || [];
+  for (const draft of drafts.slice(0, 8)) {
+    const row = document.createElement("button");
+    row.className = `detail-row ${draft.status === "approved" ? "ok" : draft.status === "requires_human_review" ? "warn" : ""}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(draft.title)}</strong>
+      <span>${escapeHtml(draft.status)} | ${escapeHtml(draft.recommended_engine)} | ${escapeHtml(fmtTime(draft.updated_at || draft.created_at))}</span>
+      <code>${escapeHtml(draft.intent)}</code>
+    `;
+    row.addEventListener("click", () => {
+      app.latestPolicyDraftId = draft.id;
+      refs.policyIntent.value = draft.intent;
+      refs.policyEngineHint.value = draft.recommended_engine || "rego";
+      refs.policyAssistantResult.innerHTML = `
+        <strong>${escapeHtml(draft.title)}</strong>
+        <span>${escapeHtml(draft.status)} - human approval required before deployment</span>
+        <code>${escapeHtml(JSON.stringify(draft.policy_ir, null, 2))}</code>
+      `;
+    });
+    refs.policyDraftList.append(row);
+  }
+  if (!drafts.length) {
+    refs.policyDraftList.innerHTML = `<div class="detail-row"><strong>No policy drafts</strong><span>Generate a draft from policy intent.</span></div>`;
+  }
+
+  for (const bundle of app.data.policy_bundles.slice(0, 8)) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${bundle.status === "active" ? "ok" : bundle.status === "stale" ? "warn" : ""}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(bundle.name)}</strong>
+      <span>${escapeHtml(bundle.status)} | revision ${escapeHtml(bundle.revision)} | coverage ${escapeHtml(bundle.coverage)}%</span>
+      <code>${escapeHtml(bundle.id)}${bundle.signed ? " | signed | hot reload" : ""}</code>
+    `;
+    refs.bundleStatusList.append(row);
+  }
+}
+
+function renderTimeline() {
+  refs.rolloutTimeline.innerHTML = "";
+  refs.enrollmentList.innerHTML = "";
+  refs.evidenceExportList.innerHTML = "";
+
+  const rollouts = app.data.rollout_plans || [];
+  for (const rollout of (rollouts.length ? rollouts : [{ bundle_id: "No rollout planned", status: "idle", target_ids: [], created_at: "" }]).slice(0, 8)) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${rollout.status === "planned" ? "warn" : ""}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(rollout.bundle_id)}</strong>
+      <span>${escapeHtml(rollout.status)} | targets ${escapeHtml((rollout.target_ids || []).length)} | ${escapeHtml(fmtTime(rollout.created_at))}</span>
+      <code>${escapeHtml(rollout.wave_strategy || "not scheduled")}</code>
+    `;
+    refs.rolloutTimeline.append(row);
+  }
+
+  const enrollments = app.data.enrollment_sessions || [];
+  for (const session of (enrollments.length ? enrollments : [{ user_code: "No enrollment", status: "idle", command: "Create an enrollment when a new LCP is ready.", created_at: "" }]).slice(0, 6)) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${session.status === "waiting_for_lcp" ? "warn" : ""}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(session.user_code)}</strong>
+      <span>${escapeHtml(session.status)} | ${escapeHtml(fmtTime(session.created_at))}</span>
+      <code>${escapeHtml(session.command)}</code>
+    `;
+    refs.enrollmentList.append(row);
+  }
+
+  const exports = app.data.evidence_exports || [];
+  for (const item of (exports.length ? exports : [{ id: "No evidence exports", status: "idle", scope: "none", requested_at: "" }]).slice(0, 6)) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${item.status === "ready" ? "ok" : ""}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(item.id)}</strong>
+      <span>${escapeHtml(item.status)} | ${escapeHtml(item.scope)} | ${escapeHtml(fmtTime(item.requested_at))}</span>
+    `;
+    refs.evidenceExportList.append(row);
+  }
+}
+
+function renderAudit() {
+  refs.auditList.innerHTML = "";
+  refs.integrationHealthList.innerHTML = "";
+  const auditRows = app.data.audit_events?.length ? app.data.audit_events : app.data.tasks.map((task) => ({
+    action: task.type,
+    target_type: "task",
+    target_id: task.id,
+    occurred_at: task.created_at,
+    payload: task.details || {}
+  }));
+  for (const event of (auditRows.length ? auditRows : [{ action: "No audit events", target_type: "audit", target_id: "none", occurred_at: "", payload: {} }]).slice(0, 12)) {
+    const row = document.createElement("div");
+    row.className = "detail-row";
+    row.innerHTML = `
+      <strong>${escapeHtml(event.action)}</strong>
+      <span>${escapeHtml(event.target_type)} | ${escapeHtml(event.target_id)} | ${escapeHtml(fmtTime(event.occurred_at))}</span>
+      <code>${escapeHtml(JSON.stringify(event.payload || {}, null, 2))}</code>
+    `;
+    refs.auditList.append(row);
+  }
+
+  for (const item of app.data.integrations) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${item.status === "configured" ? "ok" : item.status === "needs_secret" ? "warn" : ""}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${escapeHtml(item.type)} | ${escapeHtml(item.direction)} | ${escapeHtml(item.status)}</span>
+      <button class="mini-button" data-integration-id="${escapeHtml(item.id)}">Test</button>
+    `;
+    row.querySelector(".mini-button").addEventListener("click", async () => {
+      await testIntegration(item.id);
+    });
+    refs.integrationHealthList.append(row);
   }
 }
 
@@ -407,6 +649,137 @@ async function acknowledgeAlarm(alarmId) {
   }
 }
 
+async function generatePolicyDraft() {
+  refs.aiPolicyButton.disabled = true;
+  refs.aiPolicyButton.textContent = "Generating";
+  try {
+    const payload = await postJson("/api/policy/assist", {
+      intent: refs.policyIntent.value,
+      engine_hint: refs.policyEngineHint.value
+    });
+    app.latestPolicyDraftId = payload.draft.id;
+    refs.policyAssistantResult.innerHTML = `
+      <strong>${escapeHtml(payload.draft.title)}</strong>
+      <span>${escapeHtml(payload.draft.status)} - human approval required</span>
+      <code>${escapeHtml(JSON.stringify(payload.draft.policy_ir, null, 2))}</code>
+    `;
+    await refresh();
+    setActiveTab("policies");
+  } catch (error) {
+    refs.policyAssistantResult.textContent = String(error);
+  } finally {
+    refs.aiPolicyButton.disabled = false;
+    refs.aiPolicyButton.textContent = "Generate Draft";
+  }
+}
+
+async function simulateLatestPolicy() {
+  const draftId = app.latestPolicyDraftId || app.data.policy_drafts?.[0]?.id;
+  if (!draftId) {
+    refs.policyAssistantResult.textContent = "No policy draft to simulate.";
+    return;
+  }
+  refs.simulatePolicyButton.disabled = true;
+  refs.simulatePolicyButton.textContent = "Simulating";
+  try {
+    const payload = await postJson(`/api/policy/drafts/${encodeURIComponent(draftId)}/simulate`, {});
+    refs.policyAssistantResult.innerHTML = `
+      <strong>${escapeHtml(payload.simulation.status)}</strong>
+      <span>${escapeHtml(payload.simulation.summary)}</span>
+      <code>${escapeHtml(JSON.stringify(payload.simulation.decisions, null, 2))}</code>
+    `;
+    await refresh();
+  } catch (error) {
+    refs.policyAssistantResult.textContent = String(error);
+  } finally {
+    refs.simulatePolicyButton.disabled = false;
+    refs.simulatePolicyButton.textContent = "Simulate Latest";
+  }
+}
+
+async function approveLatestPolicy() {
+  const draftId = app.latestPolicyDraftId || app.data.policy_drafts?.[0]?.id;
+  if (!draftId) {
+    refs.policyAssistantResult.textContent = "No policy draft to approve.";
+    return;
+  }
+  refs.approvePolicyButton.disabled = true;
+  refs.approvePolicyButton.textContent = "Approving";
+  try {
+    const payload = await postJson(`/api/policy/drafts/${encodeURIComponent(draftId)}/approve`, {});
+    refs.policyAssistantResult.innerHTML = `
+      <strong>Approved, not deployed</strong>
+      <span>${escapeHtml(payload.bundle.id)} is signed and ready for rollout.</span>
+      <code>${escapeHtml(JSON.stringify({ rollout_required: payload.rollout_required, bundle: payload.bundle }, null, 2))}</code>
+    `;
+    await refresh();
+  } catch (error) {
+    refs.policyAssistantResult.textContent = String(error);
+  } finally {
+    refs.approvePolicyButton.disabled = false;
+    refs.approvePolicyButton.textContent = "Approve Latest";
+  }
+}
+
+async function queryTelemetry() {
+  const params = new URLSearchParams();
+  params.set("severity", refs.telemetrySeverity.value);
+  if (refs.telemetryType.value) params.set("type", refs.telemetryType.value);
+  if (refs.telemetrySearch.value) params.set("q", refs.telemetrySearch.value);
+  const response = await fetch(`/api/telemetry/query?${params}`);
+  const payload = await response.json();
+  app.telemetryResults = payload.events || [];
+  renderTelemetryExplorer();
+  setActiveTab("telemetry");
+}
+
+async function sendSampleTelemetry() {
+  refs.telemetrySampleButton.disabled = true;
+  refs.telemetrySampleButton.textContent = "Sending";
+  try {
+    await postJson("/api/telemetry/sample", {
+      lcp_id: selectedObject().type === "lcp" ? selectedObject().id : "lcp_local",
+      severity: "warning"
+    });
+    app.telemetryResults = [];
+    await refresh();
+    setActiveTab("telemetry");
+  } finally {
+    refs.telemetrySampleButton.disabled = false;
+    refs.telemetrySampleButton.textContent = "Send Sample";
+  }
+}
+
+async function createEnrollment() {
+  refs.enrollmentButton.disabled = true;
+  refs.enrollmentButton.textContent = "Creating";
+  try {
+    const payload = await postJson("/api/enrollments", {
+      device_name: "New Local Control Plane"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Enrollment created</strong>
+      <span>${escapeHtml(payload.session.user_code)}</span>
+      <code>${escapeHtml(payload.session.command)}</code>
+    `;
+    await refresh();
+    setActiveTab("timeline");
+  } finally {
+    refs.enrollmentButton.disabled = false;
+    refs.enrollmentButton.textContent = "Create Enrollment";
+  }
+}
+
+async function testIntegration(integrationId) {
+  const payload = await postJson(`/api/integrations/${encodeURIComponent(integrationId)}/test`, {});
+  refs.probeResult.innerHTML = `
+    <strong>Integration test: ${escapeHtml(payload.result)}</strong>
+    <span>${escapeHtml(payload.integration.name)} - ${escapeHtml(payload.integration.status)}</span>
+  `;
+  await refresh();
+  setActiveTab("audit");
+}
+
 refs.globalSearch.addEventListener("input", (event) => {
   app.query = event.target.value;
   render();
@@ -421,6 +794,12 @@ refs.refreshButton.addEventListener("click", refresh);
 refs.probeButton.addEventListener("click", () => runProbe(refs.lcpUrl.value));
 refs.rolloutButton.addEventListener("click", createRollout);
 refs.evidenceButton.addEventListener("click", exportEvidence);
+refs.aiPolicyButton.addEventListener("click", generatePolicyDraft);
+refs.simulatePolicyButton.addEventListener("click", simulateLatestPolicy);
+refs.approvePolicyButton.addEventListener("click", approveLatestPolicy);
+refs.telemetryQueryButton.addEventListener("click", queryTelemetry);
+refs.telemetrySampleButton.addEventListener("click", sendSampleTelemetry);
+refs.enrollmentButton.addEventListener("click", createEnrollment);
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });
   const payload = await response.json();
@@ -431,10 +810,25 @@ refs.probeVisibleButton.addEventListener("click", async () => {
 
 document.querySelectorAll(".tab").forEach((button) => {
   button.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("active"));
-    button.classList.add("active");
+    setActiveTab(button.dataset.tab);
   });
 });
 
+document.querySelectorAll(".view-button").forEach((button) => {
+  const label = button.textContent.trim();
+  button.dataset.targetTab = {
+    Inventory: "summary",
+    "Policy Center": "policies",
+    "Observe Center": "telemetry",
+    Compliance: "timeline"
+  }[label] || "summary";
+  button.addEventListener("click", () => setActiveTab(button.dataset.targetTab));
+});
+
+window.addEventListener("hashchange", () => {
+  setActiveTab(tabFromHash(), { updateHash: false });
+});
+
+setActiveTab(tabFromHash(), { updateHash: false });
 await refresh();
 setInterval(refresh, 5000);

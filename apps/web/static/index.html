@@ -90,64 +90,207 @@
           <button class="tab" data-tab="policies">Policies</button>
           <button class="tab" data-tab="telemetry">Telemetry</button>
           <button class="tab" data-tab="alarms">Alarms</button>
+          <button class="tab" data-tab="timeline">Timeline</button>
           <button class="tab" data-tab="audit">Audit</button>
         </section>
 
         <div class="workspace-grid">
           <section class="primary-pane">
-            <div class="pane-header">
-              <div>
-                <p class="eyebrow">Fleet</p>
-                <h3>Local Control Planes</h3>
+            <div class="tab-panel active" data-tab-panel="summary">
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Fleet</p>
+                  <h3>Local Control Planes</h3>
+                </div>
+                <div class="table-tools">
+                  <select id="statusFilter" aria-label="Status filter">
+                    <option value="all">All status</option>
+                    <option value="connected">Connected</option>
+                    <option value="degraded">Degraded</option>
+                    <option value="offline">Offline</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </div>
               </div>
-              <div class="table-tools">
-                <select id="statusFilter" aria-label="Status filter">
-                  <option value="all">All status</option>
-                  <option value="connected">Connected</option>
-                  <option value="degraded">Degraded</option>
-                  <option value="offline">Offline</option>
-                  <option value="unknown">Unknown</option>
-                </select>
+              <div class="table-wrap">
+                <table class="fleet-table">
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Name</th>
+                      <th>Site</th>
+                      <th>Version</th>
+                      <th>Contract</th>
+                      <th>Bundle</th>
+                      <th>Agents</th>
+                      <th>Coverage</th>
+                      <th>Last Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fleetRows"></tbody>
+                </table>
               </div>
-            </div>
-            <div class="table-wrap">
-              <table class="fleet-table">
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Name</th>
-                    <th>Site</th>
-                    <th>Version</th>
-                    <th>Contract</th>
-                    <th>Bundle</th>
-                    <th>Agents</th>
-                    <th>Coverage</th>
-                    <th>Last Seen</th>
-                  </tr>
-                </thead>
-                <tbody id="fleetRows"></tbody>
-              </table>
+
+              <div class="lower-grid">
+                <section class="sub-pane">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Relationships</p>
+                      <h3>Relationship Map</h3>
+                    </div>
+                  </div>
+                  <div id="relationshipMap" class="relationship-map"></div>
+                </section>
+                <section class="sub-pane">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Telemetry</p>
+                      <h3>Telemetry Events</h3>
+                    </div>
+                  </div>
+                  <div id="eventTable" class="event-list"></div>
+                </section>
+              </div>
             </div>
 
-            <div class="lower-grid">
-              <section class="sub-pane">
-                <div class="pane-header compact">
-                  <div>
-                    <p class="eyebrow">Relationships</p>
-                    <h3>Relationship Map</h3>
-                  </div>
+            <div class="tab-panel" data-tab-panel="relationships" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Relationships</p>
+                  <h3>Object Relationship Map</h3>
                 </div>
-                <div id="relationshipMap" class="relationship-map"></div>
-              </section>
-              <section class="sub-pane">
-                <div class="pane-header compact">
-                  <div>
-                    <p class="eyebrow">Telemetry</p>
-                    <h3>Telemetry Events</h3>
-                  </div>
+              </div>
+              <div id="relationshipMapFull" class="relationship-map expanded"></div>
+              <div id="relationshipDetailList" class="detail-list"></div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="policies" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Policy Center</p>
+                  <h3>Draft, Simulate, Approve</h3>
                 </div>
-                <div id="eventTable" class="event-list"></div>
-              </section>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">AI Assisted Policy Editor</p>
+                      <h3>Policy Draft</h3>
+                    </div>
+                    <button id="aiPolicyButton" class="primary-button">Generate Draft</button>
+                  </div>
+                  <label for="policyEngineHint">Engine</label>
+                  <select id="policyEngineHint">
+                    <option value="rego">OPA/Rego</option>
+                    <option value="cedar">Cedar</option>
+                    <option value="openfga">OpenFGA</option>
+                  </select>
+                  <label for="policyIntent">Intent</label>
+                  <textarea id="policyIntent" rows="5">Warn when AI tool output attempts to override system or developer instructions.</textarea>
+                  <div class="button-row">
+                    <button id="simulatePolicyButton" class="secondary-button">Simulate Latest</button>
+                    <button id="approvePolicyButton" class="secondary-button">Approve Latest</button>
+                  </div>
+                  <div id="policyAssistantResult" class="probe-result">Policy assistant output will appear here.</div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Human Approval Gate</p>
+                      <h3>Drafts</h3>
+                    </div>
+                  </div>
+                  <div id="policyDraftList" class="detail-list"></div>
+                  <div class="pane-header compact second-header">
+                    <div>
+                      <p class="eyebrow">Bundle Status</p>
+                      <h3>Signed Artifacts</h3>
+                    </div>
+                  </div>
+                  <div id="bundleStatusList" class="detail-list"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="telemetry" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Observe Center</p>
+                  <h3>Telemetry Explorer</h3>
+                </div>
+                <button id="telemetrySampleButton" class="secondary-button">Send Sample</button>
+              </div>
+              <div class="filter-row">
+                <select id="telemetrySeverity" aria-label="Telemetry severity">
+                  <option value="all">All severity</option>
+                  <option value="info">Info</option>
+                  <option value="warning">Warning</option>
+                  <option value="critical">Critical</option>
+                </select>
+                <input id="telemetryType" placeholder="Event type contains" />
+                <input id="telemetrySearch" placeholder="Search payload" />
+                <button id="telemetryQueryButton" class="primary-button">Query</button>
+              </div>
+              <div id="telemetryExplorer" class="event-list large"></div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="alarms" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Alarms</p>
+                  <h3>Incident Queue</h3>
+                </div>
+              </div>
+              <div id="alarmTabList" class="alarm-list large"></div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="timeline" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Timeline</p>
+                  <h3>Rollouts and Evidence</h3>
+                </div>
+                <button id="enrollmentButton" class="secondary-button">Create Enrollment</button>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Bundle Rollout Timeline</p>
+                      <h3>Deployment Waves</h3>
+                    </div>
+                  </div>
+                  <div id="rolloutTimeline" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Enrollment and Evidence</p>
+                      <h3>Operational Records</h3>
+                    </div>
+                  </div>
+                  <div id="enrollmentList" class="detail-list"></div>
+                  <div id="evidenceExportList" class="detail-list second-list"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="audit" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Audit</p>
+                  <h3>Tasks, Audit Trail, Integrations</h3>
+                </div>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div id="auditList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div id="integrationHealthList" class="detail-list"></div>
+                </section>
+              </div>
             </div>
           </section>
 
