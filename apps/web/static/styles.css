@@ -675,6 +675,11 @@ h3 {
   margin-top: 10px;
 }
 
+.compact-actions {
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  margin-top: 0;
+}
+
 .detail-row {
   width: 100%;
   min-height: 54px;

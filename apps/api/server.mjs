@@ -14,6 +14,222 @@ const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
 
+const ADAPTER_CATALOG = [
+  {
+    id: "openai_chatgpt",
+    display_name: "OpenAI ChatGPT and API",
+    short_name: "OpenAI",
+    category: "llm_provider",
+    description: "Hosted model and assistant traffic discovered from API, browser, or desktop activity.",
+    confidence: "high",
+    integration_modes: ["direct_api", "browser_activity", "enterprise_admin"],
+    auth_modes: ["api_key", "oauth_admin", "browser_session_observe"],
+    dynamic_fields: ["organization_id", "project_id", "base_url"],
+    discovery_capabilities: ["model_usage", "tool_call", "prompt_content", "cost_signal"],
+    probe_endpoints: ["/v1/models"],
+    entity_kinds: ["registered_agent", "found_agent", "observability"],
+    pollek_entity_type: "registered_agent"
+  },
+  {
+    id: "anthropic_claude",
+    display_name: "Anthropic Claude",
+    short_name: "Claude",
+    category: "llm_provider",
+    description: "Claude API and desktop usage mapped to agent identity, tool calls, and resource access.",
+    confidence: "high",
+    integration_modes: ["direct_api", "desktop_activity", "browser_activity"],
+    auth_modes: ["api_key", "oauth_admin", "browser_session_observe"],
+    dynamic_fields: ["workspace_id", "base_url"],
+    discovery_capabilities: ["model_usage", "tool_call", "prompt_content"],
+    probe_endpoints: ["/v1/models"],
+    entity_kinds: ["registered_agent", "found_agent", "observability"],
+    pollek_entity_type: "registered_agent"
+  },
+  {
+    id: "google_gemini_vertex",
+    display_name: "Google Gemini and Vertex AI",
+    short_name: "Gemini",
+    category: "llm_provider",
+    description: "Google AI traffic with project, model, and workspace context for enterprise tenants.",
+    confidence: "high",
+    integration_modes: ["vertex_api", "browser_activity", "workspace_admin"],
+    auth_modes: ["service_account", "oauth_admin", "browser_session_observe"],
+    dynamic_fields: ["project_id", "location", "workspace_customer_id"],
+    discovery_capabilities: ["model_usage", "tool_call", "project_scope"],
+    probe_endpoints: ["/v1/projects/{project}/locations/{location}/publishers/google/models"],
+    entity_kinds: ["registered_agent", "found_agent", "observability"],
+    pollek_entity_type: "registered_agent"
+  },
+  {
+    id: "github_copilot",
+    display_name: "GitHub Copilot",
+    short_name: "Copilot",
+    category: "code_assistant",
+    description: "Developer assistant activity from IDE, repository, and enterprise audit channels.",
+    confidence: "high",
+    integration_modes: ["ide_activity", "github_enterprise", "browser_activity"],
+    auth_modes: ["github_app", "oauth_admin", "browser_session_observe"],
+    dynamic_fields: ["enterprise_slug", "organization", "repo_allowlist"],
+    discovery_capabilities: ["code_context", "repo_access", "tool_usage"],
+    probe_endpoints: ["/enterprises/{enterprise}/copilot/usage"],
+    entity_kinds: ["registered_agent", "found_agent", "observability"],
+    pollek_entity_type: "registered_agent"
+  },
+  {
+    id: "cursor",
+    display_name: "Cursor IDE",
+    short_name: "Cursor",
+    category: "code_assistant",
+    description: "Local IDE agent activity correlated with process, workspace, file, and network evidence.",
+    confidence: "medium",
+    integration_modes: ["local_process", "workspace_activity", "network_metadata"],
+    auth_modes: ["local_observe", "browser_session_observe"],
+    dynamic_fields: ["process_path", "workspace_root"],
+    discovery_capabilities: ["process_metadata", "file_access", "tool_usage"],
+    probe_endpoints: [],
+    entity_kinds: ["found_agent", "observability", "enforcement"],
+    pollek_entity_type: "found_agent"
+  },
+  {
+    id: "mcp_server",
+    display_name: "MCP Server",
+    short_name: "MCP",
+    category: "protocol",
+    description: "Model Context Protocol servers, tools, resources, and invocation evidence.",
+    confidence: "high",
+    integration_modes: ["stdio_proxy", "http_sse", "local_registry"],
+    auth_modes: ["spiffe_mtls", "bearer_token", "local_observe"],
+    dynamic_fields: ["server_url", "command", "resource_scope"],
+    discovery_capabilities: ["tool_catalog", "resource_catalog", "tool_invocation"],
+    probe_endpoints: ["/.well-known/mcp.json"],
+    entity_kinds: ["observability", "enforcement", "policy"],
+    pollek_entity_type: "observability"
+  },
+  {
+    id: "a2a_agent_card",
+    display_name: "A2A Agent Card",
+    short_name: "A2A",
+    category: "protocol",
+    description: "Agent-to-Agent protocol discovery through agent cards and task endpoints.",
+    confidence: "medium",
+    integration_modes: ["agent_card", "http_endpoint", "gateway_observe"],
+    auth_modes: ["spiffe_mtls", "oauth_client", "bearer_token"],
+    dynamic_fields: ["agent_card_url", "issuer", "audience"],
+    discovery_capabilities: ["agent_identity", "task_capability", "delegation_trace"],
+    probe_endpoints: ["/.well-known/agent-card.json"],
+    entity_kinds: ["registered_agent", "found_agent", "observability"],
+    pollek_entity_type: "registered_agent"
+  },
+  {
+    id: "custom_http_agent",
+    display_name: "Custom HTTP Agent",
+    short_name: "Custom HTTP",
+    category: "custom",
+    description: "Generic REST or webhook-based AI agent, appliance, or policy decision component.",
+    confidence: "medium",
+    integration_modes: ["http_probe", "webhook", "gateway_observe"],
+    auth_modes: ["spiffe_mtls", "oauth_client", "api_key"],
+    dynamic_fields: ["base_url", "health_path", "telemetry_path"],
+    discovery_capabilities: ["health_check", "telemetry_ingest", "decision_log"],
+    probe_endpoints: ["/health", "/.well-known/pollek-contract"],
+    entity_kinds: ["registered_agent", "found_agent", "enforcement", "observability"],
+    pollek_entity_type: "registered_agent"
+  }
+];
+
+const SANDBOX_PROFILES = [
+  {
+    id: "sandbox_wasmtime_ephemeral",
+    name: "Ephemeral WASM Tool Sandbox",
+    runtime: "wasmtime",
+    isolation: "process-and-wasi",
+    network: "deny-by-default",
+    filesystem: "workspace-readonly",
+    ttl_seconds: 300,
+    cpu_millis: 2500,
+    memory_mb: 128,
+    local_pollek_capability: "sandbox.wasmtime"
+  },
+  {
+    id: "sandbox_policy_dry_run",
+    name: "Policy Dry-Run Sandbox",
+    runtime: "pdp-route-simulate",
+    isolation: "no-production-effect",
+    network: "cloud-to-lcp-simulate-only",
+    filesystem: "none",
+    ttl_seconds: 900,
+    cpu_millis: 1000,
+    memory_mb: 64,
+    local_pollek_capability: "pdp.routing.v1"
+  }
+];
+
+const COMPLIANCE_POLICY_BUNDLES = [
+  {
+    id: "cmp_eu_ai_act_high_risk",
+    name: "EU AI Act High-Risk AI Controls",
+    edition: "enterprise",
+    enterprise_only: true,
+    frameworks: ["EU_AI_ACT", "ISO42001"],
+    controls: ["risk-management", "human-oversight", "record-keeping", "transparency", "cybersecurity"],
+    target_engines: ["rego", "cedar", "openfga"],
+    recommended_pep_types: ["McpProxy", "HttpGateway", "BrowserExtension"],
+    default_mode: "approval",
+    deployable: true,
+    simulation_required: true,
+    evidence_streams: ["policy_decision", "tool_usage", "identity_access", "audit_event"],
+    cloud_artifacts: ["policy_ir", "rego", "cedar", "openfga_model", "bundle_manifest", "evidence_mapping"],
+    contract_hub_distribution: {
+      channel: "enterprise-compliance",
+      entitlement: "enterprise.compliance_policy_bundles",
+      local_delivery: "signed_bundle_only",
+      paths: ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+    }
+  },
+  {
+    id: "cmp_nist_ai_rmf_agentic",
+    name: "NIST AI RMF Agentic Governance",
+    edition: "enterprise",
+    enterprise_only: true,
+    frameworks: ["NIST_AI_RMF", "NIST_AI_600_1", "OWASP_AGENTIC"],
+    controls: ["govern", "map", "measure", "manage", "agent-inventory", "runtime-monitoring"],
+    target_engines: ["rego", "cedar"],
+    recommended_pep_types: ["McpProxy", "LocalModelProxy", "HttpGateway"],
+    default_mode: "warn",
+    deployable: true,
+    simulation_required: true,
+    evidence_streams: ["tool_usage", "resource_access", "security_coverage", "policy_decision"],
+    cloud_artifacts: ["policy_ir", "rego", "cedar", "bundle_manifest", "evidence_mapping"],
+    contract_hub_distribution: {
+      channel: "enterprise-compliance",
+      entitlement: "enterprise.compliance_policy_bundles",
+      local_delivery: "signed_bundle_only",
+      paths: ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+    }
+  },
+  {
+    id: "cmp_soc2_gdpr_data_access",
+    name: "SOC2 and GDPR Data Access Evidence",
+    edition: "enterprise",
+    enterprise_only: true,
+    frameworks: ["SOC2", "GDPR", "PDPA"],
+    controls: ["access-enforcement", "pii-minimization", "audit-logging", "retention", "egress-control"],
+    target_engines: ["rego", "wasm_plugin"],
+    recommended_pep_types: ["McpProxy", "FileSystemPep", "HttpGateway"],
+    default_mode: "enforce",
+    deployable: true,
+    simulation_required: true,
+    evidence_streams: ["resource_access", "content_scan", "policy_decision", "audit_event"],
+    cloud_artifacts: ["policy_ir", "rego", "wasm_plugin_config", "bundle_manifest", "evidence_mapping"],
+    contract_hub_distribution: {
+      channel: "enterprise-compliance",
+      entitlement: "enterprise.compliance_policy_bundles",
+      local_delivery: "signed_bundle_only",
+      paths: ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+    }
+  }
+];
+
 function createLocalEntityState(now) {
   const user = {
     id: "user_dell_localadmin",
@@ -411,7 +627,8 @@ function createFleetState() {
         default_mode: "enforce",
         engines: ["rego", "wasm-redactor"],
         coverage: 88,
-        controls: ["pii", "secrets", "document-egress"]
+        controls: ["pii", "secrets", "document-egress"],
+        compliance_bundle_ids: ["cmp_soc2_gdpr_data_access"]
       },
       {
         id: "pack_prompt_injection",
@@ -420,7 +637,8 @@ function createFleetState() {
         default_mode: "warn",
         engines: ["rego", "content-guard"],
         coverage: 76,
-        controls: ["tool-output-injection", "instruction-hijack"]
+        controls: ["tool-output-injection", "instruction-hijack"],
+        compliance_bundle_ids: ["cmp_eu_ai_act_high_risk", "cmp_nist_ai_rmf_agentic"]
       },
       {
         id: "pack_shadow_ai",
@@ -429,9 +647,11 @@ function createFleetState() {
         default_mode: "observe",
         engines: ["cedar", "rego"],
         coverage: 64,
-        controls: ["unmanaged-agents", "provider-egress"]
+        controls: ["unmanaged-agents", "provider-egress"],
+        compliance_bundle_ids: ["cmp_nist_ai_rmf_agentic"]
       }
     ],
+    compliancePolicyBundles: COMPLIANCE_POLICY_BUNDLES,
     policyDrafts: [
       {
         id: "draft_prompt_injection_guard",
@@ -465,6 +685,8 @@ function createFleetState() {
       }
     ],
     policySimulations: [],
+    policySandboxes: [],
+    breakglassRequests: [],
     integrations: [
       { id: "int_otlp", name: "OpenTelemetry Collector", type: "otlp", status: "configured", direction: "inbound-outbound" },
       { id: "int_splunk_hec", name: "Splunk HEC", type: "siem", status: "needs_secret", direction: "outbound" },
@@ -534,7 +756,9 @@ function createFleetState() {
     localEntities: localEntityState.entities,
     localEntityRelationships: localEntityState.relationships,
     localEntitySyncRuns: localEntityState.syncRuns,
-    rolloutPlans: []
+    adapterCatalog: ADAPTER_CATALOG,
+    rolloutPlans: [],
+    hotReloadEvents: []
   };
 }
 
@@ -544,6 +768,8 @@ const state = {
     id: "tnt_local_lab",
     name: "Local Lab Tenant",
     mode: "private-cloud-dev",
+    edition: "enterprise-dev",
+    entitlements: ["enterprise.compliance_policy_bundles", "enterprise.policy_sandbox", "enterprise.breakglass"],
     trustDomain: "local.pollek.cloud"
   },
   devices: new Map(),
@@ -628,6 +854,199 @@ function normalizeItems(payload) {
   if (Array.isArray(payload?.activity_sets)) return payload.activity_sets.flatMap((set) => set.items || []);
   if (payload && typeof payload === "object") return [payload];
   return [];
+}
+
+function normalizedKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9:/._-]+/g, " ")
+    .trim();
+}
+
+function inferResourceKind(value) {
+  const text = normalizedKey(value);
+  if (!text) return "unknown";
+  if (text.includes("github.com") || text.includes("gitlab.com") || text.endsWith(".git")) return "code_repo";
+  if (text.includes("drive.google.com")) return "google_drive";
+  if (text.includes("mail.google.com") || text.includes("gmail")) return "gmail";
+  if (text.includes("sharepoint.com") || text.includes("onedrive")) return "microsoft_365";
+  if (text.includes("slack.com")) return "slack";
+  if (text.includes("s3://") || text.includes("blob.core.windows.net") || text.includes("storage.googleapis.com")) return "cloud_storage";
+  if (text.includes("postgres") || text.includes("mysql") || text.includes("mongodb") || text.includes("redis")) return "database";
+  if (text.startsWith("http://") || text.startsWith("https://")) return "api_endpoint";
+  if (text.includes("\\") || text.includes("/") || text.includes(":\\") || text.includes("workspace")) return "file_system";
+  return "generic_resource";
+}
+
+function adapterCatalogSummary(catalog = ADAPTER_CATALOG) {
+  const byCategory = {};
+  for (const adapter of catalog) {
+    byCategory[adapter.category] = (byCategory[adapter.category] || 0) + 1;
+  }
+  return {
+    total: catalog.length,
+    categories: byCategory,
+    discovery_modes: [...new Set(catalog.flatMap((item) => item.integration_modes || []))].sort(),
+    entity_kinds: [...new Set(catalog.flatMap((item) => item.entity_kinds || []))].sort()
+  };
+}
+
+function computeEntityHealth(entity) {
+  const findings = [];
+  let score = 100;
+  const status = String(entity.status || "").toLowerCase();
+  const risk = String(entity.risk || "medium").toLowerCase();
+  const spiffeId = entity.trace?.spiffe_id || entity.identity?.spiffe_id;
+  const policyIds = entity.policy_ids || [];
+  const streams = entity.observability?.telemetry_streams || [];
+  const isAgent = entity.entity_type === "registered_agent" || entity.entity_type === "found_agent";
+  const isControl = entity.entity_type === "policy" || entity.entity_type === "enforcement";
+
+  if (["offline", "failed", "critical"].includes(status)) {
+    score -= 40;
+    findings.push("Entity is offline or critical.");
+  }
+  if (status === "found_unregistered") {
+    score -= 25;
+    findings.push("Found agent is not registered to a tenant trust scope.");
+  }
+  if (risk === "high") {
+    score -= 20;
+    findings.push("Entity carries high risk.");
+  }
+  if (isAgent && !spiffeId) {
+    score -= 20;
+    findings.push("SPIFFE identity is not bound yet.");
+  }
+  if (isAgent && !policyIds.length) {
+    score -= 15;
+    findings.push("No policy binding is attached.");
+  }
+  if (isControl && !entity.wasm?.hot_reload) {
+    score -= 12;
+    findings.push("WASM hot reload is not ready.");
+  }
+  if (!streams.length) {
+    score -= 10;
+    findings.push("No telemetry stream is attached.");
+  }
+  if (!entity.last_seen_at) {
+    score -= 8;
+    findings.push("Last-seen timestamp is missing.");
+  }
+
+  const normalizedScore = Math.max(0, Math.min(100, score));
+  const healthStatus = normalizedScore >= 80 ? "healthy" : normalizedScore >= 55 ? "warning" : "critical";
+  return {
+    entity_id: entity.id,
+    name: entity.name,
+    entity_type: entity.entity_type,
+    status: entity.status,
+    risk: entity.risk,
+    health_status: healthStatus,
+    score: normalizedScore,
+    findings,
+    spiffe_ready: Boolean(spiffeId),
+    policy_bound: policyIds.length > 0,
+    wasm_hot_reload_ready: Boolean(entity.wasm?.hot_reload),
+    telemetry_streams: streams,
+    last_seen_at: entity.last_seen_at
+  };
+}
+
+function entityHealthPage(entities = state.fleet.localEntities) {
+  const items = entities.map(computeEntityHealth);
+  return {
+    schema_version: "pollek.cloud.entity-health-page.v1",
+    tenant_id: "local",
+    generated_at: new Date().toISOString(),
+    summary: {
+      total: items.length,
+      healthy: items.filter((item) => item.health_status === "healthy").length,
+      warning: items.filter((item) => item.health_status === "warning").length,
+      critical: items.filter((item) => item.health_status === "critical").length,
+      avg_score: items.length ? Math.round(items.reduce((sum, item) => sum + item.score, 0) / items.length) : 0
+    },
+    items
+  };
+}
+
+function findDuplicateEntities(candidate = {}) {
+  const candidateName = normalizedKey(candidate.name || candidate.display_name);
+  const candidateLocalId = normalizedKey(candidate.local_object_id || candidate.agent_id || candidate.resource_id || candidate.id);
+  const candidateSpiffe = normalizedKey(candidate.trace?.spiffe_id || candidate.identity?.spiffe_id || candidate.spiffe_id);
+  const candidateProcess = normalizedKey(candidate.identity?.process_path || candidate.process_path);
+  const matches = [];
+
+  for (const entity of state.fleet.localEntities) {
+    const reasons = [];
+    if (candidateLocalId && normalizedKey(entity.local_object_id) === candidateLocalId) reasons.push("local_object_id");
+    if (candidateName && normalizedKey(entity.name) === candidateName) reasons.push("name");
+    if (candidateSpiffe && normalizedKey(entity.trace?.spiffe_id || entity.identity?.spiffe_id) === candidateSpiffe) reasons.push("spiffe_id");
+    if (candidateProcess && normalizedKey(entity.identity?.process_path) === candidateProcess) reasons.push("process_path");
+    if (!reasons.length) continue;
+    matches.push({
+      entity_id: entity.id,
+      name: entity.name,
+      entity_type: entity.entity_type,
+      status: entity.status,
+      reasons,
+      confidence: reasons.includes("local_object_id") || reasons.includes("spiffe_id") ? "high" : "medium"
+    });
+  }
+  return matches;
+}
+
+function compliancePolicyBundlePage() {
+  const enterpriseEnabled = state.tenant.entitlements?.includes("enterprise.compliance_policy_bundles");
+  const bundles = state.fleet.compliancePolicyBundles.map((bundle) => ({
+    ...bundle,
+    tenant_entitled: enterpriseEnabled,
+    status: enterpriseEnabled ? "available" : "enterprise_required",
+    local_pollek_catalog_visible: false
+  }));
+  return {
+    schema_version: "pollek.cloud.enterprise-compliance-policy-bundle-page.v1",
+    tenant_id: "local",
+    edition: state.tenant.edition,
+    enterprise_only: true,
+    local_pollek_boundary: "Local Pollek does not own the compliance catalog. It only receives signed bundle artifacts selected by Cloud Enterprise through Contract Hub.",
+    bundles
+  };
+}
+
+function complianceScorePage() {
+  const health = entityHealthPage().summary;
+  const evidenceCoverage = Math.min(100, Math.round(((state.events.length + state.auditEvents.length + state.fleet.localEntitySyncRuns.length) / 12) * 100));
+  const bundleCoverage = Math.min(100, Math.round((state.fleet.policyBundles.filter((bundle) => bundle.signed || bundle.hot_reload).length / Math.max(1, state.fleet.policyBundles.length)) * 100));
+  const identityCoverage = state.fleet.localEntities.length
+    ? Math.round((state.fleet.localEntities.filter((entity) => entity.trace?.spiffe_id || entity.identity?.spiffe_id).length / state.fleet.localEntities.length) * 100)
+    : 0;
+  const score = Math.round((health.avg_score * 0.35) + (evidenceCoverage * 0.2) + (bundleCoverage * 0.25) + (identityCoverage * 0.2));
+  return {
+    schema_version: "pollek.cloud.compliance-score.v1",
+    tenant_id: "local",
+    edition: state.tenant.edition,
+    score,
+    factors: {
+      entity_health: health.avg_score,
+      evidence_coverage: evidenceCoverage,
+      signed_bundle_coverage: bundleCoverage,
+      identity_trace_coverage: identityCoverage
+    },
+    frameworks: state.fleet.compliancePolicyBundles.map((bundle) => ({
+      id: bundle.id,
+      name: bundle.name,
+      frameworks: bundle.frameworks,
+      ready: state.tenant.entitlements?.includes("enterprise.compliance_policy_bundles"),
+      required_streams: bundle.evidence_streams
+    })),
+    gaps: [
+      ...(health.critical ? ["Critical entity health findings must be remediated before compliance export."] : []),
+      ...(identityCoverage < 80 ? ["SPIFFE/OIDC identity trace coverage is below enterprise target."] : []),
+      ...(evidenceCoverage < 70 ? ["Evidence chain needs more telemetry, audit, and decision log events."] : [])
+    ]
+  };
 }
 
 function entityIdFrom(kind, value) {
@@ -1010,6 +1429,7 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       risk: resource.sensitivity ? "medium" : "low",
       source: "registry/resources",
       sensitivity: resource.sensitivity,
+      resource_kind: resource.resource_type || resource.type || inferResourceKind(resource.uri || resource.path || resource.name || resource.resource_id),
       observability: { telemetry_streams: ["resource_access"], last_event_at: resource.last_accessed || now },
       wasm: { hot_reload: false, generation: 0 },
       raw_schema: "resource-inventory.v1",
@@ -1197,6 +1617,208 @@ function simulatePolicyDraft(draft) {
   return simulation;
 }
 
+function createPolicySandboxRun(body = {}) {
+  const now = new Date().toISOString();
+  const profile = SANDBOX_PROFILES.find((item) => item.id === body.profile_id) || SANDBOX_PROFILES[0];
+  const draft = body.draft_id
+    ? state.fleet.policyDrafts.find((item) => item.id === body.draft_id)
+    : state.fleet.policyDrafts[0];
+  const selectedEntities = Array.isArray(body.entity_ids) && body.entity_ids.length
+    ? state.fleet.localEntities.filter((entity) => body.entity_ids.includes(entity.id))
+    : state.fleet.localEntities.slice(0, 5);
+  const results = selectedEntities.map((entity) => {
+    const health = computeEntityHealth(entity);
+    const decision = health.health_status === "critical" ? "deny" : health.health_status === "warning" ? "warn" : "allow";
+    return {
+      entity_id: entity.id,
+      entity_name: entity.name,
+      decision,
+      reason: health.findings[0] || "Sandbox fixture passed.",
+      policy_engine: draft?.recommended_engine || body.engine || "rego",
+      route_simulation_path: "/v1/tenants/{tenant_id}/pdp/routes/simulate"
+    };
+  });
+  const run = {
+    id: `sandbox_${crypto.randomUUID()}`,
+    tenant_id: "local",
+    profile_id: profile.id,
+    profile,
+    draft_id: draft?.id || null,
+    mode: body.mode || "policy-dry-run",
+    status: "completed",
+    lcp_compatible: true,
+    local_pollek_paths: {
+      pdp_route_simulate: "/v1/tenants/{tenant_id}/pdp/routes/simulate",
+      policy_simulate: "/v1/tenants/{tenant_id}/policies/{policy_id}/simulate",
+      preset_simulate: "/v1/tenants/{tenant_id}/policy-presets/{preset_id}/simulate"
+    },
+    blast_radius: {
+      entities_evaluated: results.length,
+      allow: results.filter((item) => item.decision === "allow").length,
+      warn: results.filter((item) => item.decision === "warn").length,
+      deny: results.filter((item) => item.decision === "deny").length
+    },
+    results,
+    created_at: now
+  };
+  state.fleet.policySandboxes.unshift(run);
+  state.fleet.policySandboxes = state.fleet.policySandboxes.slice(0, 25);
+  recordAudit("policy_sandbox.completed", "policy_sandbox", run.id, { draft_id: run.draft_id, blast_radius: run.blast_radius });
+  addTask("policy_sandbox", "completed", `Sandbox simulation completed for ${results.length} entities`, { sandbox_run_id: run.id });
+  return run;
+}
+
+function createBreakglassRequest(body = {}) {
+  const now = new Date().toISOString();
+  const durationMinutes = Math.max(5, Math.min(Number(body.duration_minutes || 60), 240));
+  const request = {
+    id: `breakglass_${crypto.randomUUID()}`,
+    tenant_id: "local",
+    requester: body.requester || "local-dev-admin",
+    target_type: body.target_type || "lcp",
+    target_id: body.target_id || "lcp_local",
+    reason: body.reason || "Emergency operator access for local protocol testing.",
+    scope: body.scope || ["policy.rollout", "bundle.read", "telemetry.query"],
+    status: "pending_approval",
+    requires_approval: body.requires_approval !== false,
+    approvals: [],
+    expires_at: new Date(Date.now() + durationMinutes * 60 * 1000).toISOString(),
+    local_pollek_semantics: {
+      explicit: true,
+      time_bound: true,
+      audited: true,
+      kernel_deny_bypass: false
+    },
+    created_at: now,
+    updated_at: now
+  };
+  state.fleet.breakglassRequests.unshift(request);
+  state.fleet.breakglassRequests = state.fleet.breakglassRequests.slice(0, 25);
+  recordAudit("breakglass.requested", "breakglass", request.id, { target_id: request.target_id, reason: request.reason });
+  addTask("breakglass_request", "queued", `Breakglass requested for ${request.target_id}`, { breakglass_id: request.id });
+  return request;
+}
+
+function transitionBreakglass(id, action, body = {}) {
+  const request = state.fleet.breakglassRequests.find((item) => item.id === id);
+  if (!request) return null;
+  const now = new Date().toISOString();
+  if (action === "approve") {
+    request.status = "active";
+    request.approvals.push({ approver: body.approver || "local-dev-security-admin", approved_at: now, note: body.note || "Approved in local dev." });
+  } else if (action === "reject") {
+    request.status = "rejected";
+    request.rejected_by = body.rejected_by || "local-dev-security-admin";
+    request.rejected_at = now;
+  } else if (action === "close") {
+    request.status = "closed";
+    request.closed_by = body.closed_by || "local-dev-admin";
+    request.closed_at = now;
+  }
+  request.updated_at = now;
+  recordAudit(`breakglass.${action}`, "breakglass", request.id, { status: request.status });
+  addTask("breakglass_request", "completed", `Breakglass ${action}: ${request.target_id}`, { breakglass_id: request.id });
+  return request;
+}
+
+function createHotReloadEvent({ rollout, targetId, stageIndex, status = "dispatched" }) {
+  const event = {
+    id: `hotreload_${crypto.randomUUID()}`,
+    tenant_id: "local",
+    rollout_id: rollout.id,
+    lcp_id: targetId,
+    bundle_id: rollout.bundle_id,
+    event_type: "policy_bundle.hot_reload.dispatched.v1",
+    component: "policy_bundle",
+    status,
+    stage_index: stageIndex,
+    wasm_generation: rollout.wasm_generation || 1,
+    contract_hub_path: "/v1/policy-bundles/{bundle_id}/manifest",
+    local_pollek_paths: {
+      bundle_latest: "/v1/tenants/{tenant_id}/bundles/latest",
+      bundle_manifest: "/v1/policy-bundles/{bundle_id}/manifest",
+      sse_bundle_ready: "/v1/tenants/{tenant_id}/devices/{device_id}/events"
+    },
+    created_at: new Date().toISOString()
+  };
+  state.fleet.hotReloadEvents.unshift(event);
+  state.fleet.hotReloadEvents = state.fleet.hotReloadEvents.slice(0, 50);
+  recordEvent({
+    event_id: `evt_${crypto.randomUUID()}`,
+    tenant_id: "local",
+    device_id: targetId,
+    event_type: event.event_type,
+    severity: status === "failed" ? "warning" : "info",
+    payload: event
+  });
+  return event;
+}
+
+function createRolloutPlan(body = {}) {
+  const targetIds = Array.isArray(body.target_ids) && body.target_ids.length
+    ? body.target_ids
+    : state.fleet.localControlPlanes.filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
+  const stages = Array.isArray(body.stages) && body.stages.length
+    ? body.stages
+    : [
+        { index: 0, label: "Canary", percentage: 10 },
+        { index: 1, label: "Batch", percentage: 50 },
+        { index: 2, label: "Complete", percentage: 100 }
+      ];
+  return {
+    id: `rollout_${crypto.randomUUID()}`,
+    tenant_id: "local",
+    bundle_id: body.bundle_id || "bnd_ai_data_protection",
+    target_ids: targetIds,
+    wave_strategy: body.wave_strategy || "canary-then-batch",
+    status: "planned",
+    current_stage: -1,
+    total_stages: stages.length,
+    stages,
+    completed_target_ids: [],
+    failed_target_ids: [],
+    stage_results: [],
+    wasm_generation: Number(body.wasm_generation || 1),
+    local_pollek_compatibility: {
+      signed_envelope: true,
+      hot_reload: true,
+      activation_strategy: "polling-plus-sse",
+      lcp_manifest_path: "/v1/policy-bundles/{bundle_id}/manifest"
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+function advanceRolloutPlan(rollout) {
+  if (!rollout || ["completed", "cancelled"].includes(rollout.status)) return null;
+  if (rollout.status === "paused") return { error: "rollout_paused" };
+  const nextStage = rollout.current_stage + 1;
+  if (nextStage >= rollout.total_stages) {
+    rollout.status = "completed";
+    rollout.updated_at = new Date().toISOString();
+    return { rollout, stage: null, events: [] };
+  }
+  const stage = rollout.stages[nextStage];
+  const targetCount = Math.max(1, Math.ceil(rollout.target_ids.length * (Number(stage.percentage || 100) / 100)));
+  const already = new Set(rollout.completed_target_ids || []);
+  const stageTargets = rollout.target_ids.filter((targetId) => !already.has(targetId)).slice(0, targetCount);
+  const events = stageTargets.map((targetId) => createHotReloadEvent({ rollout, targetId, stageIndex: nextStage }));
+  for (const targetId of stageTargets) already.add(targetId);
+  rollout.completed_target_ids = [...already];
+  rollout.current_stage = nextStage;
+  rollout.status = rollout.completed_target_ids.length >= rollout.target_ids.length ? "completed" : "in_progress";
+  rollout.stage_results.push({
+    stage_index: nextStage,
+    label: stage.label,
+    target_ids: stageTargets,
+    status: "dispatched",
+    dispatched_at: new Date().toISOString()
+  });
+  rollout.updated_at = new Date().toISOString();
+  return { rollout, stage, events };
+}
+
 function createEnrollmentSession(body = {}) {
   const deviceCode = `devcode_${crypto.randomUUID()}`;
   const userCode = `PLK-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -1247,7 +1869,8 @@ function fleetObjectMap() {
       ...entity,
       type: entity.entity_type,
       status: entity.status,
-      risk: entity.risk
+      risk: entity.risk,
+      health: computeEntityHealth(entity)
     });
   }
   return objects;
@@ -1256,6 +1879,7 @@ function fleetObjectMap() {
 function fleetSummary() {
   const lcps = state.fleet.localControlPlanes;
   const entities = state.fleet.localEntities;
+  const health = entityHealthPage(entities).summary;
   const connected = lcps.filter((item) => item.status === "connected").length;
   const degraded = lcps.filter((item) => item.status === "degraded" || item.status === "unknown").length;
   const offline = lcps.filter((item) => item.status === "offline").length;
@@ -1278,8 +1902,11 @@ function fleetSummary() {
     telemetry_events: state.events.length,
     probes: state.probes.length,
     policy_packs: state.fleet.policyPacks.length,
+    compliance_policy_bundles: state.fleet.compliancePolicyBundles.length,
     policy_drafts: state.fleet.policyDrafts.length,
+    policy_sandboxes: state.fleet.policySandboxes.length,
     pending_approvals: state.fleet.policyDrafts.filter((draft) => draft.status === "requires_human_review" || draft.status === "simulation_passed").length,
+    active_breakglass: state.fleet.breakglassRequests.filter((item) => item.status === "active").length,
     integrations_configured: state.fleet.integrations.filter((item) => item.status === "configured").length,
     evidence_exports: state.fleet.evidenceExports.length,
     enrollment_sessions: state.fleet.enrollmentSessions.length,
@@ -1291,9 +1918,14 @@ function fleetSummary() {
     enforcement_points: entities.filter((item) => item.entity_type === "enforcement").length,
     observability_entities: entities.filter((item) => item.entity_type === "observability").length,
     wasm_hot_reload_ready: entities.filter((item) => item.wasm?.hot_reload).length,
+    entity_health_avg: health.avg_score,
+    entity_health_critical: health.critical,
     tenant_trust_scopes: state.fleet.tenantTrustScopes.length,
     service_endpoints: state.fleet.serviceEndpoints.length,
-    connection_profiles: state.fleet.connectionProfiles.length
+    connection_profiles: state.fleet.connectionProfiles.length,
+    adapter_catalog_entries: state.fleet.adapterCatalog.length,
+    staged_rollouts: state.fleet.rolloutPlans.length,
+    hot_reload_events: state.fleet.hotReloadEvents.length
   };
 }
 
@@ -1383,6 +2015,8 @@ async function contractDiscovery() {
     tenant_trust_scopes: state.fleet.tenantTrustScopes,
     service_endpoints: state.fleet.serviceEndpoints,
     connection_profiles: state.fleet.connectionProfiles,
+    adapter_catalog_summary: adapterCatalogSummary(state.fleet.adapterCatalog),
+    compliance_policy_bundles: state.fleet.compliancePolicyBundles,
     endpoints: {
       health: "/health",
       enrollment_device_authorization: "/oauth/device_authorization",
@@ -1392,17 +2026,27 @@ async function contractDiscovery() {
       telemetry_query: "/api/telemetry/query",
       registry_sync: "/v1/tenants/{tenant_id}/registry/sync",
       local_entities: "/api/entities",
+      local_entity_health: "/api/entities/health",
+      local_entity_dedupe: "/api/entities/dedupe",
       local_entity_ingest: "/api/entities/ingest",
       local_entity_sync: "/api/entities/sync",
+      adapter_catalog: "/api/adapters/catalog",
       latest_bundle: "/v1/tenants/{tenant_id}/bundles/latest",
+      hot_reload_events: "/api/hot-reload/events",
+      staged_rollout_advance: "/api/rollouts/{rollout_id}/advance",
       suggested_pdp_routes: "/v1/tenants/{tenant_id}/pdp/routes/suggested",
       policy_assist: "/api/policy/assist",
       policy_drafts: "/api/policy/drafts",
+      policy_sandbox: "/api/policy/sandbox",
+      breakglass: "/api/breakglass",
+      compliance_policy_bundles: "/api/compliance/policy-bundles",
+      compliance_score: "/api/compliance/score",
       enrollment_sessions: "/api/enrollments",
       evidence_exports: "/api/evidence/exports",
       trust_scopes: "/api/trust/scopes",
       service_endpoints: "/api/services/endpoints",
-      connection_updates: "/api/contract-hub/connection-updates"
+      connection_updates: "/api/contract-hub/connection-updates",
+      local_pollek_pdp_route_simulate: "/v1/tenants/{tenant_id}/pdp/routes/simulate"
     }
   };
 }
@@ -1624,9 +2268,14 @@ async function handleApi(req, res) {
       relationships: state.fleet.relationships,
       policy_bundles: state.fleet.policyBundles,
       policy_packs: state.fleet.policyPacks,
+      compliance_policy_bundles: state.fleet.compliancePolicyBundles,
+      compliance_score: complianceScorePage(),
       policy_drafts: state.fleet.policyDrafts,
       policy_simulations: state.fleet.policySimulations,
+      policy_sandboxes: state.fleet.policySandboxes,
+      breakglass_requests: state.fleet.breakglassRequests,
       integrations: state.fleet.integrations,
+      adapter_catalog: state.fleet.adapterCatalog,
       tenant_trust_scopes: state.fleet.tenantTrustScopes,
       service_endpoints: state.fleet.serviceEndpoints,
       connection_profiles: state.fleet.connectionProfiles,
@@ -1637,12 +2286,31 @@ async function handleApi(req, res) {
       evidence_exports: state.fleet.evidenceExports,
       enrollment_sessions: state.fleet.enrollmentSessions,
       rollout_plans: state.fleet.rolloutPlans,
+      hot_reload_events: state.fleet.hotReloadEvents,
       alarms: state.fleet.alarms,
       events: state.events.slice(0, 30),
       audit_events: state.auditEvents.slice(0, 30),
       tasks: state.tasks.slice(0, 30),
       probes: state.probes.slice(0, 10),
       contract: await contractDiscovery()
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/adapters/catalog") {
+    const category = url.searchParams.get("category") || "";
+    const q = (url.searchParams.get("q") || "").toLowerCase();
+    const items = state.fleet.adapterCatalog.filter((adapter) => {
+      if (category && adapter.category !== category) return false;
+      if (q && !JSON.stringify(adapter).toLowerCase().includes(q)) return false;
+      return true;
+    });
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.adapter-catalog-page.v1",
+      source: "curated-from-pollenwithclaw-research",
+      count: items.length,
+      summary: adapterCatalogSummary(items),
+      items
     });
     return true;
   }
@@ -1668,6 +2336,25 @@ async function handleApi(req, res) {
       entities,
       relationships: state.fleet.localEntityRelationships,
       users: state.fleet.deviceUsers
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/entities/health") {
+    const type = url.searchParams.get("type") || "all";
+    const entities = state.fleet.localEntities.filter((entity) => type === "all" || entity.entity_type === type || entity.class === type);
+    sendJson(res, 200, entityHealthPage(entities));
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/entities/dedupe") {
+    const body = await readBody(req);
+    const matches = findDuplicateEntities(body.candidate || body);
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.local-entity-dedupe.v1",
+      tenant_id: "local",
+      match_count: matches.length,
+      matches
     });
     return true;
   }
@@ -1773,16 +2460,36 @@ async function handleApi(req, res) {
       cloud_url: publicUrl,
       contract_version: "2026.06.29",
       profiles,
+      entitlements: state.tenant.entitlements,
+      enterprise_features: {
+        compliance_policy_bundles: state.tenant.entitlements.includes("enterprise.compliance_policy_bundles"),
+        policy_sandbox: state.tenant.entitlements.includes("enterprise.policy_sandbox"),
+        breakglass: state.tenant.entitlements.includes("enterprise.breakglass")
+      },
       trust_scopes: state.fleet.tenantTrustScopes.filter((scope) => scope.tenant_id === tenantId),
       service_endpoints: state.fleet.serviceEndpoints.filter((endpoint) => endpoint.tenant_id === tenantId),
+      compliance_bundle_channels: state.fleet.compliancePolicyBundles.map((bundle) => ({
+        id: bundle.id,
+        name: bundle.name,
+        enterprise_only: true,
+        local_catalog_visible: false,
+        distribution: bundle.contract_hub_distribution
+      })),
       local_entity_paths: {
         registry_agents: "/v1/tenants/{tenant_id}/registry/agents",
+        registry_entities: "/v1/tenants/{tenant_id}/registry/entities",
+        registry_relationships: "/v1/tenants/{tenant_id}/registry/relationships",
         discovery_candidates: "/v1/tenants/{tenant_id}/discovery/candidates",
         agent_inventory: "/v1/tenants/{tenant_id}/agent-inventory",
         telemetry_resources: "/v1/tenants/local/telemetry/resources",
         telemetry_tools: "/v1/tenants/local/telemetry/tools",
         telemetry_identities: "/v1/tenants/local/telemetry/identities",
-        capability_snapshot: "/v1/tenants/local/devices/local/capability-snapshot-v2"
+        telemetry_observations: "/v1/tenants/local/telemetry/observations",
+        capability_snapshot: "/v1/tenants/local/devices/local/capability-snapshot-v2",
+        pdp_route_simulate: "/v1/tenants/{tenant_id}/pdp/routes/simulate",
+        cloud_bundle_latest: "/v1/tenants/{tenant_id}/bundles/latest",
+        cloud_bundle_manifest: "/v1/policy-bundles/{bundle_id}/manifest",
+        hot_reload_events: "/api/hot-reload/events"
       }
     });
     return true;
@@ -1800,6 +2507,90 @@ async function handleApi(req, res) {
     const body = await readBody(req);
     const draft = createPolicyDraft(body);
     sendJson(res, 201, { draft, human_approval_required: true });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/policy/sandbox") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.policy-sandbox-page.v1",
+      enterprise_only: true,
+      profiles: SANDBOX_PROFILES,
+      runs: state.fleet.policySandboxes
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/policy/sandbox") {
+    const body = await readBody(req);
+    const run = createPolicySandboxRun(body);
+    sendJson(res, 201, { run });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/compliance/policy-bundles") {
+    sendJson(res, 200, compliancePolicyBundlePage());
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/compliance/score") {
+    sendJson(res, 200, complianceScorePage());
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/compliance/policy-bundles/simulate") {
+    const body = await readBody(req);
+    const bundle = state.fleet.compliancePolicyBundles.find((item) => item.id === body.bundle_id) || state.fleet.compliancePolicyBundles[0];
+    const run = createPolicySandboxRun({
+      mode: "enterprise-compliance-bundle-simulation",
+      engine: bundle.target_engines[0],
+      entity_ids: body.entity_ids,
+      profile_id: "sandbox_policy_dry_run"
+    });
+    run.compliance_bundle_id = bundle.id;
+    run.frameworks = bundle.frameworks;
+    sendJson(res, 201, { bundle, run, deploy_allowed: run.blast_radius.deny === 0 });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/compliance/policy-bundles/deploy") {
+    const body = await readBody(req);
+    const source = state.fleet.compliancePolicyBundles.find((item) => item.id === body.bundle_id);
+    if (!source) {
+      sendJson(res, 404, { error: "compliance_bundle_not_found", bundle_id: body.bundle_id });
+      return true;
+    }
+    if (!state.tenant.entitlements.includes("enterprise.compliance_policy_bundles")) {
+      sendJson(res, 403, { error: "enterprise_entitlement_required", entitlement: "enterprise.compliance_policy_bundles" });
+      return true;
+    }
+    const policyBundle = {
+      id: `bnd_${source.id}_${crypto.randomUUID().slice(0, 8)}`,
+      name: source.name,
+      revision: new Date().toISOString().slice(0, 10).replaceAll("-", "."),
+      status: "available",
+      coverage: 82,
+      signed: true,
+      hot_reload: true,
+      compliance_bundle_id: source.id,
+      frameworks: source.frameworks,
+      control_level: source.default_mode === "enforce" ? "Enforce" : source.default_mode === "approval" ? "Approval" : "Warn",
+      policies: source.controls.map((control) => ({ control, engines: source.target_engines })),
+      created_at: new Date().toISOString()
+    };
+    state.fleet.policyBundles.unshift(policyBundle);
+    const rollout = createRolloutPlan({
+      bundle_id: policyBundle.id,
+      target_ids: body.target_ids,
+      wave_strategy: body.wave_strategy || "enterprise-compliance-canary"
+    });
+    state.fleet.rolloutPlans.unshift(rollout);
+    recordAudit("compliance_bundle.deployed", "compliance_bundle", source.id, { bundle_id: policyBundle.id, rollout_id: rollout.id });
+    const task = addTask("compliance_bundle_deploy", "queued", `Prepared enterprise compliance bundle ${source.name}`, {
+      compliance_bundle_id: source.id,
+      bundle_id: policyBundle.id,
+      rollout_id: rollout.id
+    });
+    sendJson(res, 201, { compliance_bundle: source, policy_bundle: policyBundle, rollout, task });
     return true;
   }
 
@@ -1858,6 +2649,37 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && pathname === "/api/enrollments") {
     sendJson(res, 200, { sessions: state.fleet.enrollmentSessions });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/breakglass") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.breakglass-page.v1",
+      enterprise_only: true,
+      requests: state.fleet.breakglassRequests,
+      active: state.fleet.breakglassRequests.filter((item) => item.status === "active")
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/breakglass") {
+    const body = await readBody(req);
+    const request = createBreakglassRequest(body);
+    sendJson(res, 201, { request });
+    return true;
+  }
+
+  const breakglassActionMatch = pathname.match(/^\/api\/breakglass\/([^/]+)\/(approve|reject|close)$/);
+  if (req.method === "POST" && breakglassActionMatch) {
+    const id = decodeURIComponent(breakglassActionMatch[1]);
+    const action = breakglassActionMatch[2];
+    const body = await readBody(req);
+    const request = transitionBreakglass(id, action, body);
+    if (!request) {
+      sendJson(res, 404, { error: "breakglass_not_found", id });
+      return true;
+    }
+    sendJson(res, 200, { request });
     return true;
   }
 
@@ -1943,24 +2765,12 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && pathname === "/api/rollouts") {
     const body = await readBody(req);
-    const targetIds = Array.isArray(body.target_ids) && body.target_ids.length
-      ? body.target_ids
-      : state.fleet.localControlPlanes.filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
-    const bundleId = body.bundle_id || "bnd_ai_data_protection";
-    const rollout = {
-      id: `rollout_${crypto.randomUUID()}`,
-      tenant_id: "local",
-      bundle_id: bundleId,
-      target_ids: targetIds,
-      wave_strategy: body.wave_strategy || "canary-then-batch",
-      status: "planned",
-      created_at: new Date().toISOString()
-    };
+    const rollout = createRolloutPlan(body);
     state.fleet.rolloutPlans.unshift(rollout);
-    const task = addTask("bundle_rollout", "queued", `Created rollout for ${targetIds.length} Local Control Planes`, {
+    const task = addTask("bundle_rollout", "queued", `Created rollout for ${rollout.target_ids.length} Local Control Planes`, {
       rollout_id: rollout.id,
-      bundle_id: bundleId,
-      target_ids: targetIds
+      bundle_id: rollout.bundle_id,
+      target_ids: rollout.target_ids
     });
     recordEvent({
       event_id: `evt_${crypto.randomUUID()}`,
@@ -1970,6 +2780,47 @@ async function handleApi(req, res) {
       payload: rollout
     });
     sendJson(res, 201, { rollout, task });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/hot-reload/events") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.hot-reload-event-page.v1",
+      events: state.fleet.hotReloadEvents,
+      rollouts: state.fleet.rolloutPlans
+    });
+    return true;
+  }
+
+  const rolloutActionMatch = pathname.match(/^\/api\/rollouts\/([^/]+)\/(advance|pause|resume|cancel)$/);
+  if (req.method === "POST" && rolloutActionMatch) {
+    const rolloutId = decodeURIComponent(rolloutActionMatch[1]);
+    const action = rolloutActionMatch[2];
+    const rollout = state.fleet.rolloutPlans.find((item) => item.id === rolloutId);
+    if (!rollout) {
+      sendJson(res, 404, { error: "rollout_not_found", rollout_id: rolloutId });
+      return true;
+    }
+    let result = { rollout, events: [] };
+    if (action === "advance") {
+      result = advanceRolloutPlan(rollout);
+      if (result?.error) {
+        sendJson(res, 409, { error: result.error, rollout });
+        return true;
+      }
+    } else if (action === "pause") {
+      rollout.status = "paused";
+      rollout.updated_at = new Date().toISOString();
+    } else if (action === "resume") {
+      rollout.status = "in_progress";
+      rollout.updated_at = new Date().toISOString();
+    } else if (action === "cancel") {
+      rollout.status = "cancelled";
+      rollout.updated_at = new Date().toISOString();
+    }
+    recordAudit(`rollout.${action}`, "rollout", rollout.id, { status: rollout.status, bundle_id: rollout.bundle_id });
+    addTask("bundle_rollout", "completed", `Rollout ${action}: ${rollout.bundle_id}`, { rollout_id: rollout.id });
+    sendJson(res, 200, result || { rollout, events: [] });
     return true;
   }
 
@@ -2140,32 +2991,42 @@ async function handleApi(req, res) {
 
   const latestBundleMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/bundles\/latest$/);
   if (req.method === "GET" && latestBundleMatch) {
+    const tenantId = decodeURIComponent(latestBundleMatch[1]);
+    const bundle = state.fleet.policyBundles.find((item) => item.status === "active")
+      || state.fleet.policyBundles.find((item) => item.status === "available")
+      || state.fleet.policyBundles[0];
     sendJson(res, 200, {
       schema_version: "bundle-envelope.v1",
-      tenant_id: decodeURIComponent(latestBundleMatch[1]),
-      bundle_id: "bnd_local_dev_baseline",
-      revision: "2026.06.29.001",
+      tenant_id: tenantId,
+      bundle_id: bundle?.id || "bnd_local_dev_baseline",
+      revision: bundle?.revision || "2026.06.29.001",
       status: "available",
-      manifest_url: `${publicUrl}/v1/policy-bundles/bnd_local_dev_baseline/manifest`,
-      artifact_url: `${publicUrl}/v1/policy-bundles/bnd_local_dev_baseline/artifact`,
-      hot_reload: true
+      manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle?.id || "bnd_local_dev_baseline")}/manifest`,
+      artifact_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle?.id || "bnd_local_dev_baseline")}/artifact`,
+      hot_reload: Boolean(bundle?.hot_reload ?? true),
+      enterprise_compliance: Boolean(bundle?.compliance_bundle_id)
     });
     return true;
   }
 
-  if (req.method === "GET" && pathname === "/v1/policy-bundles/bnd_local_dev_baseline/manifest") {
+  const bundleManifestMatch = pathname.match(/^\/v1\/policy-bundles\/([^/]+)\/manifest$/);
+  if (req.method === "GET" && bundleManifestMatch) {
+    const bundleId = decodeURIComponent(bundleManifestMatch[1]);
+    const bundle = state.fleet.policyBundles.find((item) => item.id === bundleId) || state.fleet.policyBundles[0];
     sendJson(res, 200, {
       manifest_version: "1.0",
-      bundle_id: "bnd_local_dev_baseline",
+      schema_version: "bundle-manifest.v2",
+      bundle_id: bundleId,
       tenant_id: "local",
-      revision: "2026.06.29.001",
-      created_at: "2026-06-29T00:00:00Z",
+      revision: bundle?.revision || "2026.06.29.001",
+      created_at: bundle?.created_at || "2026-06-29T00:00:00Z",
       target: {
-        control_level: "Observe",
+        control_level: bundle?.control_level || "Observe",
         pep_capabilities: ["mcp-stdio", "http-proxy"],
         agent_selectors: [{ kind: "label", value: "managed=true" }]
       },
-      policies: [],
+      policies: bundle?.policies || [],
+      compliance_bundle_id: bundle?.compliance_bundle_id || null,
       signatures: [{ key_id: "local-dev", alg: "Ed25519", sig: "dev-placeholder" }]
     });
     return true;

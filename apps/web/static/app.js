@@ -61,6 +61,13 @@ const refs = {
   enrollmentList: document.querySelector("#enrollmentList"),
   evidenceExportList: document.querySelector("#evidenceExportList"),
   rolloutTimeline: document.querySelector("#rolloutTimeline"),
+  complianceBundleList: document.querySelector("#complianceBundleList"),
+  complianceScoreList: document.querySelector("#complianceScoreList"),
+  sandboxRunList: document.querySelector("#sandboxRunList"),
+  breakglassList: document.querySelector("#breakglassList"),
+  sandboxButton: document.querySelector("#sandboxButton"),
+  breakglassButton: document.querySelector("#breakglassButton"),
+  complianceDeployButton: document.querySelector("#complianceDeployButton"),
   auditList: document.querySelector("#auditList"),
   integrationHealthList: document.querySelector("#integrationHealthList")
 };
@@ -93,9 +100,9 @@ function fmtTime(value) {
 }
 
 function statusClass(status) {
-  if (["connected", "active", "available", "registered", "published", "enforcing", "observed", "configured", "ready", "completed"].includes(status)) return "ok";
-  if (["offline", "critical", "failed", "untrusted"].includes(status)) return "bad";
-  if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp"].includes(status)) return "warn";
+  if (["connected", "active", "available", "registered", "published", "enforcing", "observed", "configured", "ready", "completed", "healthy"].includes(status)) return "ok";
+  if (["offline", "critical", "failed", "untrusted", "denied", "deny"].includes(status)) return "bad";
+  if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp", "warning", "pending_approval", "warn"].includes(status)) return "warn";
   return "neutral";
 }
 
@@ -170,6 +177,7 @@ function render() {
   renderPolicyWorkspace();
   renderTelemetryExplorer();
   renderTimeline();
+  renderComplianceWorkspace();
   renderAudit();
   setActiveTab(app.activeTab, { updateHash: false });
 }
@@ -692,8 +700,19 @@ function renderTimeline() {
     row.className = `detail-row ${rollout.status === "planned" ? "warn" : ""}`;
     row.innerHTML = `
       <strong>${escapeHtml(rollout.bundle_id)}</strong>
-      <span>${escapeHtml(rollout.status)} | targets ${escapeHtml((rollout.target_ids || []).length)} | ${escapeHtml(fmtTime(rollout.created_at))}</span>
-      <code>${escapeHtml(rollout.wave_strategy || "not scheduled")}</code>
+      <span>${escapeHtml(rollout.status)} | stage ${escapeHtml((rollout.current_stage ?? -1) + 1)}/${escapeHtml(rollout.total_stages || 0)} | targets ${escapeHtml((rollout.target_ids || []).length)} | ${escapeHtml(fmtTime(rollout.created_at))}</span>
+      <code>${escapeHtml(rollout.wave_strategy || "not scheduled")} | ${escapeHtml(rollout.local_pollek_compatibility?.lcp_manifest_path || "manifest pending")}</code>
+    `;
+    refs.rolloutTimeline.append(row);
+  }
+
+  for (const event of (app.data.hot_reload_events || []).slice(0, 5)) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${statusClass(event.status)}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(event.event_type)}</strong>
+      <span>${escapeHtml(event.lcp_id)} | ${escapeHtml(event.status)} | stage ${escapeHtml(event.stage_index ?? 0)}</span>
+      <code>${escapeHtml(event.local_pollek_paths?.sse_bundle_ready || "")}</code>
     `;
     refs.rolloutTimeline.append(row);
   }
@@ -719,6 +738,77 @@ function renderTimeline() {
       <span>${escapeHtml(item.status)} | ${escapeHtml(item.scope)} | ${escapeHtml(fmtTime(item.requested_at))}</span>
     `;
     refs.evidenceExportList.append(row);
+  }
+}
+
+function renderComplianceWorkspace() {
+  if (!refs.complianceBundleList) return;
+  refs.complianceBundleList.innerHTML = "";
+  refs.complianceScoreList.innerHTML = "";
+  refs.sandboxRunList.innerHTML = "";
+  refs.breakglassList.innerHTML = "";
+
+  const bundles = app.data.compliance_policy_bundles || [];
+  for (const bundle of (bundles.length ? bundles : [{ name: "No compliance bundles", frameworks: [], controls: [], status: "enterprise_required" }]).slice(0, 8)) {
+    const row = document.createElement("button");
+    row.className = `detail-row ${bundle.deployable ? "ok" : "warn"}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(bundle.name)}</strong>
+      <span>${escapeHtml((bundle.frameworks || []).join(", ") || "no framework")} | ${escapeHtml(bundle.edition || "enterprise")} | ${escapeHtml(bundle.default_mode || "n/a")}</span>
+      <code>${escapeHtml((bundle.controls || []).join(", ") || "no controls")}</code>
+    `;
+    row.addEventListener("click", () => {
+      app.selectedComplianceBundleId = bundle.id;
+      renderComplianceWorkspace();
+    });
+    refs.complianceBundleList.append(row);
+  }
+
+  const score = app.data.compliance_score || {};
+  const factors = score.factors || {};
+  const scoreRows = [
+    ["Overall score", score.score ?? 0, score.score >= 80 ? "healthy" : score.score >= 60 ? "warning" : "critical"],
+    ["Entity health", factors.entity_health ?? 0, factors.entity_health >= 80 ? "healthy" : "warning"],
+    ["Evidence coverage", factors.evidence_coverage ?? 0, factors.evidence_coverage >= 70 ? "healthy" : "warning"],
+    ["Signed bundle coverage", factors.signed_bundle_coverage ?? 0, factors.signed_bundle_coverage >= 80 ? "healthy" : "warning"],
+    ["Identity trace coverage", factors.identity_trace_coverage ?? 0, factors.identity_trace_coverage >= 80 ? "healthy" : "warning"]
+  ];
+  for (const [label, value, status] of scoreRows) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${statusClass(status)}`;
+    row.innerHTML = `<strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}%</span>`;
+    refs.complianceScoreList.append(row);
+  }
+  for (const gap of score.gaps || []) {
+    const row = document.createElement("div");
+    row.className = "detail-row warn";
+    row.innerHTML = `<strong>Gap</strong><span>${escapeHtml(gap)}</span>`;
+    refs.complianceScoreList.append(row);
+  }
+
+  const runs = app.data.policy_sandboxes || [];
+  for (const run of (runs.length ? runs : [{ id: "No sandbox runs", status: "idle", mode: "Run simulation before rollout", blast_radius: {} }]).slice(0, 6)) {
+    const blast = run.blast_radius || {};
+    const row = document.createElement("div");
+    row.className = `detail-row ${statusClass(run.status)}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(run.id)}</strong>
+      <span>${escapeHtml(run.mode)} | ${escapeHtml(run.status)}</span>
+      <code>allow ${escapeHtml(blast.allow || 0)} | warn ${escapeHtml(blast.warn || 0)} | deny ${escapeHtml(blast.deny || 0)}</code>
+    `;
+    refs.sandboxRunList.append(row);
+  }
+
+  const requests = app.data.breakglass_requests || [];
+  for (const request of (requests.length ? requests : [{ id: "No breakglass requests", status: "idle", target_id: "none", reason: "Request only for audited emergency access." }]).slice(0, 6)) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${statusClass(request.status)}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(request.target_id || request.id)}</strong>
+      <span>${escapeHtml(request.status)} | expires ${escapeHtml(fmtTime(request.expires_at))}</span>
+      <code>${escapeHtml(request.reason || "")}</code>
+    `;
+    refs.breakglassList.append(row);
   }
 }
 
@@ -1008,6 +1098,76 @@ async function testIntegration(integrationId) {
   setActiveTab("audit");
 }
 
+async function runComplianceSandbox() {
+  refs.sandboxButton.disabled = true;
+  refs.sandboxButton.textContent = "Running";
+  try {
+    const bundleId = app.selectedComplianceBundleId || app.data.compliance_policy_bundles?.[0]?.id;
+    const payload = await postJson("/api/compliance/policy-bundles/simulate", {
+      bundle_id: bundleId
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Compliance sandbox completed</strong>
+      <span>${escapeHtml(payload.bundle.name)} | deploy allowed: ${escapeHtml(payload.deploy_allowed)}</span>
+      <code>${escapeHtml(JSON.stringify(payload.run.blast_radius, null, 2))}</code>
+    `;
+    await refresh();
+    setActiveTab("compliance");
+  } finally {
+    refs.sandboxButton.disabled = false;
+    refs.sandboxButton.textContent = "Run Sandbox";
+  }
+}
+
+async function requestBreakglass() {
+  refs.breakglassButton.disabled = true;
+  refs.breakglassButton.textContent = "Requesting";
+  try {
+    const payload = await postJson("/api/breakglass", {
+      target_id: selectedObject().type === "lcp" ? selectedObject().id : "lcp_local",
+      reason: "Local enterprise breakglass drill for audited emergency policy operations.",
+      duration_minutes: 60
+    });
+    const approved = await postJson(`/api/breakglass/${encodeURIComponent(payload.request.id)}/approve`, {
+      approver: "local-dev-security-admin"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Breakglass active</strong>
+      <span>${escapeHtml(approved.request.target_id)} | ${escapeHtml(approved.request.status)}</span>
+      <code>${escapeHtml(JSON.stringify(approved.request.local_pollek_semantics, null, 2))}</code>
+    `;
+    await refresh();
+    setActiveTab("compliance");
+  } finally {
+    refs.breakglassButton.disabled = false;
+    refs.breakglassButton.textContent = "Request Breakglass";
+  }
+}
+
+async function deployComplianceBundle() {
+  refs.complianceDeployButton.disabled = true;
+  refs.complianceDeployButton.textContent = "Deploying";
+  try {
+    const bundleId = app.selectedComplianceBundleId || app.data.compliance_policy_bundles?.[0]?.id;
+    const targets = (app.data.local_control_planes || []).filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
+    const payload = await postJson("/api/compliance/policy-bundles/deploy", {
+      bundle_id: bundleId,
+      target_ids: targets
+    });
+    const advanced = await postJson(`/api/rollouts/${encodeURIComponent(payload.rollout.id)}/advance`, {});
+    refs.probeResult.innerHTML = `
+      <strong>Compliance bundle staged</strong>
+      <span>${escapeHtml(payload.policy_bundle.id)} | rollout ${escapeHtml(advanced.rollout.status)}</span>
+      <code>${escapeHtml(JSON.stringify({ events: advanced.events?.length || 0, local_delivery: payload.compliance_bundle.contract_hub_distribution.local_delivery }, null, 2))}</code>
+    `;
+    await refresh();
+    setActiveTab("compliance");
+  } finally {
+    refs.complianceDeployButton.disabled = false;
+    refs.complianceDeployButton.textContent = "Deploy Bundle";
+  }
+}
+
 refs.globalSearch.addEventListener("input", (event) => {
   app.query = event.target.value;
   render();
@@ -1049,6 +1209,9 @@ refs.telemetryQueryButton.addEventListener("click", queryTelemetry);
 refs.telemetrySampleButton.addEventListener("click", sendSampleTelemetry);
 refs.enrollmentButton.addEventListener("click", createEnrollment);
 refs.entitySyncButton.addEventListener("click", syncEntities);
+refs.sandboxButton.addEventListener("click", runComplianceSandbox);
+refs.breakglassButton.addEventListener("click", requestBreakglass);
+refs.complianceDeployButton.addEventListener("click", deployComplianceBundle);
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });
   const payload = await response.json();
@@ -1064,14 +1227,16 @@ document.querySelectorAll(".tab").forEach((button) => {
 });
 
 document.querySelectorAll(".view-button").forEach((button) => {
-  const label = button.textContent.trim();
-  button.dataset.targetTab = {
-    Inventory: "summary",
-    Entities: "entities",
-    "Policy Center": "policies",
-    "Observe Center": "telemetry",
-    Compliance: "timeline"
-  }[label] || "summary";
+  if (!button.dataset.targetTab) {
+    const label = button.textContent.trim();
+    button.dataset.targetTab = {
+      Inventory: "summary",
+      Entities: "entities",
+      "Policy Center": "policies",
+      "Observe Center": "telemetry",
+      Compliance: "compliance"
+    }[label] || "summary";
+  }
   button.addEventListener("click", () => setActiveTab(button.dataset.targetTab));
 });
 

@@ -17,11 +17,11 @@
           </div>
         </div>
         <div class="view-switcher" aria-label="Inventory views">
-          <button class="view-button active">Inventory</button>
-          <button class="view-button">Entities</button>
-          <button class="view-button">Policy Center</button>
-          <button class="view-button">Observe Center</button>
-          <button class="view-button">Compliance</button>
+          <button class="view-button active" data-target-tab="summary">Inventory</button>
+          <button class="view-button" data-target-tab="entities">Entities</button>
+          <button class="view-button" data-target-tab="policies">Policy Center</button>
+          <button class="view-button" data-target-tab="telemetry">Observe Center</button>
+          <button class="view-button" data-target-tab="compliance">Compliance</button>
         </div>
         <div class="global-actions">
           <input id="globalSearch" class="global-search" aria-label="Global search" placeholder="Search tenants, LCPs, agents, bundles" />
@@ -97,6 +97,7 @@
           <button class="tab" data-tab="telemetry">Telemetry</button>
           <button class="tab" data-tab="alarms">Alarms</button>
           <button class="tab" data-tab="timeline">Timeline</button>
+          <button class="tab" data-tab="compliance">Compliance</button>
           <button class="tab" data-tab="audit">Audit</button>
         </section>
 
@@ -345,6 +346,60 @@
                   </div>
                   <div id="enrollmentList" class="detail-list"></div>
                   <div id="evidenceExportList" class="detail-list second-list"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="compliance" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Enterprise Compliance</p>
+                  <h3>Policy Bundles, Sandbox, Breakglass</h3>
+                </div>
+                <div class="button-row compact-actions">
+                  <button id="sandboxButton" class="secondary-button">Run Sandbox</button>
+                  <button id="breakglassButton" class="secondary-button">Request Breakglass</button>
+                  <button id="complianceDeployButton" class="primary-button">Deploy Bundle</button>
+                </div>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Enterprise Only</p>
+                      <h3>Compliance Policy Bundles</h3>
+                    </div>
+                  </div>
+                  <div id="complianceBundleList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Readiness</p>
+                      <h3>Compliance Score</h3>
+                    </div>
+                  </div>
+                  <div id="complianceScoreList" class="detail-list"></div>
+                </section>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Sandbox</p>
+                      <h3>Policy Dry Runs</h3>
+                    </div>
+                  </div>
+                  <div id="sandboxRunList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Breakglass</p>
+                      <h3>Audited Overrides</h3>
+                    </div>
+                  </div>
+                  <div id="breakglassList" class="detail-list"></div>
                 </section>
               </div>
             </div>

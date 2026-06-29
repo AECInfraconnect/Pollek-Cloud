@@ -46,7 +46,31 @@
       "requires_oauth": true,
       "requires_spiffe": false,
       "human_approval_required": true,
-      "paths": ["/api/policy/assist", "/api/policy/drafts", "/api/policy/drafts/{draft_id}/simulate", "/api/policy/drafts/{draft_id}/approve"]
+      "paths": ["/api/policy/assist", "/api/policy/drafts", "/api/policy/drafts/{draft_id}/simulate", "/api/policy/drafts/{draft_id}/approve", "/api/policy/sandbox"]
+    },
+    "pollek.cloud.enterprise_compliance": {
+      "direction": "cloud_admin_to_local_bundle",
+      "requires_oauth": true,
+      "requires_spiffe": true,
+      "enterprise_only": true,
+      "entitlement": "enterprise.compliance_policy_bundles",
+      "local_catalog_visible": false,
+      "paths": ["/api/compliance/policy-bundles", "/api/compliance/policy-bundles/simulate", "/api/compliance/policy-bundles/deploy", "/api/compliance/score", "/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+    },
+    "pollek.cloud.breakglass": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "enterprise_only": true,
+      "paths": ["/api/breakglass", "/api/breakglass/{request_id}/approve", "/api/breakglass/{request_id}/reject", "/api/breakglass/{request_id}/close"],
+      "constraints": ["explicit", "time_bound", "audited", "no_kernel_deny_bypass_by_default"]
+    },
+    "pollek.cloud.adapter_catalog": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "paths": ["/api/adapters/catalog"],
+      "source": "curated-cloud-catalog"
     },
     "pollek.cloud.integrations": {
       "direction": "cloud_to_siem",
@@ -67,8 +91,8 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates"],
-      "purpose": "Contract Hub mediates endpoint, trust scope, registry sync, telemetry, bundle, and hot reload connection updates for many Local Pollek instances."
+      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates", "/api/hot-reload/events"],
+      "purpose": "Contract Hub mediates endpoint, trust scope, registry sync, telemetry, bundle, enterprise entitlement, and hot reload connection updates for many Local Pollek instances."
     }
   },
   "features": {
@@ -83,6 +107,13 @@
     "spire_server_scope": true,
     "contract_hub_connection_updates": true,
     "wasm_hot_reload_registry": true,
+    "staged_rollouts": true,
+    "adapter_catalog": true,
+    "entity_health": true,
+    "entity_dedupe": true,
+    "policy_sandbox": true,
+    "breakglass": true,
+    "enterprise_compliance_policy_bundles": true,
     "dev_loopback_protocol_test": true
   }
 }

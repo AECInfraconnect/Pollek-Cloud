@@ -210,11 +210,56 @@ CREATE TABLE IF NOT EXISTS rollout_plans (
   target_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
   wave_strategy text NOT NULL DEFAULT 'canary-then-batch',
   status text NOT NULL DEFAULT 'planned',
+  stages jsonb NOT NULL DEFAULT '[]'::jsonb,
+  current_stage integer NOT NULL DEFAULT -1,
+  completed_target_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+  failed_target_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+  local_pollek_compatibility jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS rollout_plans_tenant_status_idx ON rollout_plans(tenant_id, status);
+
+CREATE TABLE IF NOT EXISTS staged_rollout_results (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  rollout_id text NOT NULL REFERENCES rollout_plans(id) ON DELETE CASCADE,
+  stage_index integer NOT NULL,
+  target_id text NOT NULL,
+  status text NOT NULL DEFAULT 'dispatched',
+  result jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS staged_rollout_results_rollout_idx ON staged_rollout_results(tenant_id, rollout_id, stage_index);
+
+CREATE TABLE IF NOT EXISTS hot_reload_events (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  rollout_id text REFERENCES rollout_plans(id) ON DELETE SET NULL,
+  lcp_id text REFERENCES local_control_planes(id) ON DELETE SET NULL,
+  bundle_id text NOT NULL,
+  event_type text NOT NULL,
+  component text NOT NULL,
+  status text NOT NULL,
+  stage_index integer,
+  wasm_generation integer,
+  local_pollek_paths jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS hot_reload_events_tenant_time_idx ON hot_reload_events(tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS adapter_catalog_entries (
+  id text PRIMARY KEY,
+  category text NOT NULL,
+  display_name text NOT NULL,
+  definition jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status text NOT NULL DEFAULT 'active',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS integrations (
   id text PRIMARY KEY,
@@ -305,6 +350,18 @@ CREATE INDEX IF NOT EXISTS local_entities_tenant_device_idx ON local_entities(te
 CREATE INDEX IF NOT EXISTS local_entities_type_status_idx ON local_entities(tenant_id, entity_type, status);
 CREATE INDEX IF NOT EXISTS local_entities_lcp_idx ON local_entities(lcp_id);
 
+CREATE TABLE IF NOT EXISTS entity_health_snapshots (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  entity_id text NOT NULL REFERENCES local_entities(id) ON DELETE CASCADE,
+  health_status text NOT NULL,
+  score integer NOT NULL,
+  findings jsonb NOT NULL DEFAULT '[]'::jsonb,
+  generated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS entity_health_snapshots_entity_idx ON entity_health_snapshots(tenant_id, entity_id, generated_at DESC);
+
 CREATE TABLE IF NOT EXISTS local_entity_relationships (
   id text PRIMARY KEY,
   tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -335,6 +392,56 @@ CREATE TABLE IF NOT EXISTS local_entity_sync_runs (
 
 CREATE INDEX IF NOT EXISTS local_entity_sync_runs_tenant_time_idx ON local_entity_sync_runs(tenant_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS policy_sandbox_runs (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  draft_id text REFERENCES policy_drafts(id) ON DELETE SET NULL,
+  profile_id text NOT NULL,
+  mode text NOT NULL,
+  status text NOT NULL,
+  blast_radius jsonb NOT NULL DEFAULT '{}'::jsonb,
+  results jsonb NOT NULL DEFAULT '[]'::jsonb,
+  local_pollek_paths jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS policy_sandbox_runs_tenant_time_idx ON policy_sandbox_runs(tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS breakglass_requests (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  requester text NOT NULL,
+  target_type text NOT NULL,
+  target_id text NOT NULL,
+  reason text NOT NULL,
+  scope jsonb NOT NULL DEFAULT '[]'::jsonb,
+  status text NOT NULL DEFAULT 'pending_approval',
+  approvals jsonb NOT NULL DEFAULT '[]'::jsonb,
+  local_pollek_semantics jsonb NOT NULL DEFAULT '{}'::jsonb,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS breakglass_requests_tenant_status_idx ON breakglass_requests(tenant_id, status, expires_at);
+
+CREATE TABLE IF NOT EXISTS compliance_policy_bundles (
+  id text PRIMARY KEY,
+  tenant_id text REFERENCES tenants(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  edition text NOT NULL DEFAULT 'enterprise',
+  enterprise_only boolean NOT NULL DEFAULT true,
+  frameworks jsonb NOT NULL DEFAULT '[]'::jsonb,
+  controls jsonb NOT NULL DEFAULT '[]'::jsonb,
+  target_engines jsonb NOT NULL DEFAULT '[]'::jsonb,
+  contract_hub_distribution jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status text NOT NULL DEFAULT 'available',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS compliance_policy_bundles_tenant_status_idx ON compliance_policy_bundles(tenant_id, status);
+
 CREATE TABLE IF NOT EXISTS evidence_exports (
   id text PRIMARY KEY,
   tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -361,13 +468,19 @@ ALTER TABLE policy_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_simulations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_bundles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rollout_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staged_rollout_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hot_reload_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tenant_trust_scopes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE service_endpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE device_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE local_entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entity_health_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE local_entity_relationships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE local_entity_sync_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE policy_sandbox_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE breakglass_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE compliance_policy_bundles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE evidence_exports ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenant_isolation_sites ON sites;
@@ -422,6 +535,14 @@ DROP POLICY IF EXISTS tenant_isolation_rollout_plans ON rollout_plans;
 CREATE POLICY tenant_isolation_rollout_plans ON rollout_plans
   USING (tenant_id = current_setting('app.tenant_id', true));
 
+DROP POLICY IF EXISTS tenant_isolation_staged_rollout_results ON staged_rollout_results;
+CREATE POLICY tenant_isolation_staged_rollout_results ON staged_rollout_results
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_hot_reload_events ON hot_reload_events;
+CREATE POLICY tenant_isolation_hot_reload_events ON hot_reload_events
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
 DROP POLICY IF EXISTS tenant_isolation_integrations ON integrations;
 CREATE POLICY tenant_isolation_integrations ON integrations
   USING (tenant_id = current_setting('app.tenant_id', true));
@@ -442,6 +563,10 @@ DROP POLICY IF EXISTS tenant_isolation_local_entities ON local_entities;
 CREATE POLICY tenant_isolation_local_entities ON local_entities
   USING (tenant_id = current_setting('app.tenant_id', true));
 
+DROP POLICY IF EXISTS tenant_isolation_entity_health_snapshots ON entity_health_snapshots;
+CREATE POLICY tenant_isolation_entity_health_snapshots ON entity_health_snapshots
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
 DROP POLICY IF EXISTS tenant_isolation_local_entity_relationships ON local_entity_relationships;
 CREATE POLICY tenant_isolation_local_entity_relationships ON local_entity_relationships
   USING (tenant_id = current_setting('app.tenant_id', true));
@@ -449,6 +574,18 @@ CREATE POLICY tenant_isolation_local_entity_relationships ON local_entity_relati
 DROP POLICY IF EXISTS tenant_isolation_local_entity_sync_runs ON local_entity_sync_runs;
 CREATE POLICY tenant_isolation_local_entity_sync_runs ON local_entity_sync_runs
   USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_policy_sandbox_runs ON policy_sandbox_runs;
+CREATE POLICY tenant_isolation_policy_sandbox_runs ON policy_sandbox_runs
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_breakglass_requests ON breakglass_requests;
+CREATE POLICY tenant_isolation_breakglass_requests ON breakglass_requests
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_compliance_policy_bundles ON compliance_policy_bundles;
+CREATE POLICY tenant_isolation_compliance_policy_bundles ON compliance_policy_bundles
+  USING (tenant_id IS NULL OR tenant_id = current_setting('app.tenant_id', true));
 
 DROP POLICY IF EXISTS tenant_isolation_evidence_exports ON evidence_exports;
 CREATE POLICY tenant_isolation_evidence_exports ON evidence_exports
