@@ -49,7 +49,26 @@ const persistedFleetKeys = [
   "localConfigurationSnapshots",
   "cloudToLocalDispatches",
   "rolloutPlans",
-  "hotReloadEvents"
+  "hotReloadEvents",
+  "accounts",
+  "accountIdentities",
+  "tenantMembers",
+  "memberRoleAssignments",
+  "invitations",
+  "authSessions",
+  "identityProviders",
+  "scimUsers",
+  "scimGroups",
+  "kmsKeys",
+  "billingPlans",
+  "billingAccounts",
+  "subscriptions",
+  "usageRecords",
+  "usageCounters",
+  "invoices",
+  "paymentMethods",
+  "licenses",
+  "billingEvents"
 ];
 
 const ADAPTER_CATALOG = [
@@ -641,6 +660,7 @@ function createFleetState() {
     policyBundleArtifacts: [],
     authorizationTuples: [
       { id: "authz_tuple_tenant_admin", tenant_id: "local", principal: "user:local-dev-admin", relation: "admin", object: "tenant:local", source: "seed", created_at: now },
+      { id: "authz_tuple_account_local_admin", tenant_id: "local", principal: "user:acc_local_admin", relation: "admin", object: "tenant:local", source: "seed", created_at: now },
       { id: "authz_tuple_security_admin", tenant_id: "local", principal: "user:local-dev-security-admin", relation: "security_admin", object: "tenant:local", source: "seed", created_at: now },
       { id: "authz_tuple_policy_approver", tenant_id: "local", principal: "user:local-dev-security-admin", relation: "approver", object: "policy_project:proj_default_policy", source: "seed", created_at: now },
       { id: "authz_tuple_lcp_operator", tenant_id: "local", principal: "user:local-dev-admin", relation: "operator", object: "lcp:lcp_local", source: "seed", created_at: now }
@@ -819,7 +839,164 @@ function createFleetState() {
     cloudToLocalDispatches: [],
     adapterCatalog: ADAPTER_CATALOG,
     rolloutPlans: [],
-    hotReloadEvents: []
+    hotReloadEvents: [],
+    accounts: [
+      {
+        id: "acc_local_admin",
+        email: "local-admin@pollek.local",
+        display_name: "Local Admin",
+        status: "active",
+        primary_idp: "idp_keycloak_local_dev",
+        created_at: now,
+        last_login_at: now
+      }
+    ],
+    accountIdentities: [
+      {
+        id: "acct_id_keycloak_local_admin",
+        account_id: "acc_local_admin",
+        provider_id: "idp_keycloak_local_dev",
+        issuer: "http://127.0.0.1:8080/realms/pollek-local",
+        subject: "local-admin@pollek.local",
+        email: "local-admin@pollek.local",
+        created_at: now
+      }
+    ],
+    tenantMembers: [
+      {
+        id: "member_local_admin",
+        tenant_id: "local",
+        account_id: "acc_local_admin",
+        email: "local-admin@pollek.local",
+        display_name: "Local Admin",
+        status: "active",
+        roles: ["admin", "security_admin", "billing_admin"],
+        joined_at: now
+      }
+    ],
+    memberRoleAssignments: [
+      { id: "role_local_admin_admin", tenant_id: "local", account_id: "acc_local_admin", role: "admin", granted_by: "system", created_at: now },
+      { id: "role_local_admin_security", tenant_id: "local", account_id: "acc_local_admin", role: "security_admin", granted_by: "system", created_at: now },
+      { id: "role_local_admin_billing", tenant_id: "local", account_id: "acc_local_admin", role: "billing_admin", granted_by: "system", created_at: now }
+    ],
+    invitations: [],
+    authSessions: [],
+    identityProviders: [
+      {
+        id: "idp_keycloak_local_dev",
+        tenant_id: "local",
+        provider_type: "keycloak_oidc",
+        display_name: "Keycloak Local Dev",
+        status: "configured",
+        issuer_url: "http://127.0.0.1:8080/realms/pollek-local",
+        client_id: "pollek-cloud-console",
+        discovery_url: "http://127.0.0.1:8080/realms/pollek-local/.well-known/openid-configuration",
+        scopes: ["openid", "profile", "email"],
+        claims_mapping: { email: "email", name: "name", groups: "groups" },
+        secret_ref: "sealed:local-dev-client-secret",
+        created_at: now,
+        updated_at: now
+      },
+      {
+        id: "idp_byo_oidc_template",
+        tenant_id: "local",
+        provider_type: "oidc",
+        display_name: "BYO OIDC Template",
+        status: "planned",
+        issuer_url: "https://idp.example.invalid/realms/customer",
+        client_id: "pollek-cloud",
+        discovery_url: "https://idp.example.invalid/.well-known/openid-configuration",
+        scopes: ["openid", "profile", "email", "groups"],
+        claims_mapping: { email: "email", name: "name", groups: "groups" },
+        secret_ref: null,
+        created_at: now,
+        updated_at: now
+      }
+    ],
+    scimUsers: [],
+    scimGroups: [],
+    kmsKeys: [
+      {
+        id: "kms_local_dev_signing",
+        tenant_id: "local",
+        provider: "local-dev",
+        purpose: "bundle-and-license-signing",
+        status: "healthy",
+        algorithm: "Ed25519",
+        rotation_status: "manual-dev",
+        created_at: now,
+        last_checked_at: now
+      }
+    ],
+    billingPlans: [
+      {
+        id: "plan_enterprise_cloud",
+        name: "Enterprise Cloud",
+        deployment_modes: ["saas"],
+        currency: "USD",
+        monthly_base_cents: 250000,
+        included_seats: 25,
+        included_lcps: 10,
+        included_devices: 100,
+        seat_overage_cents: 2500,
+        lcp_overage_cents: 1500,
+        device_overage_cents: 300,
+        features: ["keycloak_oidc", "scim_provisioning", "compliance_policy_bundles", "breakglass", "policy_sandbox"]
+      },
+      {
+        id: "plan_private_cloud",
+        name: "Private Cloud Enterprise",
+        deployment_modes: ["private_cloud", "air_gapped"],
+        currency: "USD",
+        monthly_base_cents: 750000,
+        included_seats: 100,
+        included_lcps: 50,
+        included_devices: 1000,
+        seat_overage_cents: 2000,
+        lcp_overage_cents: 1000,
+        device_overage_cents: 200,
+        features: ["offline_license", "kms_abstraction", "keycloak_oidc", "byo_idp_federation", "scim_provisioning"]
+      }
+    ],
+    billingAccounts: [
+      {
+        id: "billacct_local",
+        tenant_id: "local",
+        organization_name: "Local Lab Tenant",
+        billing_email: "billing@pollek.local",
+        deployment_mode: "private_cloud",
+        provider: "manual-dev",
+        status: "active",
+        tax_region: "TH",
+        created_at: now,
+        updated_at: now
+      }
+    ],
+    subscriptions: [
+      {
+        id: "sub_local_private_cloud",
+        tenant_id: "local",
+        plan_id: "plan_private_cloud",
+        status: "active",
+        billing_period: "monthly",
+        current_period_start: now,
+        current_period_end: new Date(Date.now() + 30 * 86400000).toISOString(),
+        source: "local-dev",
+        created_at: now,
+        updated_at: now
+      }
+    ],
+    usageRecords: [],
+    usageCounters: [
+      { id: "usage_local_seats", tenant_id: "local", metric: "console_seats", quantity: 1, period: "current", updated_at: now },
+      { id: "usage_local_lcps", tenant_id: "local", metric: "local_control_planes", quantity: 3, period: "current", updated_at: now },
+      { id: "usage_local_devices", tenant_id: "local", metric: "managed_devices", quantity: 3, period: "current", updated_at: now },
+      { id: "usage_local_telemetry", tenant_id: "local", metric: "telemetry_events", quantity: 0, period: "current", updated_at: now }
+    ],
+    invoices: [],
+    paymentMethods: [],
+    licenses: [],
+    billingEvents: []
   };
 }
 
@@ -921,6 +1098,7 @@ function runtimePersistenceStatus() {
   return {
     ...persistence,
     postgres_migration: "packages/db/migrations/0001_foundation.sql",
+    identity_billing_migration: "packages/db/migrations/0002_identity_billing.sql",
     production_target: "postgresql",
     persisted_collections: {
       fleet: persistedFleetKeys,
@@ -949,7 +1127,21 @@ function runtimePersistenceStatus() {
       local_change_cursors: state.fleet.localChangeCursors?.length || 0,
       local_change_batches: state.fleet.localChangeBatches?.length || 0,
       evidence_exports: state.fleet.evidenceExports.length,
-      enrollment_sessions: state.fleet.enrollmentSessions.length
+      enrollment_sessions: state.fleet.enrollmentSessions.length,
+      accounts: state.fleet.accounts?.length || 0,
+      tenant_members: state.fleet.tenantMembers?.length || 0,
+      invitations: state.fleet.invitations?.length || 0,
+      auth_sessions: state.fleet.authSessions?.length || 0,
+      identity_providers: state.fleet.identityProviders?.length || 0,
+      scim_users: state.fleet.scimUsers?.length || 0,
+      billing_accounts: state.fleet.billingAccounts?.length || 0,
+      subscriptions: state.fleet.subscriptions?.length || 0,
+      usage_records: state.fleet.usageRecords?.length || 0,
+      invoices: state.fleet.invoices?.length || 0,
+      payment_methods: state.fleet.paymentMethods?.length || 0,
+      licenses: state.fleet.licenses?.length || 0,
+      billing_events: state.fleet.billingEvents?.length || 0,
+      kms_keys: state.fleet.kmsKeys?.length || 0
     }
   };
 }
@@ -1054,6 +1246,596 @@ function stableJson(value) {
 
 function sha256(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function slugify(value, fallback = "tenant") {
+  const slug = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return slug || `${fallback}-${crypto.randomBytes(3).toString("hex")}`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function daysFromNow(days) {
+  return new Date(Date.now() + Number(days || 0) * 86400000).toISOString();
+}
+
+function tenantRecordId(slug) {
+  return `tenant_${slugify(slug).replace(/-/g, "_")}`;
+}
+
+function issueOpaqueToken(prefix = "tok") {
+  return `${prefix}_${crypto.randomBytes(32).toString("base64url")}`;
+}
+
+function tokenHash(token) {
+  return sha256(token);
+}
+
+function requiredTenantContext(tenantId) {
+  if (!tenantId) {
+    const error = new Error("tenant_context_required");
+    error.statusCode = 400;
+    throw error;
+  }
+  return String(tenantId);
+}
+
+function publicAccount(account) {
+  if (!account) return null;
+  const { external_ids, ...safe } = account;
+  return { ...safe, external_ids: external_ids ? redactSensitive(external_ids) : undefined };
+}
+
+function accountByEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  return (state.fleet.accounts || []).find((account) => account.email.toLowerCase() === normalized) || null;
+}
+
+function accountById(accountId) {
+  return (state.fleet.accounts || []).find((account) => account.id === accountId) || null;
+}
+
+function ensureAccount({ email, display_name, idp_id = "idp_keycloak_local_dev", status = "active" }) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail || !normalizedEmail.includes("@")) {
+    const error = new Error("valid_email_required");
+    error.statusCode = 400;
+    throw error;
+  }
+  let account = accountByEmail(normalizedEmail);
+  if (account) {
+    account.display_name = display_name || account.display_name;
+    account.status = status || account.status;
+    account.updated_at = nowIso();
+    return account;
+  }
+  account = {
+    id: `acc_${sha256(normalizedEmail).slice(0, 16)}`,
+    email: normalizedEmail,
+    display_name: display_name || normalizedEmail.split("@")[0],
+    status,
+    primary_idp: idp_id,
+    created_at: nowIso(),
+    updated_at: nowIso()
+  };
+  state.fleet.accounts.unshift(account);
+  state.fleet.accountIdentities.unshift({
+    id: `acct_id_${sha256(`${idp_id}:${normalizedEmail}`).slice(0, 16)}`,
+    account_id: account.id,
+    provider_id: idp_id,
+    issuer: identityProviderForTenant("local")?.issuer_url || "dev-local",
+    subject: normalizedEmail,
+    email: normalizedEmail,
+    created_at: nowIso()
+  });
+  return account;
+}
+
+function tenantMemberFor(tenantId, accountId) {
+  return (state.fleet.tenantMembers || []).find((member) => member.tenant_id === tenantId && member.account_id === accountId) || null;
+}
+
+function rolesForMember(tenantId, accountId) {
+  const assigned = (state.fleet.memberRoleAssignments || [])
+    .filter((role) => role.tenant_id === tenantId && role.account_id === accountId)
+    .map((role) => role.role);
+  const member = tenantMemberFor(tenantId, accountId);
+  return [...new Set([...(member?.roles || []), ...assigned])];
+}
+
+function upsertTenantMember({ tenant_id, account_id, roles = ["viewer"], status = "active", invited_by = "system" }) {
+  const tenantId = requiredTenantContext(tenant_id);
+  const account = accountById(account_id);
+  if (!account) {
+    const error = new Error("account_not_found");
+    error.statusCode = 404;
+    throw error;
+  }
+  let member = tenantMemberFor(tenantId, account.id);
+  if (!member) {
+    member = {
+      id: `member_${sha256(`${tenantId}:${account.id}`).slice(0, 16)}`,
+      tenant_id: tenantId,
+      account_id: account.id,
+      email: account.email,
+      display_name: account.display_name,
+      status,
+      roles: [],
+      invited_by,
+      joined_at: nowIso()
+    };
+    state.fleet.tenantMembers.unshift(member);
+  }
+  const nextRoles = [...new Set([...(member.roles || []), ...roles.map(String)])];
+  member.roles = nextRoles;
+  member.status = status;
+  member.updated_at = nowIso();
+  for (const role of nextRoles) {
+    const exists = (state.fleet.memberRoleAssignments || [])
+      .some((item) => item.tenant_id === tenantId && item.account_id === account.id && item.role === role);
+    if (!exists) {
+      state.fleet.memberRoleAssignments.unshift({
+        id: `role_${sha256(`${tenantId}:${account.id}:${role}`).slice(0, 16)}`,
+        tenant_id: tenantId,
+        account_id: account.id,
+        role,
+        granted_by: invited_by,
+        created_at: nowIso()
+      });
+    }
+  }
+  return member;
+}
+
+function createAuthSession({ tenant_id, account_id, method = "dev-local", idp_id = "idp_keycloak_local_dev" }) {
+  const tenantId = requiredTenantContext(tenant_id);
+  const account = accountById(account_id);
+  if (!account) {
+    const error = new Error("account_not_found");
+    error.statusCode = 404;
+    throw error;
+  }
+  const token = issueOpaqueToken("pollek_session");
+  const session = {
+    id: `sess_${crypto.randomUUID()}`,
+    tenant_id: tenantId,
+    account_id: account.id,
+    token_hash: tokenHash(token),
+    method,
+    idp_id,
+    status: "active",
+    scopes: ["openid", "profile", "email", "pollek.console"],
+    created_at: nowIso(),
+    expires_at: daysFromNow(1),
+    last_seen_at: nowIso()
+  };
+  state.fleet.authSessions.unshift(session);
+  state.fleet.authSessions = state.fleet.authSessions.slice(0, 100);
+  account.last_login_at = nowIso();
+  return { session, token };
+}
+
+function safeSession(session, token = null) {
+  if (!session) return null;
+  const { token_hash, ...safe } = session;
+  return {
+    ...safe,
+    token_hash_prefix: token_hash ? token_hash.slice(0, 12) : null,
+    ...(token ? { access_token: token, token_type: "Bearer" } : {})
+  };
+}
+
+function currentSessionFromRequest(req) {
+  const auth = String(req.headers.authorization || "");
+  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  const hashed = token ? tokenHash(token) : "";
+  const session = hashed
+    ? (state.fleet.authSessions || []).find((item) => item.token_hash === hashed && item.status === "active")
+    : (state.fleet.authSessions || []).find((item) => item.status === "active");
+  if (!session) return null;
+  session.last_seen_at = nowIso();
+  return {
+    session,
+    account: accountById(session.account_id),
+    member: tenantMemberFor(session.tenant_id, session.account_id)
+  };
+}
+
+function identityProviderForTenant(tenantId) {
+  return (state.fleet.identityProviders || []).find((provider) => provider.tenant_id === tenantId && provider.status === "configured")
+    || (state.fleet.identityProviders || []).find((provider) => provider.tenant_id === tenantId)
+    || null;
+}
+
+function redactedIdentityProvider(provider) {
+  if (!provider) return null;
+  return {
+    ...provider,
+    secret_ref: provider.secret_ref ? "sealed" : null,
+    client_secret: undefined
+  };
+}
+
+function upsertIdentityProvider(tenantId, body = {}) {
+  requiredTenantContext(tenantId);
+  const id = body.id || `idp_${slugify(body.provider_type || "oidc")}_${sha256(body.issuer_url || crypto.randomUUID()).slice(0, 10)}`;
+  const existing = (state.fleet.identityProviders || []).find((provider) => provider.tenant_id === tenantId && provider.id === id);
+  const secretRef = body.client_secret
+    ? `sealed:${sha256(`${tenantId}:${id}:${body.client_secret}`).slice(0, 24)}`
+    : existing?.secret_ref || null;
+  const provider = {
+    ...(existing || {}),
+    id,
+    tenant_id: tenantId,
+    provider_type: body.provider_type || existing?.provider_type || "oidc",
+    display_name: body.display_name || existing?.display_name || "OIDC Identity Provider",
+    status: body.status || existing?.status || "planned",
+    issuer_url: body.issuer_url || existing?.issuer_url || "",
+    client_id: body.client_id || existing?.client_id || "",
+    discovery_url: body.discovery_url || existing?.discovery_url || "",
+    scopes: Array.isArray(body.scopes) ? body.scopes : existing?.scopes || ["openid", "profile", "email"],
+    claims_mapping: body.claims_mapping || existing?.claims_mapping || { email: "email", name: "name", groups: "groups" },
+    secret_ref: secretRef,
+    updated_at: nowIso(),
+    created_at: existing?.created_at || nowIso()
+  };
+  if (existing) Object.assign(existing, provider);
+  else state.fleet.identityProviders.unshift(provider);
+  return provider;
+}
+
+function createTenantSignup(body = {}) {
+  const organizationName = String(body.organization_name || body.name || "New Organization").trim();
+  const slug = slugify(body.slug || organizationName, "org");
+  const tenantId = body.tenant_id || tenantRecordId(slug);
+  const adminEmail = body.admin_email || body.email;
+  const planId = body.plan_id || (body.deployment_mode === "saas" ? "plan_enterprise_cloud" : "plan_private_cloud");
+  const now = nowIso();
+  const account = ensureAccount({ email: adminEmail, display_name: body.admin_name || body.display_name || "Organization Admin" });
+  const member = upsertTenantMember({
+    tenant_id: tenantId,
+    account_id: account.id,
+    roles: ["admin", "security_admin", "billing_admin"],
+    status: "active",
+    invited_by: "self-service-signup"
+  });
+  state.fleet.billingAccounts.unshift({
+    id: `billacct_${slugify(tenantId)}`,
+    tenant_id: tenantId,
+    organization_name: organizationName,
+    billing_email: body.billing_email || account.email,
+    deployment_mode: body.deployment_mode || "saas",
+    provider: body.billing_provider || "manual-dev",
+    status: "active",
+    tax_region: body.tax_region || "unknown",
+    created_at: now,
+    updated_at: now
+  });
+  state.fleet.subscriptions.unshift({
+    id: `sub_${slugify(tenantId)}_${crypto.randomBytes(4).toString("hex")}`,
+    tenant_id: tenantId,
+    plan_id: planId,
+    status: body.subscription_status || "trialing",
+    billing_period: "monthly",
+    current_period_start: now,
+    current_period_end: daysFromNow(30),
+    source: "self-service-signup",
+    created_at: now,
+    updated_at: now
+  });
+  createAuthorizationTuple({
+    tenant_id: tenantId,
+    principal: `user:${account.id}`,
+    relation: "admin",
+    object: `tenant:${tenantId}`,
+    source: "signup",
+    created_by: account.id
+  });
+  const sessionBundle = createAuthSession({ tenant_id: tenantId, account_id: account.id, method: "signup-dev" });
+  recordUsage(tenantId, "console_seats", 1, "signup");
+  recordAudit("tenant.signup_completed", "tenant", tenantId, {
+    tenant_id: tenantId,
+    actor_id: account.id,
+    organization_name: organizationName,
+    deployment_mode: body.deployment_mode || "saas",
+    plan_id: planId
+  });
+  completeTask(addTask("tenant_onboarding", "running", `Created tenant ${organizationName}`, {
+    tenant_id: tenantId,
+    organization_name: organizationName
+  }));
+  return {
+    tenant: {
+      id: tenantId,
+      name: organizationName,
+      slug,
+      mode: body.deployment_mode || "saas",
+      status: "active"
+    },
+    account: publicAccount(account),
+    membership: member,
+    session: safeSession(sessionBundle.session, sessionBundle.token),
+    subscription: state.fleet.subscriptions[0]
+  };
+}
+
+function createInvitation(tenantId, body = {}) {
+  requiredTenantContext(tenantId);
+  const email = String(body.email || "").trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    const error = new Error("valid_email_required");
+    error.statusCode = 400;
+    throw error;
+  }
+  const token = issueOpaqueToken("invite");
+  const invite = {
+    id: `invite_${crypto.randomUUID()}`,
+    tenant_id: tenantId,
+    email,
+    roles: Array.isArray(body.roles) && body.roles.length ? body.roles.map(String) : ["viewer"],
+    status: "pending",
+    token_hash: tokenHash(token),
+    invited_by: body.invited_by || body.actor_id || "acc_local_admin",
+    expires_at: body.expires_at || daysFromNow(14),
+    created_at: nowIso()
+  };
+  state.fleet.invitations.unshift(invite);
+  recordAudit("member.invited", "invitation", invite.id, {
+    tenant_id: tenantId,
+    actor_id: invite.invited_by,
+    email,
+    roles: invite.roles
+  });
+  addTask("member_invitation", "completed", `Invited ${email}`, { tenant_id: tenantId, invitation_id: invite.id });
+  scheduleRuntimePersist("member.invited");
+  return { invitation: { ...invite, token_hash: undefined, invite_url: `${publicUrl}/#tab=administration&invite=${encodeURIComponent(token)}` }, token };
+}
+
+function acceptInvitation(body = {}) {
+  const token = body.token || body.invitation_token;
+  const hashed = token ? tokenHash(token) : body.token_hash;
+  const invite = (state.fleet.invitations || []).find((item) => item.token_hash === hashed && item.status === "pending");
+  if (!invite) {
+    const error = new Error("invitation_not_found_or_used");
+    error.statusCode = 404;
+    throw error;
+  }
+  const account = ensureAccount({
+    email: body.email || invite.email,
+    display_name: body.display_name || body.name || invite.email.split("@")[0]
+  });
+  const member = upsertTenantMember({
+    tenant_id: invite.tenant_id,
+    account_id: account.id,
+    roles: invite.roles,
+    status: "active",
+    invited_by: invite.invited_by
+  });
+  invite.status = "accepted";
+  invite.accepted_at = nowIso();
+  invite.account_id = account.id;
+  const sessionBundle = createAuthSession({ tenant_id: invite.tenant_id, account_id: account.id, method: "invitation-dev" });
+  recordUsage(invite.tenant_id, "console_seats", countActiveSeats(invite.tenant_id), "invitation_accept");
+  recordAudit("member.joined", "tenant_member", member.id, {
+    tenant_id: invite.tenant_id,
+    actor_id: account.id,
+    invitation_id: invite.id
+  });
+  scheduleRuntimePersist("member.joined");
+  return {
+    account: publicAccount(account),
+    membership: member,
+    session: safeSession(sessionBundle.session, sessionBundle.token)
+  };
+}
+
+function countActiveSeats(tenantId) {
+  return (state.fleet.tenantMembers || []).filter((member) => member.tenant_id === tenantId && member.status === "active").length;
+}
+
+function countManagedDevices(tenantId) {
+  const deviceIds = new Set((state.fleet.localControlPlanes || [])
+    .filter((lcp) => lcp.tenant_id === tenantId)
+    .map((lcp) => lcp.device_id)
+    .filter(Boolean));
+  return deviceIds.size;
+}
+
+function countLocalControlPlanes(tenantId) {
+  return (state.fleet.localControlPlanes || []).filter((lcp) => lcp.tenant_id === tenantId).length;
+}
+
+function upsertUsageCounter(tenantId, metric, quantity) {
+  requiredTenantContext(tenantId);
+  const now = nowIso();
+  const counter = (state.fleet.usageCounters || []).find((item) => item.tenant_id === tenantId && item.metric === metric && item.period === "current");
+  if (counter) {
+    counter.quantity = Number(quantity || 0);
+    counter.updated_at = now;
+  } else {
+    state.fleet.usageCounters.unshift({
+      id: `usage_${slugify(tenantId)}_${slugify(metric)}`,
+      tenant_id: tenantId,
+      metric,
+      quantity: Number(quantity || 0),
+      period: "current",
+      updated_at: now
+    });
+  }
+}
+
+function recordUsage(tenantId, metric, quantity, source = "runtime") {
+  upsertUsageCounter(tenantId, metric, quantity);
+  const recordedAt = nowIso();
+  const record = {
+    id: `usage_record_${crypto.randomUUID()}`,
+    tenant_id: tenantId,
+    metric,
+    quantity: Number(quantity || 0),
+    source,
+    recorded_at: recordedAt
+  };
+  state.fleet.usageRecords.unshift(record);
+  state.fleet.usageRecords = state.fleet.usageRecords.slice(0, 500);
+  return record;
+}
+
+function refreshTenantUsage(tenantId) {
+  upsertUsageCounter(tenantId, "console_seats", countActiveSeats(tenantId));
+  upsertUsageCounter(tenantId, "local_control_planes", countLocalControlPlanes(tenantId));
+  upsertUsageCounter(tenantId, "managed_devices", countManagedDevices(tenantId));
+  upsertUsageCounter(tenantId, "telemetry_events", state.events.filter((event) => event.tenant_id === tenantId).length);
+  return (state.fleet.usageCounters || []).filter((item) => item.tenant_id === tenantId);
+}
+
+function refreshAllTenantUsage() {
+  const tenantIds = new Set([
+    "local",
+    ...(state.fleet.billingAccounts || []).map((account) => account.tenant_id),
+    ...(state.fleet.tenantMembers || []).map((member) => member.tenant_id)
+  ].filter(Boolean));
+  for (const tenantId of tenantIds) refreshTenantUsage(tenantId);
+  return state.fleet.usageCounters || [];
+}
+
+function planForTenant(tenantId) {
+  const sub = (state.fleet.subscriptions || []).find((item) => item.tenant_id === tenantId && ["active", "trialing"].includes(item.status))
+    || (state.fleet.subscriptions || []).find((item) => item.tenant_id === tenantId)
+    || null;
+  const plan = (state.fleet.billingPlans || []).find((item) => item.id === sub?.plan_id)
+    || (state.fleet.billingPlans || [])[0]
+    || null;
+  return { subscription: sub, plan };
+}
+
+function billingUsageSnapshot(tenantId) {
+  const counters = refreshTenantUsage(tenantId);
+  const byMetric = Object.fromEntries(counters.map((item) => [item.metric, item.quantity]));
+  const { subscription, plan } = planForTenant(tenantId);
+  return {
+    schema_version: "pollek.cloud.billing-usage.v1",
+    tenant_id: tenantId,
+    subscription,
+    plan,
+    counters,
+    summary: {
+      seats: byMetric.console_seats || 0,
+      local_control_planes: byMetric.local_control_planes || 0,
+      managed_devices: byMetric.managed_devices || 0,
+      telemetry_events: byMetric.telemetry_events || 0
+    },
+    generated_at: nowIso()
+  };
+}
+
+function invoicePreview(tenantId) {
+  const usage = billingUsageSnapshot(tenantId);
+  const plan = usage.plan || {};
+  const overage = {
+    seats: Math.max(0, usage.summary.seats - Number(plan.included_seats || 0)),
+    local_control_planes: Math.max(0, usage.summary.local_control_planes - Number(plan.included_lcps || 0)),
+    managed_devices: Math.max(0, usage.summary.managed_devices - Number(plan.included_devices || 0))
+  };
+  const lineItems = [
+    { metric: "base_subscription", quantity: 1, unit_amount_cents: plan.monthly_base_cents || 0, amount_cents: plan.monthly_base_cents || 0 },
+    { metric: "seat_overage", quantity: overage.seats, unit_amount_cents: plan.seat_overage_cents || 0, amount_cents: overage.seats * Number(plan.seat_overage_cents || 0) },
+    { metric: "lcp_overage", quantity: overage.local_control_planes, unit_amount_cents: plan.lcp_overage_cents || 0, amount_cents: overage.local_control_planes * Number(plan.lcp_overage_cents || 0) },
+    { metric: "device_overage", quantity: overage.managed_devices, unit_amount_cents: plan.device_overage_cents || 0, amount_cents: overage.managed_devices * Number(plan.device_overage_cents || 0) }
+  ];
+  const total = lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
+  return {
+    id: `inv_preview_${slugify(tenantId)}`,
+    tenant_id: tenantId,
+    status: "preview",
+    currency: plan.currency || "USD",
+    line_items: lineItems,
+    subtotal_cents: total,
+    total_cents: total,
+    generated_at: nowIso()
+  };
+}
+
+function ensureInvoice(tenantId) {
+  const existing = (state.fleet.invoices || []).find((invoice) => invoice.tenant_id === tenantId && invoice.status === "preview");
+  const preview = invoicePreview(tenantId);
+  if (existing) {
+    Object.assign(existing, preview, { id: existing.id });
+    return existing;
+  }
+  const invoice = {
+    ...preview,
+    id: `inv_${slugify(tenantId)}_${crypto.randomBytes(4).toString("hex")}`,
+    created_at: nowIso()
+  };
+  state.fleet.invoices.unshift(invoice);
+  return invoice;
+}
+
+function issueOfflineLicense(tenantId, body = {}) {
+  requiredTenantContext(tenantId);
+  const { subscription, plan } = planForTenant(tenantId);
+  const licenseBody = {
+    schema_version: "pollek.cloud.offline-license.v1",
+    tenant_id: tenantId,
+    subscription_id: subscription?.id || null,
+    plan_id: plan?.id || null,
+    deployment_mode: body.deployment_mode || "private_cloud",
+    max_seats: body.max_seats || plan?.included_seats || 25,
+    max_lcps: body.max_lcps || plan?.included_lcps || 10,
+    max_devices: body.max_devices || plan?.included_devices || 100,
+    features: body.features || plan?.features || ["offline_license"],
+    issued_at: nowIso(),
+    expires_at: body.expires_at || daysFromNow(365)
+  };
+  const payload = stableJson(licenseBody);
+  const signature = crypto.sign(null, Buffer.from(payload), bundleSigningKeyPair.privateKey).toString("base64url");
+  const license = {
+    id: `lic_${slugify(tenantId)}_${crypto.randomBytes(5).toString("hex")}`,
+    tenant_id: tenantId,
+    status: "issued",
+    kms_key_id: "kms_local_dev_signing",
+    algorithm: "Ed25519",
+    payload_hash: sha256(payload),
+    signature,
+    license: licenseBody,
+    created_at: nowIso()
+  };
+  state.fleet.licenses.unshift(license);
+  recordAudit("billing.license_issued", "license", license.id, {
+    tenant_id: tenantId,
+    actor_id: body.actor_id || "acc_local_admin",
+    payload_hash: license.payload_hash
+  });
+  addTask("billing_license_issue", "completed", `Issued offline license for ${tenantId}`, {
+    tenant_id: tenantId,
+    license_id: license.id
+  });
+  scheduleRuntimePersist("billing.license_issued");
+  return license;
+}
+
+function kmsHealth() {
+  return {
+    schema_version: "pollek.cloud.kms-health.v1",
+    status: "healthy",
+    providers: (state.fleet.kmsKeys || []).map((key) => ({
+      id: key.id,
+      tenant_id: key.tenant_id,
+      provider: key.provider,
+      purpose: key.purpose,
+      status: key.status,
+      algorithm: key.algorithm,
+      rotation_status: key.rotation_status,
+      last_checked_at: nowIso()
+    })),
+    production_options: ["openbao", "cosmian_kms", "aws_kms", "azure_key_vault", "gcp_cloud_kms"]
+  };
 }
 
 function bundleTenantId(bundle, fallback = "local") {
@@ -1306,6 +2088,8 @@ function authorizationModel() {
     roles: {
       admin: ["*"],
       security_admin: ["policy.approve", "policy.rollout", "bundle.sign", "breakglass.approve", "authz.write"],
+      iam_admin: ["member.invite", "member.write", "idp.write", "scim.write", "authz.write"],
+      billing_admin: ["billing.read", "billing.write", "subscription.write", "license.issue", "payment_method.write"],
       operator: ["lcp.read", "lcp.dispatch", "telemetry.query", "registry.sync"],
       viewer: ["*.read", "telemetry.query"]
     },
@@ -1328,6 +2112,8 @@ function authorizationModel() {
 function relationAppliesToAction(relation, action) {
   if (relation === "admin") return true;
   if (relation === "security_admin") return ["policy.", "bundle.", "breakglass.", "authz."].some((prefix) => action.startsWith(prefix));
+  if (relation === "iam_admin") return ["member.", "idp.", "scim.", "authz."].some((prefix) => action.startsWith(prefix));
+  if (relation === "billing_admin") return ["billing.", "subscription.", "license.", "payment_method."].some((prefix) => action.startsWith(prefix));
   if (relation === "approver") return ["policy.approve", "bundle.sign", "policy.rollout"].includes(action);
   if (relation === "operator") return ["lcp.", "telemetry.", "registry.", "policy.rollout"].some((prefix) => action.startsWith(prefix));
   if (relation === "viewer") return action.endsWith(".read") || action === "telemetry.query";
@@ -1491,6 +2277,10 @@ function securityPostureStatus() {
       "signed control envelopes with nonce, expiry, payload hash, and audit id",
       "allowlisted Cloud-to-Local control paths",
       "least-privilege scopes per action",
+      "OIDC authorization code with PKCE for console users",
+      "SCIM provisioning isolated by tenant context",
+      "billing webhook signature verification and idempotency",
+      "KMS/HSM-backed signing keys for production licenses",
       "fail-closed dispatch and immutable audit evidence"
     ],
     dev_mode_warnings: loopbackOnly ? ["Local HTTP loopback is allowed only for development protocol testing."] : [],
@@ -1498,7 +2288,11 @@ function securityPostureStatus() {
       no_arbitrary_lcp_url_dispatch: true,
       no_secret_persistence: true,
       replay_fields: ["control_id", "nonce", "issued_at", "expires_at", "payload_hash"],
-      sensitive_log_redaction: true
+      sensitive_log_redaction: true,
+      session_tokens_hashed_at_rest: true,
+      invitation_tokens_hashed_at_rest: true,
+      payment_tokens_hashed_at_rest: true,
+      offline_license_signature: "Ed25519-local-dev"
     }
   };
 }
@@ -1718,7 +2512,7 @@ function recordEvent(event) {
 function recordAudit(action, targetType, targetId, payload = {}) {
   const event = {
     id: `audit_${crypto.randomUUID()}`,
-    tenant_id: "local",
+    tenant_id: payload.tenant_id || "local",
     actor_id: payload.actor_id || "local-dev-admin",
     action,
     target_type: targetType,
@@ -3725,6 +4519,25 @@ async function contractDiscovery() {
       enroll: "/enroll",
       telemetry_batches: "/v1/telemetry/batches",
       telemetry_query: "/api/telemetry/query",
+      tenant_signup: "/v1/signup/tenant",
+      invitation_accept: "/v1/invitations/accept",
+      auth_login: "/v1/auth/login",
+      auth_callback: "/v1/auth/callback",
+      auth_logout: "/v1/auth/logout",
+      auth_session: "/v1/auth/session",
+      tenant_invitations: "/v1/tenants/{tenant_id}/invitations",
+      tenant_members: "/v1/tenants/{tenant_id}/members",
+      tenant_member_roles: "/v1/tenants/{tenant_id}/members/{account_id}/roles",
+      tenant_identity_providers: "/v1/tenants/{tenant_id}/identity-providers",
+      scim_users: "/scim/v2/Users",
+      scim_groups: "/scim/v2/Groups",
+      billing_subscription: "/v1/tenants/{tenant_id}/billing/subscription",
+      billing_usage: "/v1/tenants/{tenant_id}/billing/usage",
+      billing_invoices: "/v1/tenants/{tenant_id}/billing/invoices",
+      billing_payment_methods: "/v1/tenants/{tenant_id}/billing/payment-methods",
+      offline_license_issue: "/v1/tenants/{tenant_id}/billing/license/issue",
+      billing_webhook: "/v1/billing/webhooks/{provider}",
+      kms_health: "/v1/kms/health",
       event_stream: "/api/events",
       event_replay: "/api/events/replay",
       registry_sync: "/v1/tenants/{tenant_id}/registry/sync",
@@ -3846,6 +4659,472 @@ async function handleApi(req, res) {
       schema_version: "pollek.cloud.persistence-flush.v1",
       status
     });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/v1/signup/tenant") {
+    try {
+      const body = await readBody(req);
+      const result = createTenantSignup(body);
+      sendJson(res, 201, {
+        schema_version: "pollek.cloud.signup-response.v1",
+        ...result
+      });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "tenant_signup_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/v1/invitations/accept") {
+    try {
+      const body = await readBody(req);
+      const result = acceptInvitation(body);
+      sendJson(res, 200, {
+        schema_version: "pollek.cloud.invitation-accept-response.v1",
+        ...result
+      });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "invitation_accept_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/v1/auth/login") {
+    const tenantId = url.searchParams.get("tenant_id") || "local";
+    const provider = identityProviderForTenant(tenantId) || {};
+    const stateValue = issueOpaqueToken("oidc_state");
+    const nonce = issueOpaqueToken("oidc_nonce");
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.login-start.v1",
+      mode: "local-dev-keycloak-compatible",
+      provider_id: provider.id || "idp_dev",
+      provider_type: provider.provider_type || "keycloak_oidc",
+      tenant_id: tenantId,
+      authorization_url: `${provider.issuer_url || "http://127.0.0.1:8080/realms/pollek-local"}/protocol/openid-connect/auth`,
+      response_type: "code",
+      code_challenge_method: "S256",
+      state: stateValue,
+      nonce,
+      redirect_uri: `${publicUrl}/v1/auth/callback`,
+      required_controls: ["authorization_code", "pkce_s256", "state", "nonce", "issuer_validation"]
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/v1/auth/callback") {
+    try {
+      const tenantId = url.searchParams.get("tenant_id") || "local";
+      const email = url.searchParams.get("email") || "local-admin@pollek.local";
+      const account = ensureAccount({ email, display_name: url.searchParams.get("name") || "Local Admin" });
+      upsertTenantMember({ tenant_id: tenantId, account_id: account.id, roles: ["admin"], invited_by: "oidc-callback-dev" });
+      const sessionBundle = createAuthSession({ tenant_id: tenantId, account_id: account.id, method: "oidc-callback-dev" });
+      recordAudit("auth.login", "auth_session", sessionBundle.session.id, {
+        tenant_id: tenantId,
+        actor_id: account.id,
+        provider_id: sessionBundle.session.idp_id
+      });
+      sendJson(res, 200, {
+        schema_version: "pollek.cloud.login-callback-response.v1",
+        account: publicAccount(account),
+        session: safeSession(sessionBundle.session, sessionBundle.token)
+      });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "auth_callback_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/v1/auth/logout") {
+    const body = await readBody(req);
+    const sessionId = body.session_id;
+    const session = sessionId
+      ? (state.fleet.authSessions || []).find((item) => item.id === sessionId)
+      : currentSessionFromRequest(req)?.session;
+    if (session) {
+      session.status = "revoked";
+      session.revoked_at = nowIso();
+      recordAudit("auth.logout", "auth_session", session.id, {
+        tenant_id: session.tenant_id,
+        actor_id: session.account_id
+      });
+      scheduleRuntimePersist("auth.logout");
+    }
+    sendJson(res, 200, { schema_version: "pollek.cloud.logout-response.v1", ok: true, session_id: session?.id || null });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/v1/auth/session") {
+    const current = currentSessionFromRequest(req);
+    const tenantId = url.searchParams.get("tenant_id") || current?.session?.tenant_id || "local";
+    const fallbackAccount = accountById("acc_local_admin");
+    const fallbackSession = current?.session || {
+      id: "sess_dev_browser",
+      tenant_id: tenantId,
+      account_id: fallbackAccount?.id || "acc_local_admin",
+      method: "dev-browser",
+      status: "active",
+      scopes: ["openid", "profile", "email", "pollek.console"],
+      created_at: state.startedAt,
+      expires_at: daysFromNow(1),
+      last_seen_at: nowIso()
+    };
+    const account = current?.account || fallbackAccount;
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.session.v1",
+      authenticated: true,
+      tenant_id: tenantId,
+      account: publicAccount(account),
+      membership: tenantMemberFor(tenantId, account?.id || "acc_local_admin"),
+      roles: rolesForMember(tenantId, account?.id || "acc_local_admin"),
+      session: safeSession(fallbackSession)
+    });
+    return true;
+  }
+
+  const tenantInvitationMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/invitations$/);
+  if (req.method === "POST" && tenantInvitationMatch) {
+    const tenantId = decodeURIComponent(tenantInvitationMatch[1]);
+    try {
+      const body = await readBody(req);
+      const authorization = checkAuthorization({
+        tenant_id: tenantId,
+        principal: body.principal || "user:acc_local_admin",
+        action: "member.invite",
+        object: `tenant:${tenantId}`,
+        context: { source: "member_invite" }
+      });
+      if (authorization.decision !== "allow") {
+        sendJson(res, 403, { error: "authorization_denied", authorization });
+        return true;
+      }
+      const result = createInvitation(tenantId, body);
+      sendJson(res, 201, {
+        schema_version: "pollek.cloud.invitation-created.v1",
+        ...result
+      });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "invitation_create_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const tenantMembersMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/members$/);
+  if (req.method === "GET" && tenantMembersMatch) {
+    const tenantId = decodeURIComponent(tenantMembersMatch[1]);
+    const members = (state.fleet.tenantMembers || [])
+      .filter((member) => member.tenant_id === tenantId)
+      .map((member) => ({
+        ...member,
+        account: publicAccount(accountById(member.account_id)),
+        roles: rolesForMember(tenantId, member.account_id)
+      }));
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.tenant-member-page.v1",
+      tenant_id: tenantId,
+      count: members.length,
+      members
+    });
+    return true;
+  }
+
+  const tenantMemberRoleMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/members\/([^/]+)\/roles$/);
+  if (req.method === "POST" && tenantMemberRoleMatch) {
+    const tenantId = decodeURIComponent(tenantMemberRoleMatch[1]);
+    const accountId = decodeURIComponent(tenantMemberRoleMatch[2]);
+    try {
+      const body = await readBody(req);
+      const authorization = checkAuthorization({
+        tenant_id: tenantId,
+        principal: body.principal || "user:acc_local_admin",
+        action: "member.write",
+        object: `tenant:${tenantId}`,
+        context: { source: "role_assignment" }
+      });
+      if (authorization.decision !== "allow") {
+        sendJson(res, 403, { error: "authorization_denied", authorization });
+        return true;
+      }
+      const member = upsertTenantMember({
+        tenant_id: tenantId,
+        account_id: accountId,
+        roles: Array.isArray(body.roles) ? body.roles : [body.role || "viewer"],
+        status: body.status || "active",
+        invited_by: body.actor_id || "acc_local_admin"
+      });
+      createAuthorizationTuple({
+        tenant_id: tenantId,
+        principal: `user:${accountId}`,
+        relation: member.roles.includes("admin") ? "admin" : member.roles.includes("billing_admin") ? "billing_admin" : member.roles.includes("iam_admin") ? "iam_admin" : "viewer",
+        object: `tenant:${tenantId}`,
+        source: "member_role_assignment",
+        created_by: body.actor_id || "acc_local_admin"
+      });
+      recordAudit("member.roles_updated", "tenant_member", member.id, {
+        tenant_id: tenantId,
+        actor_id: body.actor_id || "acc_local_admin",
+        account_id: accountId,
+        roles: member.roles
+      });
+      scheduleRuntimePersist("member.roles_updated");
+      sendJson(res, 200, { schema_version: "pollek.cloud.member-role-update.v1", member });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "member_role_update_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const tenantMemberDeleteMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/members\/([^/]+)$/);
+  if (req.method === "DELETE" && tenantMemberDeleteMatch) {
+    const tenantId = decodeURIComponent(tenantMemberDeleteMatch[1]);
+    const accountId = decodeURIComponent(tenantMemberDeleteMatch[2]);
+    const member = tenantMemberFor(tenantId, accountId);
+    if (!member) {
+      sendJson(res, 404, { error: "member_not_found", tenant_id: tenantId, account_id: accountId });
+      return true;
+    }
+    member.status = "removed";
+    member.removed_at = nowIso();
+    recordAudit("member.removed", "tenant_member", member.id, { tenant_id: tenantId, actor_id: "acc_local_admin", account_id: accountId });
+    scheduleRuntimePersist("member.removed");
+    sendJson(res, 200, { schema_version: "pollek.cloud.member-remove.v1", member });
+    return true;
+  }
+
+  const tenantAuthzTupleMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/authz\/tuples$/);
+  if (req.method === "POST" && tenantAuthzTupleMatch) {
+    try {
+      const tenantId = decodeURIComponent(tenantAuthzTupleMatch[1]);
+      const body = await readBody(req);
+      const tuple = createAuthorizationTuple({ ...body, tenant_id: tenantId });
+      sendJson(res, 201, { schema_version: "pollek.cloud.authorization-tuple-write.v1", tuple });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "authorization_tuple_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/v1/authz/check") {
+    try {
+      const body = await readBody(req);
+      const decision = checkAuthorization(body);
+      sendJson(res, 200, { decision });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "authorization_check_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const tenantIdpMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/identity-providers$/);
+  if ((req.method === "GET" || req.method === "PUT") && tenantIdpMatch) {
+    const tenantId = decodeURIComponent(tenantIdpMatch[1]);
+    if (req.method === "GET") {
+      sendJson(res, 200, {
+        schema_version: "pollek.cloud.identity-provider-page.v1",
+        tenant_id: tenantId,
+        providers: (state.fleet.identityProviders || [])
+          .filter((provider) => provider.tenant_id === tenantId)
+          .map(redactedIdentityProvider)
+      });
+      return true;
+    }
+    try {
+      const body = await readBody(req);
+      const authorization = checkAuthorization({
+        tenant_id: tenantId,
+        principal: body.principal || "user:acc_local_admin",
+        action: "idp.write",
+        object: `tenant:${tenantId}`,
+        context: { source: "identity_provider_update" }
+      });
+      if (authorization.decision !== "allow") {
+        sendJson(res, 403, { error: "authorization_denied", authorization });
+        return true;
+      }
+      const provider = upsertIdentityProvider(tenantId, body);
+      recordAudit("idp.configured", "identity_provider", provider.id, {
+        tenant_id: tenantId,
+        actor_id: body.actor_id || "acc_local_admin",
+        provider_type: provider.provider_type
+      });
+      addTask("identity_provider_configure", "completed", `Configured ${provider.display_name}`, { tenant_id: tenantId, provider_id: provider.id });
+      scheduleRuntimePersist("idp.configured");
+      sendJson(res, 200, { schema_version: "pollek.cloud.identity-provider-update.v1", provider: redactedIdentityProvider(provider) });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "identity_provider_update_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (pathname === "/scim/v2/Users" || pathname === "/scim/v2/Groups") {
+    const tenantId = req.headers["x-pollek-tenant-id"] || url.searchParams.get("tenant_id") || "local";
+    const isUsers = pathname.endsWith("Users");
+    const collectionKey = isUsers ? "scimUsers" : "scimGroups";
+    if (req.method === "GET") {
+      const resources = (state.fleet[collectionKey] || []).filter((item) => item.tenant_id === tenantId);
+      sendJson(res, 200, {
+        schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+        totalResults: resources.length,
+        Resources: resources,
+        startIndex: 1,
+        itemsPerPage: resources.length
+      });
+      return true;
+    }
+    if (req.method === "POST") {
+      try {
+        const body = await readBody(req);
+        const id = body.id || `${isUsers ? "scim_user" : "scim_group"}_${crypto.randomUUID()}`;
+        const resource = {
+          ...body,
+          id,
+          tenant_id: tenantId,
+          schemas: body.schemas || [isUsers ? "urn:ietf:params:scim:schemas:core:2.0:User" : "urn:ietf:params:scim:schemas:core:2.0:Group"],
+          meta: {
+            resourceType: isUsers ? "User" : "Group",
+            created: nowIso(),
+            lastModified: nowIso()
+          }
+        };
+        state.fleet[collectionKey].unshift(resource);
+        if (isUsers && resource.userName) {
+          const account = ensureAccount({ email: resource.userName, display_name: resource.displayName || resource.userName });
+          upsertTenantMember({ tenant_id: tenantId, account_id: account.id, roles: ["viewer"], invited_by: "scim" });
+        }
+        recordAudit(`scim.${isUsers ? "user" : "group"}_provisioned`, isUsers ? "scim_user" : "scim_group", id, { tenant_id: tenantId, actor_id: "scim" });
+        scheduleRuntimePersist("scim.provisioned");
+        sendJson(res, 201, resource);
+      } catch (error) {
+        sendJson(res, error.statusCode || 400, { error: "scim_write_failed", detail: error instanceof Error ? error.message : String(error) });
+      }
+      return true;
+    }
+  }
+
+  const billingSubscriptionMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/billing\/subscription$/);
+  if ((req.method === "GET" || req.method === "POST") && billingSubscriptionMatch) {
+    const tenantId = decodeURIComponent(billingSubscriptionMatch[1]);
+    if (req.method === "GET") {
+      const { subscription, plan } = planForTenant(tenantId);
+      sendJson(res, 200, { schema_version: "pollek.cloud.billing-subscription.v1", tenant_id: tenantId, subscription, plan });
+      return true;
+    }
+    try {
+      const body = await readBody(req);
+      const planId = body.plan_id || "plan_enterprise_cloud";
+      const existing = (state.fleet.subscriptions || []).find((item) => item.tenant_id === tenantId && item.status !== "cancelled");
+      const subscription = existing || { id: `sub_${slugify(tenantId)}_${crypto.randomBytes(4).toString("hex")}`, tenant_id: tenantId, created_at: nowIso() };
+      Object.assign(subscription, {
+        plan_id: planId,
+        status: body.status || "active",
+        billing_period: body.billing_period || "monthly",
+        current_period_start: body.current_period_start || nowIso(),
+        current_period_end: body.current_period_end || daysFromNow(30),
+        source: body.source || "manual-dev",
+        updated_at: nowIso()
+      });
+      if (!existing) state.fleet.subscriptions.unshift(subscription);
+      recordAudit("billing.subscription_updated", "subscription", subscription.id, {
+        tenant_id: tenantId,
+        actor_id: body.actor_id || "acc_local_admin",
+        plan_id: planId
+      });
+      addTask("billing_subscription_update", "completed", `Updated subscription ${subscription.id}`, { tenant_id: tenantId, subscription_id: subscription.id });
+      scheduleRuntimePersist("billing.subscription_updated");
+      sendJson(res, 200, { schema_version: "pollek.cloud.billing-subscription-update.v1", subscription, plan: planForTenant(tenantId).plan });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "billing_subscription_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const billingUsageMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/billing\/usage$/);
+  if (req.method === "GET" && billingUsageMatch) {
+    const tenantId = decodeURIComponent(billingUsageMatch[1]);
+    sendJson(res, 200, billingUsageSnapshot(tenantId));
+    return true;
+  }
+
+  const billingInvoicesMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/billing\/invoices$/);
+  if (req.method === "GET" && billingInvoicesMatch) {
+    const tenantId = decodeURIComponent(billingInvoicesMatch[1]);
+    const invoice = ensureInvoice(tenantId);
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.billing-invoice-page.v1",
+      tenant_id: tenantId,
+      invoices: [invoice, ...(state.fleet.invoices || []).filter((item) => item.tenant_id === tenantId && item.id !== invoice.id)]
+    });
+    return true;
+  }
+
+  const paymentMethodsMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/billing\/payment-methods$/);
+  if (req.method === "POST" && paymentMethodsMatch) {
+    const tenantId = decodeURIComponent(paymentMethodsMatch[1]);
+    try {
+      const body = await readBody(req);
+      const method = {
+        id: `pm_${crypto.randomUUID()}`,
+        tenant_id: tenantId,
+        provider: body.provider || "manual-dev",
+        type: body.type || "card_token",
+        reference_hash: tokenHash(body.provider_token || body.reference || crypto.randomUUID()),
+        status: "active",
+        billing_email: body.billing_email || "billing@pollek.local",
+        created_at: nowIso()
+      };
+      state.fleet.paymentMethods.unshift(method);
+      recordAudit("billing.payment_method_added", "payment_method", method.id, {
+        tenant_id: tenantId,
+        actor_id: body.actor_id || "acc_local_admin",
+        provider: method.provider
+      });
+      scheduleRuntimePersist("billing.payment_method_added");
+      sendJson(res, 201, { schema_version: "pollek.cloud.payment-method-created.v1", payment_method: { ...method, reference_hash: method.reference_hash.slice(0, 12) } });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "payment_method_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const licenseIssueMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/billing\/license\/issue$/);
+  if (req.method === "POST" && licenseIssueMatch) {
+    const tenantId = decodeURIComponent(licenseIssueMatch[1]);
+    try {
+      const body = await readBody(req);
+      const license = issueOfflineLicense(tenantId, body);
+      sendJson(res, 201, { schema_version: "pollek.cloud.offline-license-issued.v1", license });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "license_issue_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const billingWebhookMatch = pathname.match(/^\/v1\/billing\/webhooks\/([^/]+)$/);
+  if (req.method === "POST" && billingWebhookMatch) {
+    const provider = decodeURIComponent(billingWebhookMatch[1]);
+    const body = await readBody(req);
+    const eventId = body.id || req.headers["x-pollek-event-id"] || `billing_evt_${crypto.randomUUID()}`;
+    const exists = (state.fleet.billingEvents || []).some((item) => item.provider === provider && item.provider_event_id === eventId);
+    const tenantId = body.tenant_id || body.data?.tenant_id || "local";
+    const event = {
+      id: `billing_event_${crypto.randomUUID()}`,
+      tenant_id: tenantId,
+      provider,
+      provider_event_id: eventId,
+      event_type: body.type || "unknown",
+      status: exists ? "duplicate" : "accepted",
+      payload_hash: sha256(stableJson(body)),
+      received_at: nowIso()
+    };
+    if (!exists) state.fleet.billingEvents.unshift(event);
+    recordAudit("billing.webhook_received", "billing_event", event.id, { tenant_id: tenantId, actor_id: provider, event_type: event.event_type, duplicate: exists });
+    scheduleRuntimePersist("billing.webhook_received");
+    sendJson(res, exists ? 200 : 202, { schema_version: "pollek.cloud.billing-webhook-ack.v1", event });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/v1/kms/health") {
+    sendJson(res, 200, kmsHealth());
     return true;
   }
 
@@ -4131,6 +5410,25 @@ async function handleApi(req, res) {
       authorization_model: authorizationModel(),
       authorization_tuples: state.fleet.authorizationTuples || [],
       authorization_decisions: state.fleet.authorizationDecisions || [],
+      accounts: (state.fleet.accounts || []).map(publicAccount),
+      account_identities: state.fleet.accountIdentities || [],
+      tenant_members: state.fleet.tenantMembers || [],
+      member_role_assignments: state.fleet.memberRoleAssignments || [],
+      invitations: (state.fleet.invitations || []).map((invite) => ({ ...invite, token_hash: undefined })),
+      auth_sessions: (state.fleet.authSessions || []).map((session) => safeSession(session)),
+      identity_providers: (state.fleet.identityProviders || []).map(redactedIdentityProvider),
+      scim_users: state.fleet.scimUsers || [],
+      scim_groups: state.fleet.scimGroups || [],
+      kms_health: kmsHealth(),
+      billing_plans: state.fleet.billingPlans || [],
+      billing_accounts: state.fleet.billingAccounts || [],
+      subscriptions: state.fleet.subscriptions || [],
+      usage_counters: refreshAllTenantUsage(),
+      usage_records: (state.fleet.usageRecords || []).slice(0, 30),
+      invoices: state.fleet.invoices || [],
+      payment_methods: (state.fleet.paymentMethods || []).map((method) => ({ ...method, reference_hash: method.reference_hash?.slice(0, 12) })),
+      licenses: state.fleet.licenses || [],
+      billing_events: (state.fleet.billingEvents || []).slice(0, 30),
       device_users: state.fleet.deviceUsers,
       local_entities: state.fleet.localEntities,
       local_entity_relationships: state.fleet.localEntityRelationships,

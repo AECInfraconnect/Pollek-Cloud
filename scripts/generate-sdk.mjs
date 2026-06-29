@@ -57,6 +57,51 @@ export class PollekCloudClient {
     return this.request("/api/fleet");
   }
 
+  signupTenant(request) {
+    return this.request("/v1/signup/tenant", { method: "POST", body: request });
+  }
+
+  getSession({ tenantId = "" } = {}) {
+    const suffix = tenantId ? \`?tenant_id=\${encodeURIComponent(tenantId)}\` : "";
+    return this.request(\`/v1/auth/session\${suffix}\`);
+  }
+
+  acceptInvitation(request) {
+    return this.request("/v1/invitations/accept", { method: "POST", body: request });
+  }
+
+  inviteMember(tenantId, request) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/invitations\`, { method: "POST", body: request });
+  }
+
+  listMembers(tenantId) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/members\`);
+  }
+
+  configureIdentityProvider(tenantId, request) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/identity-providers\`, { method: "PUT", body: request });
+  }
+
+  getBillingUsage(tenantId) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/billing/usage\`);
+  }
+
+  updateSubscription(tenantId, request) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/billing/subscription\`, { method: "POST", body: request });
+  }
+
+  listInvoices(tenantId) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/billing/invoices\`);
+  }
+
+  issueOfflineLicense(tenantId, request = {}) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/billing/license/issue\`, { method: "POST", body: request });
+  }
+
+  getKmsHealth() {
+    return this.request("/v1/kms/health");
+  }
+
   replayEvents({ since = "", channel = "contract-hub", limit = 100 } = {}) {
     const params = new URLSearchParams();
     if (since) params.set("since", since);

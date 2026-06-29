@@ -119,6 +119,33 @@
       "engines": ["rbac", "rebac", "cedar", "openfga"],
       "controls": ["explicit_tenant_context", "default_deny", "tuple_storage", "cedar_policy_guard", "audit_event"]
     },
+    "pollek.cloud.identity": {
+      "direction": "cloud_console",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "tenant_scoped": true,
+      "paths": ["/v1/signup/tenant", "/v1/invitations/accept", "/v1/auth/login", "/v1/auth/callback", "/v1/auth/logout", "/v1/auth/session", "/v1/tenants/{tenant_id}/invitations", "/v1/tenants/{tenant_id}/members", "/v1/tenants/{tenant_id}/members/{account_id}", "/v1/tenants/{tenant_id}/members/{account_id}/roles", "/v1/tenants/{tenant_id}/authz/tuples", "/v1/authz/check", "/v1/tenants/{tenant_id}/identity-providers", "/scim/v2/Users", "/scim/v2/Groups"],
+      "providers": ["keycloak_oidc", "byo_oidc", "saml_bridge_planned", "scim"],
+      "controls": ["authorization_code_pkce", "issuer_validation", "session_token_hash", "invitation_token_hash", "explicit_tenant_context", "audit_event", "scim_tenant_isolation"]
+    },
+    "pollek.cloud.billing": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "tenant_scoped": true,
+      "paths": ["/v1/tenants/{tenant_id}/billing/subscription", "/v1/tenants/{tenant_id}/billing/usage", "/v1/tenants/{tenant_id}/billing/invoices", "/v1/tenants/{tenant_id}/billing/payment-methods", "/v1/tenants/{tenant_id}/billing/license/issue", "/v1/billing/webhooks/{provider}"],
+      "meters": ["console_seats", "local_control_planes", "managed_devices", "telemetry_events"],
+      "controls": ["seat_device_lcp_metering", "payment_token_hash", "webhook_idempotency", "offline_license", "audit_event", "task_record"]
+    },
+    "pollek.cloud.kms": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "tenant_scoped": true,
+      "paths": ["/v1/kms/health"],
+      "providers": ["openbao", "cosmian_kms", "aws_kms", "azure_key_vault", "gcp_cloud_kms"],
+      "controls": ["signing_key_health", "key_rotation_status", "no_plaintext_private_key_export"]
+    },
     "pollek.cloud.connection_update": {
       "direction": "cloud_to_local",
       "requires_oauth": true,
@@ -168,6 +195,16 @@
     "lcp_change_batch_ack_cursor": true,
     "secure_cloud_to_local_dispatch": true,
     "signed_control_envelopes": true,
-    "dev_loopback_protocol_test": true
+    "dev_loopback_protocol_test": true,
+    "saas_signup": true,
+    "keycloak_oidc": true,
+    "byo_idp_federation": true,
+    "scim_provisioning": true,
+    "tenant_member_management": true,
+    "session_token_hash_at_rest": true,
+    "metered_billing_seat_device": true,
+    "offline_license": true,
+    "kms_abstraction": true,
+    "billing_webhook_idempotency": true
   }
 }

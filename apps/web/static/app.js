@@ -80,7 +80,16 @@ const refs = {
   breakglassButton: document.querySelector("#breakglassButton"),
   complianceDeployButton: document.querySelector("#complianceDeployButton"),
   auditList: document.querySelector("#auditList"),
-  integrationHealthList: document.querySelector("#integrationHealthList")
+  integrationHealthList: document.querySelector("#integrationHealthList"),
+  signupTenantButton: document.querySelector("#signupTenantButton"),
+  inviteMemberButton: document.querySelector("#inviteMemberButton"),
+  issueLicenseButton: document.querySelector("#issueLicenseButton"),
+  adminOrgList: document.querySelector("#adminOrgList"),
+  adminMembersList: document.querySelector("#adminMembersList"),
+  adminIdpList: document.querySelector("#adminIdpList"),
+  billingUsageList: document.querySelector("#billingUsageList"),
+  billingInvoiceList: document.querySelector("#billingInvoiceList"),
+  kmsHealthList: document.querySelector("#kmsHealthList")
 };
 
 function readStoredSet(key) {
@@ -129,10 +138,15 @@ function fmtTime(value) {
   return new Date(value).toLocaleString();
 }
 
+function fmtMoney(cents, currency = "USD") {
+  const value = Number(cents || 0) / 100;
+  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value);
+}
+
 function statusClass(status) {
-  if (["connected", "active", "available", "registered", "published", "enforcing", "observed", "configured", "ready", "completed", "healthy"].includes(status)) return "ok";
+  if (["connected", "active", "available", "registered", "published", "enforcing", "observed", "configured", "ready", "completed", "healthy", "issued", "accepted"].includes(status)) return "ok";
   if (["offline", "critical", "failed", "untrusted", "denied", "deny"].includes(status)) return "bad";
-  if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp", "warning", "pending_approval", "warn"].includes(status)) return "warn";
+  if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp", "warning", "pending_approval", "warn", "trialing", "preview", "pending"].includes(status)) return "warn";
   return "neutral";
 }
 
@@ -153,6 +167,12 @@ const kindLabels = {
   alarm: "Alarm",
   task: "Task",
   integration: "Integration",
+  account: "Account",
+  idp: "Identity provider",
+  billing: "Billing",
+  invoice: "Invoice",
+  license: "License",
+  kms: "KMS",
   identity: "Identity",
   telemetry: "Telemetry",
   rollout: "Rollout",
@@ -190,6 +210,12 @@ const iconSvgs = {
   alarm: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
   task: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/>',
   integration: '<path d="M8 8V4M16 8V4"/><path d="M7 8h10v5a5 5 0 0 1-10 0V8Z"/><path d="M12 18v3M9 21h6"/>',
+  account: '<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>',
+  idp: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12h8M12 8v8"/><circle cx="17" cy="7" r="1.5"/>',
+  billing: '<path d="M4 7h16v10H4V7Z"/><path d="M4 11h16"/><path d="M8 15h3"/><path d="M16 15h.01"/>',
+  invoice: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+  license: '<path d="M6 4h12v16H6V4Z"/><path d="M9 9h6M9 13h6"/><path d="m10 17 1.3 1.3L15 15"/>',
+  kms: '<circle cx="7.5" cy="14.5" r="3.5"/><path d="M10 12l8-8 2 2-8 8"/><path d="M16 6l2 2"/>',
   otlp: '<path d="M4 16V8l8-4 8 4v8l-8 4-8-4Z"/><path d="M8 10h8M8 14h5"/>',
   siem: '<path d="M4 5h16v14H4V5Z"/><path d="M8 9h8M8 13h5M8 17h3"/>',
   compliance: '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m8.5 12 2.5 2.5 5-5"/>',
@@ -446,6 +472,7 @@ function render() {
   renderTimeline();
   renderComplianceWorkspace();
   renderAudit();
+  renderAdministrationWorkspace();
   setActiveTab(app.activeTab, { updateHash: false });
 }
 
@@ -1717,6 +1744,181 @@ function renderAudit() {
   }
 }
 
+function renderAdministrationWorkspace() {
+  if (!refs.adminOrgList) return;
+  const tenant = app.data.tenant || {};
+  const members = app.data.tenant_members || [];
+  const accounts = new Map((app.data.accounts || []).map((account) => [account.id, account]));
+  const idps = app.data.identity_providers || [];
+  const plans = new Map((app.data.billing_plans || []).map((plan) => [plan.id, plan]));
+  const subscriptions = app.data.subscriptions || [];
+  const billingAccounts = app.data.billing_accounts || [];
+  const subscription = subscriptions.find((item) => item.tenant_id === "local") || subscriptions[0];
+  const plan = plans.get(subscription?.plan_id) || app.data.billing_plans?.[0] || {};
+  const usage = app.data.usage_counters || [];
+  const invoices = app.data.invoices || [];
+  const licenses = app.data.licenses || [];
+  const kmsProviders = app.data.kms_health?.providers || [];
+  const identityControls = app.data.contract?.interfaces?.["pollek.cloud.identity"]?.controls || [];
+
+  refs.adminOrgList.innerHTML = "";
+  const orgRows = billingAccounts.length ? billingAccounts : [{ tenant_id: "local", organization_name: tenant.name || "Local Lab Tenant", deployment_mode: tenant.mode || "private-cloud-dev", status: "active" }];
+  for (const org of orgRows.slice(0, 8)) {
+    const orgSubscription = subscriptions.find((item) => item.tenant_id === org.tenant_id);
+    const orgPlan = plans.get(orgSubscription?.plan_id) || plan || {};
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(orgSubscription?.status || org.status || "active")}`;
+    row.innerHTML = `
+      ${iconHtml("tenant", orgSubscription?.status || org.status || "active")}
+      <span>
+        <strong>${escapeHtml(org.organization_name || org.tenant_id)}</strong>
+        <small>${escapeHtml(org.deployment_mode || tenant.mode || "private-cloud-dev")} | ${escapeHtml(orgSubscription?.status || org.status || "active")} | ${escapeHtml(orgPlan.name || "Plan pending")}</small>
+      </span>
+      <code>${escapeHtml(JSON.stringify({
+        tenant_id: org.tenant_id,
+        billing_email: org.billing_email || "",
+        identity_controls: identityControls
+      }, null, 2))}</code>
+    `;
+    refs.adminOrgList.append(row);
+  }
+  const identitySeparationRow = document.createElement("div");
+  identitySeparationRow.className = "detail-row trace-row ok";
+  identitySeparationRow.innerHTML = `
+    ${iconHtml("identity", "configured")}
+    <span>
+      <strong>Console identity is separate from device users</strong>
+      <small>${members.length} console members | ${(app.data.device_users || []).length} observed device users</small>
+    </span>
+  `;
+  refs.adminOrgList.append(identitySeparationRow);
+
+  refs.adminMembersList.innerHTML = "";
+  const visibleMembers = members.length ? members : [{ id: "none", email: "No members", display_name: "No members", roles: [], status: "unknown" }];
+  for (const member of visibleMembers.slice(0, 12)) {
+    const account = accounts.get(member.account_id) || {};
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(member.status)}`;
+    row.innerHTML = `
+      ${iconHtml("account", member.status)}
+      <span>
+        <strong>${escapeHtml(member.display_name || account.display_name || member.email)}</strong>
+        <small>${escapeHtml(member.tenant_id)} | ${escapeHtml(member.email || account.email || "")} | ${escapeHtml((member.roles || []).join(", ") || "viewer")}</small>
+      </span>
+      <code>${escapeHtml(member.account_id || "")}</code>
+    `;
+    refs.adminMembersList.append(row);
+  }
+  for (const invite of (app.data.invitations || []).slice(0, 8)) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(invite.status)}`;
+    row.innerHTML = `
+      ${iconHtml("account", invite.status)}
+      <span>
+        <strong>${escapeHtml(invite.email)}</strong>
+        <small>${escapeHtml(invite.tenant_id)} | invitation ${escapeHtml(invite.status)} | ${escapeHtml((invite.roles || []).join(", "))}</small>
+      </span>
+      <code>expires ${escapeHtml(fmtTime(invite.expires_at))}</code>
+    `;
+    refs.adminMembersList.append(row);
+  }
+
+  refs.adminIdpList.innerHTML = "";
+  for (const provider of (idps.length ? idps : [{ id: "none", display_name: "No identity provider", provider_type: "oidc", status: "planned" }])) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(provider.status)}`;
+    row.innerHTML = `
+      ${iconHtml("idp", provider.status)}
+      <span>
+        <strong>${escapeHtml(provider.display_name)}</strong>
+        <small>${escapeHtml(provider.provider_type)} | ${escapeHtml(provider.status)} | ${escapeHtml(provider.client_id || "client pending")}</small>
+      </span>
+      <code>${escapeHtml(provider.issuer_url || provider.discovery_url || "")}</code>
+    `;
+    refs.adminIdpList.append(row);
+  }
+  const scimRow = document.createElement("div");
+  scimRow.className = "detail-row trace-row warn";
+  scimRow.innerHTML = `
+    ${iconHtml("identity", "planned")}
+    <span>
+      <strong>SCIM Provisioning</strong>
+      <small>${escapeHtml((app.data.scim_users || []).length)} users | ${escapeHtml((app.data.scim_groups || []).length)} groups | tenant header required</small>
+    </span>
+  `;
+  refs.adminIdpList.append(scimRow);
+
+  refs.billingUsageList.innerHTML = "";
+  const usageRows = usage.length ? usage : [{ metric: "usage pending", quantity: 0, status: "pending" }];
+  for (const item of usageRows) {
+    const row = document.createElement("div");
+    row.className = "detail-row trace-row";
+    row.innerHTML = `
+      ${iconHtml("billing", "active")}
+      <span>
+        <strong>${escapeHtml(item.metric)}</strong>
+        <small>${escapeHtml(item.tenant_id || "local")} | ${escapeHtml(item.period || "current")} | updated ${escapeHtml(fmtTime(item.updated_at))}</small>
+      </span>
+      <code>${escapeHtml(item.quantity)}</code>
+    `;
+    refs.billingUsageList.append(row);
+  }
+  const planRow = document.createElement("div");
+  planRow.className = `detail-row trace-row ${statusClass(subscription?.status)}`;
+  planRow.innerHTML = `
+    ${iconHtml("billing", subscription?.status)}
+    <span>
+      <strong>${escapeHtml(plan.name || "Subscription plan pending")}</strong>
+      <small>${escapeHtml(subscription?.billing_period || "monthly")} | ${escapeHtml(fmtMoney(plan.monthly_base_cents, plan.currency || "USD"))} base</small>
+    </span>
+    <code>${escapeHtml(JSON.stringify({ seats: plan.included_seats, lcps: plan.included_lcps, devices: plan.included_devices }, null, 2))}</code>
+  `;
+  refs.billingUsageList.append(planRow);
+
+  refs.billingInvoiceList.innerHTML = "";
+  for (const invoice of (invoices.length ? invoices : [{ id: "No invoice preview", status: "preview", total_cents: 0, currency: "USD", line_items: [] }]).slice(0, 5)) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(invoice.status)}`;
+    row.innerHTML = `
+      ${iconHtml("invoice", invoice.status)}
+      <span>
+        <strong>${escapeHtml(invoice.id)}</strong>
+        <small>${escapeHtml(invoice.status)} | ${escapeHtml(fmtMoney(invoice.total_cents, invoice.currency || "USD"))}</small>
+      </span>
+      <code>${escapeHtml((invoice.line_items || []).map((item) => `${item.metric}:${item.quantity}`).join(" | "))}</code>
+    `;
+    refs.billingInvoiceList.append(row);
+  }
+  for (const license of licenses.slice(0, 5)) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(license.status)}`;
+    row.innerHTML = `
+      ${iconHtml("license", license.status)}
+      <span>
+        <strong>${escapeHtml(license.id)}</strong>
+        <small>${escapeHtml(license.algorithm)} | expires ${escapeHtml(fmtTime(license.license?.expires_at))}</small>
+      </span>
+      <code>${escapeHtml(license.payload_hash || "")}</code>
+    `;
+    refs.billingInvoiceList.append(row);
+  }
+
+  refs.kmsHealthList.innerHTML = "";
+  for (const provider of (kmsProviders.length ? kmsProviders : [{ id: "kms_pending", provider: "openbao", purpose: "planned", status: "planned", algorithm: "unknown" }])) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(provider.status)}`;
+    row.innerHTML = `
+      ${iconHtml("kms", provider.status)}
+      <span>
+        <strong>${escapeHtml(provider.provider)} / ${escapeHtml(provider.purpose)}</strong>
+        <small>${escapeHtml(provider.algorithm)} | ${escapeHtml(provider.rotation_status || "rotation pending")}</small>
+      </span>
+      <code>${escapeHtml(provider.id)}</code>
+    `;
+    refs.kmsHealthList.append(row);
+  }
+}
+
 async function runProbe(lcpUrl) {
   refs.probeButton.disabled = true;
   refs.probeButton.textContent = "Running";
@@ -1754,6 +1956,83 @@ async function postJson(url, body = {}) {
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
   return payload;
+}
+
+async function createDemoTenant() {
+  refs.signupTenantButton.disabled = true;
+  refs.signupTenantButton.textContent = "Creating";
+  try {
+    const stamp = Date.now().toString().slice(-5);
+    const payload = await postJson("/v1/signup/tenant", {
+      organization_name: `Demo Enterprise ${stamp}`,
+      slug: `demo-enterprise-${stamp}`,
+      admin_email: `admin-${stamp}@example.com`,
+      admin_name: "Demo Admin",
+      deployment_mode: "saas",
+      plan_id: "plan_enterprise_cloud"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Tenant signup created</strong>
+      <span>${escapeHtml(payload.tenant.id)} | ${escapeHtml(payload.account.email)}</span>
+      <code>${escapeHtml(JSON.stringify({ session: payload.session.id, subscription: payload.subscription.id }, null, 2))}</code>
+    `;
+    await refresh();
+    setActiveTab("administration");
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.signupTenantButton.disabled = false;
+    refs.signupTenantButton.textContent = "Create Demo Tenant";
+  }
+}
+
+async function inviteDemoMember() {
+  refs.inviteMemberButton.disabled = true;
+  refs.inviteMemberButton.textContent = "Inviting";
+  try {
+    const stamp = Date.now().toString().slice(-5);
+    const payload = await postJson("/v1/tenants/local/invitations", {
+      email: `analyst-${stamp}@example.com`,
+      roles: ["viewer", "iam_admin"]
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Invitation created</strong>
+      <span>${escapeHtml(payload.invitation.email)} | ${escapeHtml((payload.invitation.roles || []).join(", "))}</span>
+      <code>${escapeHtml(payload.invitation.invite_url || "")}</code>
+    `;
+    await refresh();
+    setActiveTab("administration");
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.inviteMemberButton.disabled = false;
+    refs.inviteMemberButton.textContent = "Invite Member";
+  }
+}
+
+async function issueAdminLicense() {
+  refs.issueLicenseButton.disabled = true;
+  refs.issueLicenseButton.textContent = "Issuing";
+  try {
+    const payload = await postJson("/v1/tenants/local/billing/license/issue", {
+      deployment_mode: "private_cloud",
+      max_seats: 100,
+      max_lcps: 50,
+      max_devices: 1000
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Offline license issued</strong>
+      <span>${escapeHtml(payload.license.id)} | ${escapeHtml(payload.license.algorithm)}</span>
+      <code>${escapeHtml(payload.license.payload_hash)}</code>
+    `;
+    await refresh();
+    setActiveTab("administration");
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.issueLicenseButton.disabled = false;
+    refs.issueLicenseButton.textContent = "Issue License";
+  }
 }
 
 async function createRollout() {
@@ -2160,6 +2439,9 @@ refs.hotReloadButton.addEventListener("click", dispatchHotReload);
 refs.sandboxButton.addEventListener("click", runComplianceSandbox);
 refs.breakglassButton.addEventListener("click", requestBreakglass);
 refs.complianceDeployButton.addEventListener("click", deployComplianceBundle);
+refs.signupTenantButton?.addEventListener("click", createDemoTenant);
+refs.inviteMemberButton?.addEventListener("click", inviteDemoMember);
+refs.issueLicenseButton?.addEventListener("click", issueAdminLicense);
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });
   const payload = await response.json();
@@ -2182,7 +2464,8 @@ document.querySelectorAll(".view-button").forEach((button) => {
       Entities: "entities",
       "Policy Center": "policies",
       "Observe Center": "telemetry",
-      Compliance: "compliance"
+      Compliance: "compliance",
+      Administration: "administration"
     }[label] || "summary";
   }
   button.addEventListener("click", () => setActiveTab(button.dataset.targetTab));

@@ -33,12 +33,19 @@ This file maps the local MVP repository state to the SRS so later work can conti
 - Telemetry ingest MVP for Pollek envelopes/batches plus Cloud-side sample telemetry for UI testing while LCP builds.
 - SIEM/integration framework seed with OTLP, Splunk HEC, Syslog CEF, and Keycloak OIDC status plus test task recording.
 - Evidence export, compliance readiness scoring, and rollout planning workflows.
+- Identity and Trust Plane MVP for self-service tenant signup, local-dev OIDC login/session, invitation accept, tenant member listing, role assignment, identity-provider configuration, SCIM User/Group create/list, and account/member separation from Local Pollek device users.
+- Commerce Plane MVP for tenant billing accounts, plan/subscription state, seat/LCP/device usage counters, invoice previews, hashed payment method references, webhook idempotency records, private-cloud offline license issuance, and KMS health reporting.
+- Administration console tab for Organization, Users and Roles, Identity Providers, Billing, Invoices/Licenses, and KMS/Keys with action buttons that call the local API endpoints.
+- PostgreSQL identity/billing migration at `packages/db/migrations/0002_identity_billing.sql` with tenant-scoped RLS-ready tables for members, invitations, sessions, IDPs, SCIM, KMS, billing, usage, invoices, payment methods, licenses, and billing events.
+- IAM/Billing architecture note at `docs/architecture/IAM_BILLING_ARCHITECTURE.md` documenting Keycloak/OIDC, SCIM, metering, webhook, and KMS production hardening decisions.
 
 ## Still Pending
 
 - Production PostgreSQL runtime repository implementation beyond the current dependency-light local state snapshot.
 - Full TypeSpec compiler integration, generated multi-language SDK packages, and package publishing beyond the current source seed and dependency-light JavaScript SDK.
-- Real OIDC login, tenant switcher UI, production Cedar/OpenFGA service integration, and external tuple-store synchronization beyond the local authorization MVP.
+- Real Keycloak-hosted OIDC login/callback validation, tenant switcher UI, production Cedar/OpenFGA service integration, and external tuple-store synchronization beyond the local authorization MVP.
+- Production billing provider integration, webhook signature verification, tax/payment workflow, subscription lifecycle automation, and invoice PDF generation beyond the local provider-neutral accounting model.
+- Production KMS/HSM integration for licenses and signing keys beyond the local-dev Ed25519 test signer.
 - Real SPIRE Server deployment, tenant trust-domain provisioning, SPIFFE ID issuance, and mTLS enforcement.
 - Production bundle compiler service, KMS/HSM-backed signing keys, transparency/attestation workflow, and external immutable object storage beyond the local-dev signing/artifact MVP.
 - Local Pollek hot-reload apply endpoint implementation for signed bundle activation beyond current Cloud dispatch/profiling.

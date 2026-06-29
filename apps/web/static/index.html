@@ -22,6 +22,7 @@
           <button class="view-button" data-target-tab="policies">Policy Center</button>
           <button class="view-button" data-target-tab="telemetry">Observe Center</button>
           <button class="view-button" data-target-tab="compliance">Compliance</button>
+          <button class="view-button" data-target-tab="administration">Administration</button>
         </div>
         <div class="global-actions">
           <input id="globalSearch" class="global-search" aria-label="Global search" placeholder="Search tenants, LCPs, agents, bundles" />
@@ -104,6 +105,7 @@
           <button class="tab" data-tab="timeline">Timeline</button>
           <button class="tab" data-tab="compliance">Compliance</button>
           <button class="tab" data-tab="audit">Audit</button>
+          <button class="tab" data-tab="administration">Administration</button>
         </section>
 
         <div class="workspace-grid">
@@ -424,6 +426,80 @@
                 </section>
                 <section class="inline-panel">
                   <div id="integrationHealthList" class="detail-list"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="administration" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Administration</p>
+                  <h3>Organization, Identity, Users, Billing</h3>
+                </div>
+                <div class="button-row compact-actions">
+                  <button id="signupTenantButton" class="secondary-button">Create Demo Tenant</button>
+                  <button id="inviteMemberButton" class="secondary-button">Invite Member</button>
+                  <button id="issueLicenseButton" class="primary-button">Issue License</button>
+                </div>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Organization</p>
+                      <h3>SaaS and Private Cloud Enrollment</h3>
+                    </div>
+                  </div>
+                  <div id="adminOrgList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Users and Roles</p>
+                      <h3>Console Accounts</h3>
+                    </div>
+                  </div>
+                  <div id="adminMembersList" class="detail-list"></div>
+                </section>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Identity Providers</p>
+                      <h3>Keycloak, BYO OIDC, SCIM</h3>
+                    </div>
+                  </div>
+                  <div id="adminIdpList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Billing</p>
+                      <h3>Subscription and Usage</h3>
+                    </div>
+                  </div>
+                  <div id="billingUsageList" class="detail-list"></div>
+                </section>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Invoices and Licenses</p>
+                      <h3>Accounting Records</h3>
+                    </div>
+                  </div>
+                  <div id="billingInvoiceList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">KMS and Keys</p>
+                      <h3>Signing Health</h3>
+                    </div>
+                  </div>
+                  <div id="kmsHealthList" class="detail-list"></div>
                 </section>
               </div>
             </div>

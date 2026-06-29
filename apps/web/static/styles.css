@@ -480,6 +480,18 @@ h3 {
 .icon-integration::before,
 .icon-otlp::before,
 .icon-siem::before { content: "IO"; }
+.icon-account { --icon-color: var(--violet); }
+.icon-account::before { content: "U"; }
+.icon-idp { --icon-color: var(--green); }
+.icon-idp::before { content: "IDP"; font-size: 7px; }
+.icon-billing,
+.icon-invoice { --icon-color: var(--blue); }
+.icon-billing::before { content: "$"; font-size: 13px; }
+.icon-invoice::before { content: "INV"; font-size: 7px; }
+.icon-license,
+.icon-kms { --icon-color: var(--amber); }
+.icon-license::before { content: "LIC"; font-size: 7px; }
+.icon-kms::before { content: "KEY"; font-size: 7px; }
 .icon-identity.icon-keycloak::before { content: "ID"; }
 .icon-spiffe::before { content: "SPI"; font-size: 7px; }
 .icon-opa::before { content: "OPA"; font-size: 7px; }

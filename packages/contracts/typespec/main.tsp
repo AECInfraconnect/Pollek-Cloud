@@ -60,6 +60,41 @@ model PolicyBundleSignatureRequest extends TenantContext {
   breakglass?: "inactive" | "active";
 }
 
+model TenantSignupRequest {
+  organization_name: string;
+  admin_email: string;
+  admin_name?: string;
+  deployment_mode?: "saas" | "private_cloud" | "air_gapped";
+  plan_id?: string;
+}
+
+model InvitationRequest {
+  email: string;
+  roles?: string[];
+}
+
+model IdentityProviderRequest {
+  provider_type: string;
+  display_name?: string;
+  issuer_url: string;
+  client_id: string;
+  client_secret?: string;
+  scopes?: string[];
+}
+
+model BillingSubscriptionRequest {
+  plan_id: string;
+  status?: string;
+}
+
+model OfflineLicenseRequest {
+  deployment_mode?: "private_cloud" | "air_gapped";
+  max_seats?: int32;
+  max_lcps?: int32;
+  max_devices?: int32;
+  expires_at?: string;
+}
+
 @route("/.well-known/pollek-contract")
 @get op getContract(): ContractDiscovery;
 
@@ -71,6 +106,36 @@ model PolicyBundleSignatureRequest extends TenantContext {
 
 @route("/api/authz/check")
 @post op checkAuthorization(@body request: AuthorizationCheckRequest): { decision: AuthorizationDecision };
+
+@route("/v1/authz/check")
+@post op checkAuthorizationV1(@body request: AuthorizationCheckRequest): { decision: AuthorizationDecision };
+
+@route("/v1/signup/tenant")
+@post op signupTenant(@body request: TenantSignupRequest): unknown;
+
+@route("/v1/auth/session")
+@get op getSession(@query tenant_id?: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/invitations")
+@post op inviteMember(@path tenant_id: string, @body request: InvitationRequest): unknown;
+
+@route("/v1/tenants/{tenant_id}/members")
+@get op listMembers(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/identity-providers")
+@put op configureIdentityProvider(@path tenant_id: string, @body request: IdentityProviderRequest): unknown;
+
+@route("/v1/tenants/{tenant_id}/billing/subscription")
+@post op updateSubscription(@path tenant_id: string, @body request: BillingSubscriptionRequest): unknown;
+
+@route("/v1/tenants/{tenant_id}/billing/usage")
+@get op getBillingUsage(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/billing/license/issue")
+@post op issueOfflineLicense(@path tenant_id: string, @body request: OfflineLicenseRequest): unknown;
+
+@route("/v1/kms/health")
+@get op getKmsHealth(): unknown;
 
 @route("/api/policy-bundles/{bundle_id}/sign")
 @post op signPolicyBundle(@path bundle_id: string, @body request: PolicyBundleSignatureRequest): unknown;
