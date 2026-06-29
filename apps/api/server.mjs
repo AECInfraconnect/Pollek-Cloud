@@ -136,7 +136,44 @@ function createFleetState() {
         state: "open",
         created_at: now
       }
-    ]
+    ],
+    policyPacks: [
+      {
+        id: "pack_ai_data_protection",
+        name: "AI Data Leakage Protection",
+        status: "ready",
+        default_mode: "enforce",
+        engines: ["rego", "wasm-redactor"],
+        coverage: 88,
+        controls: ["pii", "secrets", "document-egress"]
+      },
+      {
+        id: "pack_prompt_injection",
+        name: "Prompt Injection Defense",
+        status: "ready",
+        default_mode: "warn",
+        engines: ["rego", "content-guard"],
+        coverage: 76,
+        controls: ["tool-output-injection", "instruction-hijack"]
+      },
+      {
+        id: "pack_shadow_ai",
+        name: "Shadow AI Discovery and Control",
+        status: "observe",
+        default_mode: "observe",
+        engines: ["cedar", "rego"],
+        coverage: 64,
+        controls: ["unmanaged-agents", "provider-egress"]
+      }
+    ],
+    integrations: [
+      { id: "int_otlp", name: "OpenTelemetry Collector", type: "otlp", status: "configured", direction: "inbound-outbound" },
+      { id: "int_splunk_hec", name: "Splunk HEC", type: "siem", status: "needs_secret", direction: "outbound" },
+      { id: "int_syslog_cef", name: "Syslog CEF", type: "siem", status: "not_configured", direction: "outbound" },
+      { id: "int_keycloak", name: "Keycloak OIDC", type: "identity", status: "configured", direction: "inbound" }
+    ],
+    evidenceExports: [],
+    rolloutPlans: []
   };
 }
 
@@ -188,6 +225,14 @@ function addTask(type, status, summary, details = {}) {
   return task;
 }
 
+function completeTask(task, patch = {}) {
+  Object.assign(task, patch, {
+    status: patch.status || "completed",
+    updated_at: new Date().toISOString()
+  });
+  return task;
+}
+
 function recordEvent(event) {
   const normalized = {
     received_at: new Date().toISOString(),
@@ -234,7 +279,10 @@ function fleetSummary() {
     open_alarms: state.fleet.alarms.filter((alarm) => alarm.state === "open").length,
     policy_coverage: avgCoverage,
     telemetry_events: state.events.length,
-    probes: state.probes.length
+    probes: state.probes.length,
+    policy_packs: state.fleet.policyPacks.length,
+    integrations_configured: state.fleet.integrations.filter((item) => item.status === "configured").length,
+    evidence_exports: state.fleet.evidenceExports.length
   };
 }
 
@@ -550,12 +598,132 @@ async function handleApi(req, res) {
       local_control_planes: state.fleet.localControlPlanes,
       relationships: state.fleet.relationships,
       policy_bundles: state.fleet.policyBundles,
+      policy_packs: state.fleet.policyPacks,
+      integrations: state.fleet.integrations,
+      evidence_exports: state.fleet.evidenceExports,
+      rollout_plans: state.fleet.rolloutPlans,
       alarms: state.fleet.alarms,
       events: state.events.slice(0, 30),
       tasks: state.tasks.slice(0, 30),
       probes: state.probes.slice(0, 10),
       contract: await contractDiscovery()
     });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/policy/packs") {
+    sendJson(res, 200, {
+      packs: state.fleet.policyPacks,
+      recommended: state.fleet.policyPacks.filter((pack) => pack.status === "ready")
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/integrations/summary") {
+    const byStatus = state.fleet.integrations.reduce((acc, item) => {
+      acc[item.status] = (acc[item.status] || 0) + 1;
+      return acc;
+    }, {});
+    sendJson(res, 200, {
+      integrations: state.fleet.integrations,
+      summary: {
+        total: state.fleet.integrations.length,
+        configured: byStatus.configured || 0,
+        needs_secret: byStatus.needs_secret || 0,
+        not_configured: byStatus.not_configured || 0
+      }
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/rollouts") {
+    const body = await readBody(req);
+    const targetIds = Array.isArray(body.target_ids) && body.target_ids.length
+      ? body.target_ids
+      : state.fleet.localControlPlanes.filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
+    const bundleId = body.bundle_id || "bnd_ai_data_protection";
+    const rollout = {
+      id: `rollout_${crypto.randomUUID()}`,
+      tenant_id: "local",
+      bundle_id: bundleId,
+      target_ids: targetIds,
+      wave_strategy: body.wave_strategy || "canary-then-batch",
+      status: "planned",
+      created_at: new Date().toISOString()
+    };
+    state.fleet.rolloutPlans.unshift(rollout);
+    const task = addTask("bundle_rollout", "queued", `Created rollout for ${targetIds.length} Local Control Planes`, {
+      rollout_id: rollout.id,
+      bundle_id: bundleId,
+      target_ids: targetIds
+    });
+    recordEvent({
+      event_id: `evt_${crypto.randomUUID()}`,
+      tenant_id: "local",
+      event_type: "rollout.created.v1",
+      severity: "info",
+      payload: rollout
+    });
+    sendJson(res, 201, { rollout, task });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/evidence/exports") {
+    const body = await readBody(req);
+    const exportRecord = {
+      id: `evidence_${crypto.randomUUID()}`,
+      tenant_id: "local",
+      scope: body.scope || "tenant",
+      format: body.format || "json",
+      status: "ready",
+      requested_at: new Date().toISOString(),
+      download_url: `/api/evidence/exports/latest`
+    };
+    state.fleet.evidenceExports.unshift(exportRecord);
+    const task = completeTask(addTask("evidence_export", "running", "Generated tenant evidence package", {
+      evidence_export_id: exportRecord.id,
+      scope: exportRecord.scope,
+      format: exportRecord.format
+    }));
+    recordEvent({
+      event_id: `evt_${crypto.randomUUID()}`,
+      tenant_id: "local",
+      event_type: "evidence.export.ready.v1",
+      severity: "info",
+      payload: exportRecord
+    });
+    sendJson(res, 201, { export: exportRecord, task });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/evidence/exports/latest") {
+    const latest = state.fleet.evidenceExports[0] || null;
+    sendJson(res, latest ? 200 : 404, latest || { error: "no_evidence_export" });
+    return true;
+  }
+
+  const alarmAckMatch = pathname.match(/^\/api\/alarms\/([^/]+)\/ack$/);
+  if (req.method === "POST" && alarmAckMatch) {
+    const alarmId = decodeURIComponent(alarmAckMatch[1]);
+    const alarm = state.fleet.alarms.find((item) => item.id === alarmId);
+    if (!alarm) {
+      sendJson(res, 404, { error: "alarm_not_found", alarm_id: alarmId });
+      return true;
+    }
+    alarm.state = "acknowledged";
+    alarm.acknowledged_at = new Date().toISOString();
+    const task = addTask("alarm_acknowledge", "completed", `Acknowledged alarm: ${alarm.summary}`, {
+      alarm_id: alarm.id,
+      object_id: alarm.object_id
+    });
+    recordEvent({
+      event_id: `evt_${crypto.randomUUID()}`,
+      tenant_id: "local",
+      event_type: "alarm.acknowledged.v1",
+      severity: alarm.severity,
+      payload: alarm
+    });
+    sendJson(res, 200, { alarm, task });
     return true;
   }
 

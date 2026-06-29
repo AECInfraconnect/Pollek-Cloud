@@ -30,6 +30,28 @@ test("dev server exposes fleet inventory endpoints", async () => {
   assert.match(server, /applyProbeToFleet/);
 });
 
+test("dev server exposes fleet operations endpoints", async () => {
+  const server = await readFile("apps/api/server.mjs", "utf8");
+
+  assert.match(server, /pathname === "\/api\/rollouts"/);
+  assert.match(server, /pathname === "\/api\/evidence\/exports"/);
+  assert.match(server, /\/api\\\/alarms\\\/\(\[\^\/\]\+\)\\\/ack/);
+  assert.match(server, /pathname === "\/api\/policy\/packs"/);
+  assert.match(server, /pathname === "\/api\/integrations\/summary"/);
+});
+
+test("console wires fleet operations controls", async () => {
+  const app = await readFile("apps/web/static/app.js", "utf8");
+  const html = await readFile("apps/web/static/index.html", "utf8");
+
+  assert.match(html, /id="rolloutButton"/);
+  assert.match(html, /id="evidenceButton"/);
+  assert.match(html, /id="policyPackList"/);
+  assert.match(app, /async function createRollout/);
+  assert.match(app, /async function exportEvidence/);
+  assert.match(app, /async function acknowledgeAlarm/);
+});
+
 test("static console assets stay ascii-only", async () => {
   const files = [
     "apps/web/static/index.html",

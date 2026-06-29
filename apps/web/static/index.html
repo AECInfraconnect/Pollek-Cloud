@@ -134,7 +134,7 @@
                 <div class="pane-header compact">
                   <div>
                     <p class="eyebrow">Relationships</p>
-                    <h3>Object Map</h3>
+                    <h3>Relationship Map</h3>
                   </div>
                 </div>
                 <div id="relationshipMap" class="relationship-map"></div>
@@ -143,7 +143,7 @@
                 <div class="pane-header compact">
                   <div>
                     <p class="eyebrow">Telemetry</p>
-                    <h3>Recent Events</h3>
+                    <h3>Telemetry Events</h3>
                   </div>
                 </div>
                 <div id="eventTable" class="event-list"></div>
@@ -152,6 +152,17 @@
           </section>
 
           <aside class="ops-rail">
+            <section class="ops-panel">
+              <div class="pane-header compact">
+                <div>
+                  <p class="eyebrow">Policy Packs</p>
+                  <h3>Compliance Ready</h3>
+                </div>
+                <span id="policyPackCount" class="count-badge">0</span>
+              </div>
+              <div id="policyPackList" class="compact-list"></div>
+            </section>
+
             <section class="ops-panel">
               <div class="pane-header compact">
                 <div>
@@ -186,6 +197,16 @@
                 </div>
               </div>
               <div id="taskList" class="task-list"></div>
+            </section>
+
+            <section class="ops-panel">
+              <div class="pane-header compact">
+                <div>
+                  <p class="eyebrow">Integrations</p>
+                  <h3>SIEM / Identity</h3>
+                </div>
+              </div>
+              <div id="integrationList" class="compact-list"></div>
             </section>
           </aside>
         </div>

@@ -39,6 +39,16 @@ flowchart LR
 - Preserve protocol truth: the local dev console must show whether an LCP actually fetched Cloud Contract Hub and reported capability data.
 - Design for many LCPs: table-first, server-paginated later, with filters by status, site, bundle, contract, and alarm state.
 
+## Operations Behavior
+
+The console should make infrastructure actions visible immediately, the same way an operator expects task and alarm feedback in an infrastructure console:
+
+- `Create Rollout` creates a rollout plan and a task, but does not imply production deployment approval.
+- `Export Evidence` creates an evidence export record and a completed task.
+- `Ack` on alarms changes alarm state and creates an audit-like event plus task entry.
+- `Run` probe tests only the selected/local LCP endpoint and updates fleet health when the LCP is reachable.
+- LCP builds are never started from Pollek Cloud; the Cloud console probes an already-running LCP.
+
 ## Sources
 
 - VMware vCenter overview: https://en.wikipedia.org/wiki/VCenter

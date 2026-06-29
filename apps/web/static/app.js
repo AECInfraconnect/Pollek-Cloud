@@ -19,12 +19,17 @@ const refs = {
   eventTable: document.querySelector("#eventTable"),
   probeButton: document.querySelector("#probeButton"),
   probeVisibleButton: document.querySelector("#probeVisibleButton"),
+  rolloutButton: document.querySelector("#rolloutButton"),
+  evidenceButton: document.querySelector("#evidenceButton"),
   lcpUrl: document.querySelector("#lcpUrl"),
   lcpToken: document.querySelector("#lcpToken"),
   probeResult: document.querySelector("#probeResult"),
   alarmCount: document.querySelector("#alarmCount"),
   alarmList: document.querySelector("#alarmList"),
-  taskList: document.querySelector("#taskList")
+  taskList: document.querySelector("#taskList"),
+  policyPackCount: document.querySelector("#policyPackCount"),
+  policyPackList: document.querySelector("#policyPackList"),
+  integrationList: document.querySelector("#integrationList")
 };
 
 const app = {
@@ -82,6 +87,8 @@ function render() {
   renderEvents();
   renderAlarms();
   renderTasks();
+  renderPolicyPacks();
+  renderIntegrations();
 }
 
 function renderSummary(summary) {
@@ -246,12 +253,21 @@ function renderAlarms() {
   refs.alarmCount.textContent = alarms.length;
   refs.alarmList.innerHTML = "";
   for (const alarm of alarms) {
-    const row = document.createElement("button");
+    const row = document.createElement("div");
     row.className = `alarm-row ${alarm.severity}`;
-    row.innerHTML = `<strong>${escapeHtml(alarm.summary)}</strong><span>${escapeHtml(alarm.object_name)} - ${escapeHtml(fmtTime(alarm.created_at))}</span>`;
-    row.addEventListener("click", () => {
+    row.innerHTML = `
+      <button class="alarm-target" data-object-id="${escapeHtml(alarm.object_id)}">
+        <strong>${escapeHtml(alarm.summary)}</strong>
+        <span>${escapeHtml(alarm.object_name)} - ${escapeHtml(fmtTime(alarm.created_at))}</span>
+      </button>
+      <button class="mini-button" data-alarm-id="${escapeHtml(alarm.id)}">Ack</button>
+    `;
+    row.querySelector(".alarm-target").addEventListener("click", () => {
       app.selectedObjectId = alarm.object_id;
       render();
+    });
+    row.querySelector(".mini-button").addEventListener("click", async () => {
+      await acknowledgeAlarm(alarm.id);
     });
     refs.alarmList.append(row);
   }
@@ -265,6 +281,35 @@ function renderTasks() {
     row.className = "task-row";
     row.innerHTML = `<strong>${escapeHtml(task.summary)}</strong><span>${escapeHtml(task.status)}${task.created_at ? ` - ${fmtTime(task.created_at)}` : ""}</span>`;
     refs.taskList.append(row);
+  }
+}
+
+function renderPolicyPacks() {
+  const packs = app.data.policy_packs || [];
+  refs.policyPackCount.textContent = packs.length;
+  refs.policyPackList.innerHTML = "";
+  for (const pack of packs) {
+    const row = document.createElement("div");
+    row.className = "compact-row";
+    row.innerHTML = `
+      <strong>${escapeHtml(pack.name)}</strong>
+      <span>${escapeHtml(pack.default_mode)} - ${escapeHtml(pack.engines.join(", "))}</span>
+    `;
+    refs.policyPackList.append(row);
+  }
+}
+
+function renderIntegrations() {
+  const integrations = app.data.integrations || [];
+  refs.integrationList.innerHTML = "";
+  for (const item of integrations) {
+    const row = document.createElement("div");
+    row.className = "compact-row";
+    row.innerHTML = `
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${escapeHtml(item.type)} - ${escapeHtml(item.status)}</span>
+    `;
+    refs.integrationList.append(row);
   }
 }
 
@@ -296,6 +341,72 @@ async function runProbe(lcpUrl) {
   }
 }
 
+async function postJson(url, body = {}) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  return payload;
+}
+
+async function createRollout() {
+  refs.rolloutButton.disabled = true;
+  refs.rolloutButton.textContent = "Creating";
+  try {
+    const connectedTargets = app.data.local_control_planes
+      .filter((lcp) => lcp.status !== "offline")
+      .map((lcp) => lcp.id);
+    const payload = await postJson("/api/rollouts", {
+      bundle_id: "bnd_ai_data_protection",
+      target_ids: connectedTargets,
+      wave_strategy: "canary-then-batch"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Rollout planned</strong>
+      <span>${escapeHtml(payload.rollout.bundle_id)} for ${payload.rollout.target_ids.length} LCPs</span>
+    `;
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.rolloutButton.disabled = false;
+    refs.rolloutButton.textContent = "Create Rollout";
+  }
+}
+
+async function exportEvidence() {
+  refs.evidenceButton.disabled = true;
+  refs.evidenceButton.textContent = "Exporting";
+  try {
+    const payload = await postJson("/api/evidence/exports", {
+      scope: selectedObject().type || "tenant",
+      format: "json"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>Evidence export ready</strong>
+      <span>${escapeHtml(payload.export.id)} - ${escapeHtml(payload.export.download_url)}</span>
+    `;
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.evidenceButton.disabled = false;
+    refs.evidenceButton.textContent = "Export Evidence";
+  }
+}
+
+async function acknowledgeAlarm(alarmId) {
+  try {
+    await postJson(`/api/alarms/${encodeURIComponent(alarmId)}/ack`, {});
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  }
+}
+
 refs.globalSearch.addEventListener("input", (event) => {
   app.query = event.target.value;
   render();
@@ -308,6 +419,8 @@ refs.statusFilter.addEventListener("change", (event) => {
 
 refs.refreshButton.addEventListener("click", refresh);
 refs.probeButton.addEventListener("click", () => runProbe(refs.lcpUrl.value));
+refs.rolloutButton.addEventListener("click", createRollout);
+refs.evidenceButton.addEventListener("click", exportEvidence);
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });
   const payload = await response.json();
