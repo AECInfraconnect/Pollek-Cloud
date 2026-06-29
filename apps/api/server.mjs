@@ -4509,7 +4509,10 @@ function connectionUpdatePayload({ lcp, action, bundle, body = {} }) {
       signed: Boolean(bundle.signed ?? true)
     } : null,
     runtime_configuration: {
-      poll_seconds: Math.round(lcpWatchIntervalMs / 1000),
+      reconcile_seconds: Math.round(lcpEntityWatch.interval_ms / 1000),
+      hybrid_sync_mode: lcpEntityWatch.mode,
+      primary_mode: lcpEntityWatch.primary_mode,
+      fallback_mode: lcpEntityWatch.fallback_mode,
       event_stream: `${publicUrl}/api/events`,
       event_replay: `${publicUrl}/api/events/replay`,
       entity_sync: `${publicUrl}/api/entities/ingest`,

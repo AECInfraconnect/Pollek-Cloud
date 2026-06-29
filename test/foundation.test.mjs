@@ -634,7 +634,10 @@ test("contract hub serves concrete schema artifacts", async (t) => {
 test("console wires fleet operations controls", async () => {
   const app = await readFile("apps/web/static/app.js", "utf8");
   const html = await readFile("apps/web/static/index.html", "utf8");
+  const css = await readFile("apps/web/static/styles.css", "utf8");
 
+  assert.match(html, /styles\.css\?v=20260629-layout-polish/);
+  assert.match(html, /app\.js\?v=20260629-lcp-dispatch-ux/);
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="appShell"/);
@@ -654,6 +657,7 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /data-tab-panel="bundle_status"/);
   assert.match(html, /data-tab-panel="settings"/);
   assert.match(html, /data-tab-panel="administration"/);
+  assert.doesNotMatch(html, /class="tab" data-tab="administration"/);
   assert.match(html, /id="bundleStatusCenterList"/);
   assert.match(html, /id="bundleDeliveryList"/);
   assert.match(html, /id="objectSettingsList"/);
@@ -704,6 +708,10 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /async function refreshLiveWatch/);
   assert.match(app, /async function dispatchConfigUpdate/);
   assert.match(app, /async function dispatchHotReload/);
+  assert.match(app, /function reportActionError/);
+  assert.match(app, /Human review: verify the Local Control Plane contract/);
+  assert.match(app, /Config dispatch needs review/);
+  assert.match(app, /Hot reload needs review/);
   assert.match(app, /function renderLiveSyncStatus/);
   assert.match(app, /function renderConnectionProfiles/);
   assert.match(app, /function renderServiceEndpoints/);
@@ -752,6 +760,10 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /local_entities\.updated/);
   assert.match(app, /cloud_to_local\.dispatched/);
   assert.match(app, /Cloud API streaming/);
+  assert.match(app, /detailTabs\.hidden = nextTab === "administration"/);
+  assert.match(css, /grid-template-columns: minmax\(760px, 1fr\) var\(--ops-width\)/);
+  assert.match(css, /\.app-shell\.ops-collapsed \.ops-rail-content/);
+  assert.match(css, /overflow-x: hidden/);
 });
 
 test("static console assets stay ascii-only", async () => {

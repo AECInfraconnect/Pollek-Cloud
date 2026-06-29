@@ -490,6 +490,7 @@ function tabFromHash() {
 function setActiveTab(tabName, options = {}) {
   const panel = document.querySelector(`[data-tab-panel="${tabName}"]`);
   const nextTab = panel ? tabName : "summary";
+  const detailTabs = document.querySelector(".detail-tabs");
   app.activeTab = nextTab;
 
   document.querySelectorAll(".tab").forEach((button) => {
@@ -501,6 +502,9 @@ function setActiveTab(tabName, options = {}) {
     item.hidden = item.dataset.tabPanel !== nextTab;
     item.classList.toggle("active", item.dataset.tabPanel === nextTab);
   });
+  if (detailTabs) {
+    detailTabs.hidden = nextTab === "administration";
+  }
   document.querySelectorAll(".view-button").forEach((button) => {
     const target = button.dataset.targetTab || "summary";
     button.classList.toggle("active", target === nextTab);
@@ -2310,7 +2314,12 @@ async function requestJson(url, { method = "GET", body, headers = {} } = {}) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
   return payload;
 }
 
@@ -2324,6 +2333,33 @@ async function putJson(url, body = {}, options = {}) {
 
 async function deleteJson(url, body = undefined, options = {}) {
   return requestJson(url, { method: "DELETE", body, ...options });
+}
+
+function reportActionError(title, error, fallback = "The operation could not complete.") {
+  const payload = error?.payload || null;
+  const dispatch = payload?.dispatch || payload?.probe || payload?.run || null;
+  const failedResults = (dispatch?.results || payload?.results || [])
+    .filter((item) => item && item.ok === false)
+    .map((item) => ({
+      path: item.path || item.name || item.url || "unknown",
+      status: item.status || "failed",
+      error: item.error || item.detail || "LCP endpoint did not accept the request"
+    }));
+  refs.probeResult.innerHTML = `
+    <strong>${escapeHtml(title)}</strong>
+    <span>${escapeHtml(error?.message || fallback)}</span>
+    <span>Human review: verify the Local Control Plane contract, endpoint version, auth mode, and allowed control paths before retrying.</span>
+    <code>${escapeHtml(JSON.stringify({
+      status: dispatch?.status || payload?.status || error?.status || "failed",
+      action: dispatch?.action || payload?.action || "manual_review_required",
+      failed_results: failedResults,
+      payload: payload ? {
+        schema_version: payload.schema_version,
+        error: payload.error,
+        detail: payload.detail
+      } : null
+    }, null, 2))}</code>
+  `;
 }
 
 async function createDemoTenant() {
@@ -2919,7 +2955,7 @@ async function dispatchConfigUpdate() {
     `;
     await refresh();
   } catch (error) {
-    refs.probeResult.textContent = String(error);
+    reportActionError("Config dispatch needs review", error, "Cloud could not push the configuration update to this LCP.");
   } finally {
     refs.pushConfigButton.disabled = false;
     refs.pushConfigButton.textContent = "Push Config";
@@ -2943,7 +2979,7 @@ async function dispatchHotReload() {
     await refresh();
     setActiveTab("timeline");
   } catch (error) {
-    refs.probeResult.textContent = String(error);
+    reportActionError("Hot reload needs review", error, "Cloud could not hot reload the policy bundle on this LCP.");
   } finally {
     refs.hotReloadButton.disabled = false;
     refs.hotReloadButton.textContent = "Hot Reload";
