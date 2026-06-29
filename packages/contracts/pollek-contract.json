@@ -24,14 +24,58 @@
       "direction": "local_to_cloud",
       "requires_oauth": true,
       "requires_spiffe": true,
-      "paths": ["/v1/telemetry/batches", "/v1/telemetry/envelopes"]
+      "paths": [
+        "/v1/telemetry/batches",
+        "/v1/telemetry/envelopes",
+        "/v1/telemetry/events",
+        "/v1/telemetry/decision-logs",
+        "/v1/telemetry/security-events",
+        "/v1/telemetry/traces",
+        "/v1/telemetry/ebpf-events",
+        "/v1/metrics",
+        "/v1/telemetry/runtime-metrics",
+        "/v1/telemetry/observations",
+        "/v1/telemetry/resources",
+        "/v1/telemetry/tools",
+        "/v1/telemetry/identities",
+        "/v1/telemetry/enforcement-status",
+        "/v1/tenants/{tenant_id}/telemetry/events",
+        "/v1/tenants/{tenant_id}/telemetry/observations",
+        "/v1/tenants/{tenant_id}/telemetry/resources",
+        "/v1/tenants/{tenant_id}/telemetry/tools",
+        "/v1/tenants/{tenant_id}/telemetry/identities",
+        "/v1/tenants/{tenant_id}/telemetry/guard-events",
+        "/v1/tenants/{tenant_id}/browser-extension/events",
+        "/v1/tenants/{tenant_id}/browser-extension/status"
+      ],
+      "controls": ["secret_redaction", "schema_version_validation", "tenant_device_headers", "sender_constrained_token_planned"]
     },
     "pollek.cloud.local_entities": {
       "direction": "local_to_cloud",
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/api/entities", "/api/entities/health", "/api/entities/dedupe", "/api/entities/ingest", "/api/entities/sync", "/api/entities/watch", "/api/lcp/change-batches", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync", "/v1/tenants/{tenant_id}/lcp/change-batches"],
+      "paths": [
+        "/api/entities",
+        "/api/entities/health",
+        "/api/entities/dedupe",
+        "/api/entities/ingest",
+        "/api/entities/sync",
+        "/api/entities/watch",
+        "/api/lcp/change-batches",
+        "/api/contract-hub/connection-updates",
+        "/v1/tenants/{tenant_id}/registry/sync",
+        "/v1/tenants/{tenant_id}/registry/agents",
+        "/v1/tenants/{tenant_id}/registry/entities",
+        "/v1/tenants/{tenant_id}/registry/relationships",
+        "/v1/tenants/{tenant_id}/registry/resources",
+        "/v1/tenants/{tenant_id}/registry/tools",
+        "/v1/tenants/{tenant_id}/discovery/candidates",
+        "/v1/tenants/{tenant_id}/discovery/entities",
+        "/v1/tenants/{tenant_id}/capability-snapshot",
+        "/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2",
+        "/v1/tenants/{tenant_id}/lcp/change-batches"
+      ],
       "entity_types": ["registered_agent", "found_agent", "policy", "enforcement", "observability"],
       "sync_strategy": {
         "primary": "lcp_outbox_delta_push",
@@ -52,7 +96,7 @@
       "hot_reload": true,
       "requires_oauth": true,
       "requires_spiffe": true,
-      "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest", "/v1/policy-bundles/{bundle_id}/artifact"],
+      "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest", "/v1/policy-bundles/{bundle_id}/artifact"],
       "controls": ["signed_manifest", "content_addressed_artifact", "immutable_cache", "artifact_hash"]
     },
     "pollek.cloud.policy_bundle_signing": {
@@ -79,7 +123,7 @@
       "enterprise_only": true,
       "entitlement": "enterprise.compliance_policy_bundles",
       "local_catalog_visible": false,
-      "paths": ["/api/compliance/policy-bundles", "/api/compliance/policy-bundles/simulate", "/api/compliance/policy-bundles/deploy", "/api/compliance/score", "/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+      "paths": ["/api/compliance/policy-bundles", "/api/compliance/policy-bundles/simulate", "/api/compliance/policy-bundles/deploy", "/api/compliance/score", "/v1/tenants/{tenant_id}/bundles/latest", "/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
     },
     "pollek.cloud.breakglass": {
       "direction": "cloud_admin",
@@ -171,6 +215,8 @@
     "spiffe_mtls": true,
     "oauth_device_flow": true,
     "telemetry_otlp": true,
+    "lcp_telemetry_endpoint_family": true,
+    "lcp_contract_compatibility_2026_06_30": true,
     "ai_policy_editor": true,
     "ai_policy_provider_redaction_citations": true,
     "local_entity_inventory": true,

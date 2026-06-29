@@ -3832,6 +3832,68 @@
         "x-pollek-tenant-scoped": true
       }
     },
+    "/v1/metrics": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/metrics",
+        "operationId": "postV1Metrics",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
     "/v1/policy-bundles/{bundle_id}/artifact": {
       "get": {
         "tags": [
@@ -4080,6 +4142,181 @@
         "x-pollek-tenant-scoped": false
       }
     },
+    "/v1/telemetry/decision-logs": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/telemetry/decision-logs",
+        "operationId": "postV1TelemetryDecisionLogs",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/ebpf-events": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/telemetry/ebpf-events",
+        "operationId": "postV1TelemetryEbpfEvents",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/enforcement-status": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/telemetry/enforcement-status",
+        "operationId": "getV1TelemetryEnforcementStatus",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
     "/v1/telemetry/envelopes": {
       "post": {
         "tags": [
@@ -4087,6 +4324,458 @@
         ],
         "summary": "Pollek Cloud POST /v1/telemetry/envelopes",
         "operationId": "postV1TelemetryEnvelopes",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/events": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/telemetry/events",
+        "operationId": "postV1TelemetryEvents",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/identities": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/telemetry/identities",
+        "operationId": "getV1TelemetryIdentities",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/observations": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/telemetry/observations",
+        "operationId": "getV1TelemetryObservations",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/resources": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/telemetry/resources",
+        "operationId": "getV1TelemetryResources",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/runtime-metrics": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/telemetry/runtime-metrics",
+        "operationId": "postV1TelemetryRuntimeMetrics",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/security-events": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/telemetry/security-events",
+        "operationId": "postV1TelemetrySecurityEvents",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/tools": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/telemetry/tools",
+        "operationId": "getV1TelemetryTools",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/telemetry/traces": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/telemetry/traces",
+        "operationId": "postV1TelemetryTraces",
         "security": [
           {
             "bearerAuth": [],
@@ -4604,6 +5293,139 @@
         "x-pollek-tenant-scoped": true
       }
     },
+    "/v1/tenants/{tenant_id}/browser-extension/events": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/tenants/{tenant_id}/browser-extension/events",
+        "operationId": "postV1TenantsTenantIdBrowserExtensionEvents",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/browser-extension/status": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/browser-extension/status",
+        "operationId": "getV1TenantsTenantIdBrowserExtensionStatus",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
     "/v1/tenants/{tenant_id}/bundles/latest": {
       "get": {
         "tags": [
@@ -4666,6 +5488,341 @@
         ],
         "x-pollek-enterprise-only": true,
         "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/capability-snapshot": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/capability-snapshot",
+        "operationId": "getV1TenantsTenantIdCapabilitySnapshot",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest": {
+      "post": {
+        "tags": [
+          "pollek.cloud.policy_bundle",
+          "pollek.cloud.enterprise_compliance"
+        ],
+        "summary": "Pollek Cloud POST /v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest",
+        "operationId": "postV1TenantsTenantIdDevicesDeviceIdBundlesLatest",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.policy_bundle",
+          "pollek.cloud.enterprise_compliance"
+        ],
+        "x-pollek-direction": [
+          "cloud_to_local",
+          "cloud_admin_to_local_bundle"
+        ],
+        "x-pollek-enterprise-only": true,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2",
+        "operationId": "getV1TenantsTenantIdDevicesDeviceIdCapabilitySnapshotV2",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/discovery/candidates": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/discovery/candidates",
+        "operationId": "getV1TenantsTenantIdDiscoveryCandidates",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/discovery/entities": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/discovery/entities",
+        "operationId": "getV1TenantsTenantIdDiscoveryEntities",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
       }
     },
     "/v1/tenants/{tenant_id}/identity-providers": {
@@ -5161,6 +6318,250 @@
         "x-pollek-tenant-scoped": true
       }
     },
+    "/v1/tenants/{tenant_id}/registry/agents": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/registry/agents",
+        "operationId": "getV1TenantsTenantIdRegistryAgents",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/registry/entities": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/registry/entities",
+        "operationId": "getV1TenantsTenantIdRegistryEntities",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/registry/relationships": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/registry/relationships",
+        "operationId": "getV1TenantsTenantIdRegistryRelationships",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/registry/resources": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/registry/resources",
+        "operationId": "getV1TenantsTenantIdRegistryResources",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
     "/v1/tenants/{tenant_id}/registry/sync": {
       "post": {
         "tags": [
@@ -5231,6 +6632,444 @@
         ],
         "x-pollek-enterprise-only": false,
         "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/registry/tools": {
+      "get": {
+        "tags": [
+          "pollek.cloud.local_entities"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/registry/tools",
+        "operationId": "getV1TenantsTenantIdRegistryTools",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/telemetry/events": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud POST /v1/tenants/{tenant_id}/telemetry/events",
+        "operationId": "postV1TenantsTenantIdTelemetryEvents",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/telemetry/guard-events": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/telemetry/guard-events",
+        "operationId": "getV1TenantsTenantIdTelemetryGuardEvents",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/telemetry/identities": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/telemetry/identities",
+        "operationId": "getV1TenantsTenantIdTelemetryIdentities",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/telemetry/observations": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/telemetry/observations",
+        "operationId": "getV1TenantsTenantIdTelemetryObservations",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/telemetry/resources": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/telemetry/resources",
+        "operationId": "getV1TenantsTenantIdTelemetryResources",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/telemetry/tools": {
+      "get": {
+        "tags": [
+          "pollek.cloud.telemetry"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/telemetry/tools",
+        "operationId": "getV1TenantsTenantIdTelemetryTools",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
       }
     }
   },

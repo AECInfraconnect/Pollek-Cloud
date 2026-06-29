@@ -126,6 +126,8 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.offline_license, true);
   assert.equal(contract.features.kms_abstraction, true);
   assert.equal(contract.features.billing_webhook_idempotency, true);
+  assert.equal(contract.features.lcp_telemetry_endpoint_family, true);
+  assert.equal(contract.features.lcp_contract_compatibility_2026_06_30, true);
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/v1/signup/tenant"));
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/v1/tenants/{tenant_id}/members/{account_id}/roles"));
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/scim/v2/Users"));
@@ -137,6 +139,10 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/telemetry-envelope.schema.json"));
   assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/api/lcp/change-batches"));
   assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/lcp/change-batches"));
+  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/registry/resources"));
+  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/registry/tools"));
+  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/discovery/entities"));
+  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events/replay"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/hot-reload/stream"));
@@ -152,7 +158,12 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("approval_record_required"));
   assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("ed25519_signature"));
   assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].paths.includes("/v1/policy-bundles/{bundle_id}/artifact"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].paths.includes("/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest"));
   assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].controls.includes("content_addressed_artifact"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/telemetry/events"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/telemetry/enforcement-status"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/browser-extension/events"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("tenant_device_headers"));
   assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/model"));
   assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/tuples"));
   assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/check"));
@@ -210,6 +221,14 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/api/events"].get);
   assert.ok(openapi.paths["/api/events/replay"].get);
   assert.ok(openapi.paths["/api/hot-reload/stream"].get);
+  assert.ok(openapi.paths["/v1/telemetry/events"].post);
+  assert.ok(openapi.paths["/v1/telemetry/observations"].get);
+  assert.ok(openapi.paths["/v1/telemetry/enforcement-status"].get);
+  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/browser-extension/events"].post);
+  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/registry/resources"].get);
+  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/discovery/entities"].get);
+  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2"].get);
+  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest"].post);
   assert.equal(packageJson.scripts["contracts:sdk"], "node scripts/generate-sdk.mjs");
   assert.deepEqual(missing, []);
   assert.deepEqual(extra, []);
@@ -238,6 +257,11 @@ test("typespec source and sdk artifact cover core Contract Hub APIs", async () =
   assert.match(typespec, /op getKmsHealth/);
   assert.match(typespec, /op signPolicyBundle/);
   assert.match(typespec, /op getBundleArtifact/);
+  assert.match(typespec, /op ingestTelemetryEvent/);
+  assert.match(typespec, /op getTelemetryEnforcementStatus/);
+  assert.match(typespec, /op getLatestDeviceBundle/);
+  assert.match(typespec, /op listRegistryAgents/);
+  assert.match(typespec, /op listDiscoveryCandidates/);
   assert.match(sdk, /export class PollekCloudClient/);
   assert.match(sdk, /POLLEK_CONTRACT_VERSION = "2026\.06\.29"/);
   assert.match(sdk, /replayEvents/);
@@ -257,7 +281,16 @@ test("typespec source and sdk artifact cover core Contract Hub APIs", async () =
   assert.match(sdk, /getKmsHealth/);
   assert.match(sdk, /signPolicyBundle/);
   assert.match(sdk, /getBundleArtifact/);
+  assert.match(sdk, /ingestTelemetryEvent/);
+  assert.match(sdk, /listTelemetryObservations/);
+  assert.match(sdk, /getTelemetryEnforcementStatus/);
+  assert.match(sdk, /getLatestDeviceBundle/);
+  assert.match(sdk, /getDeviceCapabilitySnapshot/);
+  assert.match(sdk, /listRegistryAgents/);
+  assert.match(sdk, /listDiscoveryCandidates/);
   assert.match(generator, /export function sdkSource/);
+  assert.match(generator, /ingestTelemetryEvent/);
+  assert.match(generator, /getLatestDeviceBundle/);
   assert.match(drift, /SDK artifact is not generated/);
 });
 
@@ -463,6 +496,94 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /\/api\\\/rollouts\\\/\(\[\^\/\]\+\)\\\/\(advance\|pause\|resume\|cancel\)/);
   assert.match(server, /pathname === "\/api\/policy\/packs"/);
   assert.match(server, /pathname === "\/api\/integrations\/summary"/);
+  assert.match(server, /const telemetryIngestKinds = new Map/);
+  assert.match(server, /function recordTelemetryPayload/);
+  assert.match(server, /function cloudCapabilitySnapshot/);
+  assert.match(server, /function registryPage/);
+  assert.match(server, /function discoveryPage/);
+  assert.match(server, /function latestBundleEnvelope/);
+  assert.match(server, /browser-extension\\\/events/);
+  assert.match(server, /registry\\\/\(agents\|entities\|relationships\|resources\|tools\)/);
+  assert.match(server, /discovery\\\/\(candidates\|entities\)/);
+  assert.match(server, /capability-snapshot-v2/);
+  assert.match(server, /devices\\\/\(\[\^\/\]\+\)\\\/bundles\\\/latest/);
+});
+
+test("dev server serves latest LCP compatibility endpoints", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const telemetryEvent = await api(baseUrl, "/v1/telemetry/events", {
+      method: "POST",
+      headers: {
+        "x-pollek-tenant-id": "local",
+        "x-pollek-device-id": "device_local_windows"
+      },
+      body: {
+        event_id: "evt_test_lcp_observation",
+        event_type: "agent.observation.v1",
+        payload: { agent: "Antigravity", signal: "tool_usage", api_token: "lcp-secret-token" }
+      }
+    });
+    assert.equal(telemetryEvent.response.status, 202);
+    assert.equal(telemetryEvent.payload.accepted, true);
+    assert.equal(telemetryEvent.payload.tenant_id, "local");
+
+    const observations = await api(baseUrl, "/v1/telemetry/observations");
+    assert.equal(observations.response.status, 200);
+    assert.equal(observations.payload.schema_version, "observation-page.v1");
+    assert.ok(observations.payload.items.length >= 1);
+
+    const enforcement = await api(baseUrl, "/v1/telemetry/enforcement-status");
+    assert.equal(enforcement.response.status, 200);
+    assert.equal(enforcement.payload.schema_version, "enforcement-status-list.v1");
+    assert.ok(Array.isArray(enforcement.payload.items));
+
+    const resources = await api(baseUrl, "/v1/telemetry/resources");
+    assert.equal(resources.response.status, 200);
+    assert.equal(resources.payload.schema_version, "pollek.cloud.telemetry-resources-page.v1");
+
+    const extension = await api(baseUrl, "/v1/tenants/local/browser-extension/events", {
+      method: "POST",
+      body: {
+        device_id: "device_local_windows",
+        url: "https://example.invalid",
+        event_type: "browser_extension.discovery.v1",
+        extension_secret: "browser-extension-secret"
+      }
+    });
+    assert.equal(extension.response.status, 202);
+    assert.equal(extension.payload.accepted, true);
+
+    const extensionStatus = await api(baseUrl, "/v1/tenants/local/browser-extension/status");
+    assert.equal(extensionStatus.response.status, 200);
+    assert.equal(extensionStatus.payload.schema_version, "pollek.cloud.browser-extension-status.v1");
+
+    const registryResources = await api(baseUrl, "/v1/tenants/local/registry/resources");
+    assert.equal(registryResources.response.status, 200);
+    assert.equal(registryResources.payload.schema_version, "pollek.cloud.registry-resources-page.v1");
+
+    const discoveryEntities = await api(baseUrl, "/v1/tenants/local/discovery/entities");
+    assert.equal(discoveryEntities.response.status, 200);
+    assert.equal(discoveryEntities.payload.schema_version, "pollek.cloud.discovery-entities-page.v1");
+
+    const capability = await api(baseUrl, "/v1/tenants/local/devices/device_local_windows/capability-snapshot-v2");
+    assert.equal(capability.response.status, 200);
+    assert.equal(capability.payload.schema_version, "local-capability-snapshot.v2");
+    assert.equal(capability.payload.tenant_id, "local");
+
+    const latestBundle = await api(baseUrl, "/v1/tenants/local/devices/device_local_windows/bundles/latest", {
+      method: "POST",
+      body: { installed_revision: "2026.06.29.000" }
+    });
+    assert.equal(latestBundle.response.status, 200);
+    assert.equal(latestBundle.payload.schema_version, "bundle-envelope.v1");
+    assert.equal(latestBundle.payload.tenant_id, "local");
+    assert.equal(latestBundle.payload.device_id, "device_local_windows");
+    assert.equal(latestBundle.payload.signature_status, "valid");
+
+    const fleet = await api(baseUrl, "/api/fleet");
+    assert.equal(fleet.response.status, 200);
+    assert.doesNotMatch(JSON.stringify(fleet.payload.events), /lcp-secret-token|browser-extension-secret/);
+  });
 });
 
 test("admin IAM and billing workflows enforce tenant context and redact secrets", async (t) => {

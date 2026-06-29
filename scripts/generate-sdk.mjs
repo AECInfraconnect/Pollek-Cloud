@@ -65,6 +65,33 @@ export class PollekCloudClient {
     return this.request("/contracts/telemetry-envelope.schema.json");
   }
 
+  ingestTelemetry(path, request) {
+    return this.request(path, { method: "POST", body: request });
+  }
+
+  ingestTelemetryBatch(request) {
+    return this.ingestTelemetry("/v1/telemetry/batches", request);
+  }
+
+  ingestTelemetryEvent(request) {
+    return this.ingestTelemetry("/v1/telemetry/events", request);
+  }
+
+  listTelemetryObservations({ tenantId = "" } = {}) {
+    const suffix = tenantId ? \`?tenant_id=\${encodeURIComponent(tenantId)}\` : "";
+    return this.request(\`/v1/telemetry/observations\${suffix}\`);
+  }
+
+  listTelemetryResources({ tenantId = "" } = {}) {
+    const suffix = tenantId ? \`?tenant_id=\${encodeURIComponent(tenantId)}\` : "";
+    return this.request(\`/v1/telemetry/resources\${suffix}\`);
+  }
+
+  getTelemetryEnforcementStatus({ tenantId = "" } = {}) {
+    const suffix = tenantId ? \`?tenant_id=\${encodeURIComponent(tenantId)}\` : "";
+    return this.request(\`/v1/telemetry/enforcement-status\${suffix}\`);
+  }
+
   getFleet() {
     return this.request("/api/fleet");
   }
@@ -156,6 +183,22 @@ export class PollekCloudClient {
 
   getLatestBundle(tenantId) {
     return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/bundles/latest\`);
+  }
+
+  getLatestDeviceBundle(tenantId, deviceId, request = {}) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/devices/\${encodeURIComponent(deviceId)}/bundles/latest\`, { method: "POST", body: request });
+  }
+
+  getDeviceCapabilitySnapshot(tenantId, deviceId) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/devices/\${encodeURIComponent(deviceId)}/capability-snapshot-v2\`);
+  }
+
+  listRegistryAgents(tenantId) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/registry/agents\`);
+  }
+
+  listDiscoveryCandidates(tenantId) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/discovery/candidates\`);
   }
 
   getBundleManifest(bundleId) {

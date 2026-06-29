@@ -130,6 +130,72 @@ model OfflineLicenseRequest {
 @route("/contracts/telemetry-envelope.schema.json")
 @get op getTelemetryEnvelopeSchema(): unknown;
 
+@route("/v1/telemetry/batches")
+@post op ingestTelemetryBatch(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/envelopes")
+@post op ingestTelemetryEnvelope(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/events")
+@post op ingestTelemetryEvent(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/decision-logs")
+@post op ingestTelemetryDecisionLog(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/security-events")
+@post op ingestTelemetrySecurityEvent(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/traces")
+@post op ingestTelemetryTrace(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/ebpf-events")
+@post op ingestTelemetryEbpfEvent(@body request: Record<unknown>): unknown;
+
+@route("/v1/metrics")
+@post op ingestRuntimeMetric(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/runtime-metrics")
+@post op ingestTelemetryRuntimeMetric(@body request: Record<unknown>): unknown;
+
+@route("/v1/telemetry/observations")
+@get op listTelemetryObservations(@query tenant_id?: string): unknown;
+
+@route("/v1/telemetry/resources")
+@get op listTelemetryResources(@query tenant_id?: string): unknown;
+
+@route("/v1/telemetry/tools")
+@get op listTelemetryTools(@query tenant_id?: string): unknown;
+
+@route("/v1/telemetry/identities")
+@get op listTelemetryIdentities(@query tenant_id?: string): unknown;
+
+@route("/v1/telemetry/enforcement-status")
+@get op getTelemetryEnforcementStatus(@query tenant_id?: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/telemetry/events")
+@post op ingestTenantTelemetryEvent(@path tenant_id: string, @body request: Record<unknown>): unknown;
+
+@route("/v1/tenants/{tenant_id}/telemetry/observations")
+@get op listTenantTelemetryObservations(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/telemetry/resources")
+@get op listTenantTelemetryResources(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/telemetry/tools")
+@get op listTenantTelemetryTools(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/telemetry/identities")
+@get op listTenantTelemetryIdentities(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/telemetry/guard-events")
+@get op listTenantTelemetryGuardEvents(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/browser-extension/events")
+@post op ingestBrowserExtensionEvent(@path tenant_id: string, @body request: Record<unknown>): unknown;
+
+@route("/v1/tenants/{tenant_id}/browser-extension/status")
+@get op getBrowserExtensionStatus(@path tenant_id: string): unknown;
+
 @route("/api/events/replay")
 @get op replayEvents(@query since?: string, @query channel?: string, @query limit?: int32): EventReplayResponse;
 
@@ -192,6 +258,36 @@ model OfflineLicenseRequest {
 
 @route("/v1/tenants/{tenant_id}/bundles/latest")
 @get op getLatestBundle(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest")
+@post op getLatestDeviceBundle(@path tenant_id: string, @path device_id: string, @body request: Record<unknown>): unknown;
+
+@route("/v1/tenants/{tenant_id}/capability-snapshot")
+@get op getTenantCapabilitySnapshot(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2")
+@get op getDeviceCapabilitySnapshotV2(@path tenant_id: string, @path device_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/registry/agents")
+@get op listRegistryAgents(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/registry/entities")
+@get op listRegistryEntities(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/registry/relationships")
+@get op listRegistryRelationships(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/registry/resources")
+@get op listRegistryResources(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/registry/tools")
+@get op listRegistryTools(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/discovery/candidates")
+@get op listDiscoveryCandidates(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/discovery/entities")
+@get op listDiscoveryEntities(@path tenant_id: string): unknown;
 
 @route("/v1/policy-bundles/{bundle_id}/manifest")
 @get op getBundleManifest(@path bundle_id: string): unknown;

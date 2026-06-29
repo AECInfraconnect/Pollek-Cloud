@@ -2648,6 +2648,123 @@ function recordEvent(event) {
   return normalized;
 }
 
+const telemetryIngestKinds = new Map([
+  ["/v1/telemetry/events", "event"],
+  ["/v1/telemetry/decision-logs", "decision_log"],
+  ["/v1/telemetry/security-events", "security_event"],
+  ["/v1/telemetry/traces", "trace"],
+  ["/v1/telemetry/ebpf-events", "ebpf_event"],
+  ["/v1/metrics", "runtime_metric"],
+  ["/v1/telemetry/runtime-metrics", "runtime_metric"],
+  ["/v1/telemetry/envelopes", "envelope"]
+]);
+
+function requestTenantId(req, body = {}, tenantIdFromPath = null) {
+  return tenantIdFromPath || body.tenant_id || req.headers["x-pollek-tenant-id"] || "local";
+}
+
+function requestDeviceId(req, body = {}) {
+  return body.device_id || body.payload?.device_id || req.headers["x-pollek-device-id"] || "unknown";
+}
+
+function normalizeTelemetryItems(body = {}) {
+  if (Array.isArray(body.events)) return body.events;
+  if (Array.isArray(body.items)) return body.items;
+  if (Array.isArray(body)) return body;
+  return [body];
+}
+
+function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null } = {}) {
+  const items = normalizeTelemetryItems(body);
+  const tenantId = requestTenantId(req, body, tenantIdFromPath);
+  const eventType = body.event_type || (kind ? `telemetry.${kind}.v1` : "telemetry.envelope.v1");
+  const event = recordEvent({
+    event_id: body.batch_id || body.event_id || req.headers["x-pollek-event-id"] || `evt_${crypto.randomUUID()}`,
+    tenant_id: tenantId,
+    device_id: requestDeviceId(req, body),
+    event_type: body.schema_version === "telemetry-batch.v1" || kind === "batch" ? "telemetry.batch.v1" : eventType,
+    severity: body.severity || (kind === "security_event" ? "warning" : "info"),
+    payload: {
+      schema_version: body.schema_version || (kind === "batch" ? "telemetry-batch.v1" : "telemetry-envelope.v1"),
+      telemetry_kind: kind || "envelope",
+      event_count: items.length,
+      sample: redactSensitive(items.slice(0, 5)),
+      source_path: body.source_path || null,
+      raw: redactSensitive(body)
+    }
+  });
+  return {
+    schema_version: "telemetry-ingest-response.v1",
+    accepted: true,
+    tenant_id: tenantId,
+    event_id: event.event_id,
+    received_events: items.length
+  };
+}
+
+function telemetryEventsFor(tenantId = "local", predicate = () => true) {
+  return state.events
+    .filter((event) => !tenantId || event.tenant_id === tenantId || event.tenant_id === "unknown")
+    .filter(predicate)
+    .slice(0, 100);
+}
+
+function telemetryEntityPage(kind, tenantId = "local") {
+  const classByKind = { resources: "resource", tools: "tool", identities: "identity" };
+  const sourceByKind = { resources: "registry/resources", tools: "registry/tools", identities: "telemetry/identities" };
+  const entityClass = classByKind[kind];
+  const items = state.fleet.localEntities
+    .filter((entity) => entity.tenant_id === tenantId || tenantId === "local")
+    .filter((entity) => entity.class === entityClass || entity.source === sourceByKind[kind])
+    .map((entity) => ({
+      id: entity.local_object_id || entity.id,
+      name: entity.name,
+      device_id: entity.device_id,
+      user_subject: entity.user_subject,
+      status: entity.status,
+      last_seen_at: entity.last_seen_at,
+      payload: entity.raw || entity
+    }));
+  return {
+    schema_version: `pollek.cloud.telemetry-${kind}-page.v1`,
+    tenant_id: tenantId,
+    count: items.length,
+    items
+  };
+}
+
+function observationTelemetryPage(tenantId = "local") {
+  const entities = state.fleet.localEntities
+    .filter((entity) => entity.entity_type === "observability" && entity.source === "telemetry/observations")
+    .map((entity) => entity.raw || entity);
+  const events = telemetryEventsFor(tenantId, (event) => String(event.event_type || "").includes("observation"));
+  return {
+    schema_version: "observation-page.v1",
+    tenant_id: tenantId,
+    items: [...entities, ...events],
+    next_cursor: null
+  };
+}
+
+function enforcementStatusPage(tenantId = "local") {
+  const enforcement = state.fleet.localEntities
+    .filter((entity) => entity.entity_type === "enforcement")
+    .map((entity) => ({
+      entity_id: entity.id,
+      method_id: entity.local_object_id,
+      status: entity.status,
+      mode: entity.enforcement?.mode || "observe",
+      pep_plane: entity.enforcement?.pep_plane || "unknown",
+      pdp_engine: entity.enforcement?.pdp_engine || "unknown",
+      last_seen_at: entity.last_seen_at
+    }));
+  return {
+    schema_version: "enforcement-status-list.v1",
+    tenant_id: tenantId,
+    items: enforcement
+  };
+}
+
 function recordAudit(action, targetType, targetId, payload = {}) {
   const event = {
     id: `audit_${crypto.randomUUID()}`,
@@ -4375,6 +4492,104 @@ function fleetSummary() {
   };
 }
 
+function latestBundleEnvelope(bundle, tenantId, deviceId = null) {
+  const manifest = signedPolicyBundleManifest(bundle);
+  return {
+    schema_version: "bundle-envelope.v1",
+    tenant_id: tenantId,
+    ...(deviceId ? { device_id: deviceId } : {}),
+    bundle_id: bundle.id,
+    revision: bundle.revision || "2026.06.29.001",
+    status: "available",
+    manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/manifest`,
+    artifact_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/artifact`,
+    hot_reload: Boolean(bundle.hot_reload ?? true),
+    enterprise_compliance: Boolean(bundle.compliance_bundle_id),
+    signature_status: manifest.verification.status,
+    payload_hash: manifest.payload_hash,
+    signatures: manifest.signatures.map((signature) => ({
+      key_id: signature.key_id,
+      alg: signature.alg,
+      payload_hash: signature.payload_hash,
+      signed_at: signature.signed_at
+    }))
+  };
+}
+
+function activePolicyBundle() {
+  return state.fleet.policyBundles.find((item) => item.status === "active")
+    || state.fleet.policyBundles.find((item) => item.status === "available")
+    || state.fleet.policyBundles[0]
+    || null;
+}
+
+function cloudCapabilitySnapshot(tenantId = "local", deviceId = "local") {
+  const lcp = state.fleet.localControlPlanes.find((item) => item.device_id === deviceId || item.id === deviceId)
+    || state.fleet.localControlPlanes.find((item) => item.tenant_id === tenantId)
+    || state.fleet.localControlPlanes[0];
+  const enforcement = state.fleet.localEntities.filter((entity) => entity.entity_type === "enforcement" && (!lcp || entity.lcp_id === lcp.id));
+  const observe = state.fleet.localEntities.filter((entity) => entity.entity_type === "observability" && (!lcp || entity.lcp_id === lcp.id));
+  return {
+    schema_version: "local-capability-snapshot.v2",
+    tenant_id: tenantId,
+    device_id: lcp?.device_id || deviceId,
+    os: { family: "cloud_aggregated", name: lcp?.device_name || "Pollek Cloud inventory view" },
+    mode: "cloud_compatibility_view",
+    generated_at: nowIso(),
+    control_methods: enforcement.map((entity) => ({
+      method_id: entity.local_object_id || entity.id,
+      display_name_en: entity.name,
+      status: entity.status,
+      max_level: entity.enforcement?.mode || "observe",
+      domains: entity.observability?.telemetry_streams || []
+    })),
+    observation_sources: observe.map((entity) => ({
+      source_id: entity.local_object_id || entity.id,
+      display_name_en: entity.name,
+      status: entity.status,
+      domains: entity.observability?.telemetry_streams || [],
+      privacy_note_en: entity.observability?.privacy_note || "Aggregated from Local Pollek telemetry."
+    })),
+    setup_actions: [],
+    contract: {
+      local_contract_version: "2026.06.29",
+      compatible_cloud_contracts: [">=2026.06.29 <2026.09.00"],
+      status: "compatible",
+      reason_code: "cloud_aggregate"
+    }
+  };
+}
+
+function registryPage(tenantId, collection) {
+  const entities = state.fleet.localEntities.filter((entity) => entity.tenant_id === tenantId || tenantId === "local");
+  const byCollection = {
+    agents: entities.filter((entity) => entity.entity_type === "registered_agent"),
+    entities,
+    resources: entities.filter((entity) => entity.class === "resource" || entity.source === "registry/resources"),
+    tools: entities.filter((entity) => entity.class === "tool" || entity.source === "registry/tools")
+  };
+  const items = collection === "relationships" ? state.fleet.localEntityRelationships : (byCollection[collection] || []);
+  return {
+    schema_version: `pollek.cloud.registry-${collection}-page.v1`,
+    tenant_id: tenantId,
+    count: items.length,
+    items
+  };
+}
+
+function discoveryPage(tenantId, collection = "candidates") {
+  const candidates = state.fleet.localEntities.filter((entity) => (
+    (tenantId === "local" || entity.tenant_id === tenantId)
+    && (entity.entity_type === "found_agent" || entity.status === "found_unregistered" || entity.source === "discovery/candidates")
+  ));
+  return {
+    schema_version: `pollek.cloud.discovery-${collection}-page.v1`,
+    tenant_id: tenantId,
+    count: candidates.length,
+    items: candidates
+  };
+}
+
 function updateTreeObject(id, patch) {
   const item = state.fleet.tree.find((entry) => entry.id === id);
   if (item) Object.assign(item, patch);
@@ -4660,6 +4875,15 @@ async function contractDiscovery() {
       enrollment_token: "/oauth/token",
       enroll: "/enroll",
       telemetry_batches: "/v1/telemetry/batches",
+      telemetry_events: "/v1/telemetry/events",
+      telemetry_decision_logs: "/v1/telemetry/decision-logs",
+      telemetry_security_events: "/v1/telemetry/security-events",
+      telemetry_traces: "/v1/telemetry/traces",
+      telemetry_observations: "/v1/telemetry/observations",
+      telemetry_resources: "/v1/telemetry/resources",
+      telemetry_tools: "/v1/telemetry/tools",
+      telemetry_identities: "/v1/telemetry/identities",
+      telemetry_enforcement_status: "/v1/telemetry/enforcement-status",
       telemetry_query: "/api/telemetry/query",
       tenant_signup: "/v1/signup/tenant",
       invitation_accept: "/v1/invitations/accept",
@@ -4683,6 +4907,16 @@ async function contractDiscovery() {
       event_stream: "/api/events",
       event_replay: "/api/events/replay",
       registry_sync: "/v1/tenants/{tenant_id}/registry/sync",
+      registry_agents: "/v1/tenants/{tenant_id}/registry/agents",
+      registry_entities: "/v1/tenants/{tenant_id}/registry/entities",
+      registry_relationships: "/v1/tenants/{tenant_id}/registry/relationships",
+      registry_resources: "/v1/tenants/{tenant_id}/registry/resources",
+      registry_tools: "/v1/tenants/{tenant_id}/registry/tools",
+      discovery_candidates: "/v1/tenants/{tenant_id}/discovery/candidates",
+      discovery_entities: "/v1/tenants/{tenant_id}/discovery/entities",
+      browser_extension_events: "/v1/tenants/{tenant_id}/browser-extension/events",
+      browser_extension_status: "/v1/tenants/{tenant_id}/browser-extension/status",
+      capability_snapshot: "/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2",
       local_entities: "/api/entities",
       local_entity_health: "/api/entities/health",
       local_entity_dedupe: "/api/entities/dedupe",
@@ -4690,6 +4924,7 @@ async function contractDiscovery() {
       local_entity_sync: "/api/entities/sync",
       adapter_catalog: "/api/adapters/catalog",
       latest_bundle: "/v1/tenants/{tenant_id}/bundles/latest",
+      device_latest_bundle: "/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest",
       hot_reload_events: "/api/hot-reload/events",
       hot_reload_stream: "/api/hot-reload/stream",
       staged_rollout_advance: "/api/rollouts/{rollout_id}/advance",
@@ -5881,15 +6116,25 @@ async function handleApi(req, res) {
         registry_agents: "/v1/tenants/{tenant_id}/registry/agents",
         registry_entities: "/v1/tenants/{tenant_id}/registry/entities",
         registry_relationships: "/v1/tenants/{tenant_id}/registry/relationships",
+        registry_resources: "/v1/tenants/{tenant_id}/registry/resources",
+        registry_tools: "/v1/tenants/{tenant_id}/registry/tools",
         discovery_candidates: "/v1/tenants/{tenant_id}/discovery/candidates",
+        discovery_entities: "/v1/tenants/{tenant_id}/discovery/entities",
         agent_inventory: "/v1/tenants/{tenant_id}/agent-inventory",
+        telemetry_events: "/v1/telemetry/events",
+        telemetry_decision_logs: "/v1/telemetry/decision-logs",
+        telemetry_security_events: "/v1/telemetry/security-events",
+        telemetry_traces: "/v1/telemetry/traces",
+        telemetry_runtime_metrics: "/v1/telemetry/runtime-metrics",
         telemetry_resources: "/v1/tenants/local/telemetry/resources",
         telemetry_tools: "/v1/tenants/local/telemetry/tools",
         telemetry_identities: "/v1/tenants/local/telemetry/identities",
         telemetry_observations: "/v1/tenants/local/telemetry/observations",
+        telemetry_guard_events: "/v1/tenants/local/telemetry/guard-events",
         capability_snapshot: "/v1/tenants/local/devices/local/capability-snapshot-v2",
         pdp_route_simulate: "/v1/tenants/{tenant_id}/pdp/routes/simulate",
         cloud_bundle_latest: "/v1/tenants/{tenant_id}/bundles/latest",
+        cloud_device_bundle_latest: "/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest",
         cloud_bundle_manifest: "/v1/policy-bundles/{bundle_id}/manifest",
         hot_reload_events: "/api/hot-reload/events",
         hot_reload_stream: "/api/hot-reload/stream",
@@ -6512,40 +6757,100 @@ async function handleApi(req, res) {
     return true;
   }
 
+  if (req.method === "GET" && pathname === "/v1/telemetry/observations") {
+    sendJson(res, 200, observationTelemetryPage(url.searchParams.get("tenant_id") || "local"));
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/v1/telemetry/enforcement-status") {
+    sendJson(res, 200, enforcementStatusPage(url.searchParams.get("tenant_id") || "local"));
+    return true;
+  }
+
+  const telemetryEntityMatch = pathname.match(/^\/v1\/telemetry\/(resources|tools|identities)$/);
+  if (req.method === "GET" && telemetryEntityMatch) {
+    sendJson(res, 200, telemetryEntityPage(telemetryEntityMatch[1], url.searchParams.get("tenant_id") || "local"));
+    return true;
+  }
+
+  const tenantTelemetryReadMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/telemetry\/(observations|resources|tools|identities|guard-events)$/);
+  if (req.method === "GET" && tenantTelemetryReadMatch) {
+    const tenantId = decodeURIComponent(tenantTelemetryReadMatch[1]);
+    const kind = tenantTelemetryReadMatch[2];
+    sendJson(res, 200, kind === "observations" || kind === "guard-events" ? observationTelemetryPage(tenantId) : telemetryEntityPage(kind, tenantId));
+    return true;
+  }
+
   if (req.method === "POST" && pathname === "/v1/telemetry/batches") {
     const body = await readBody(req);
-    const events = Array.isArray(body.events) ? body.events : [];
-    recordEvent({
-      event_id: body.batch_id || `batch_${crypto.randomUUID()}`,
-      tenant_id: body.tenant_id || req.headers["x-pollek-tenant-id"] || "unknown",
-      device_id: body.device_id || req.headers["x-pollek-device-id"] || "unknown",
-      event_type: "telemetry.batch.v1",
-      severity: "info",
-      payload: {
-        schema_version: body.schema_version || "telemetry-batch.v1",
-        event_count: events.length,
-        sample: events.slice(0, 3)
-      }
+    const response = recordTelemetryPayload(req, body, { kind: "batch" });
+    sendJson(res, 202, { ...response, batch_id: body.batch_id || null });
+    return true;
+  }
+
+  const tenantTelemetryIngestMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/telemetry\/events$/);
+  if (req.method === "POST" && (telemetryIngestKinds.has(pathname) || tenantTelemetryIngestMatch)) {
+    const body = await readBody(req);
+    const response = recordTelemetryPayload(req, body, {
+      kind: tenantTelemetryIngestMatch ? "event" : telemetryIngestKinds.get(pathname),
+      tenantIdFromPath: tenantTelemetryIngestMatch ? decodeURIComponent(tenantTelemetryIngestMatch[1]) : null
     });
-    sendJson(res, 202, {
-      accepted: true,
-      batch_id: body.batch_id || null,
-      received_events: events.length
+    sendJson(res, 202, response);
+    return true;
+  }
+
+  const browserExtensionEventMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/browser-extension\/events$/);
+  if (req.method === "POST" && browserExtensionEventMatch) {
+    const tenantId = decodeURIComponent(browserExtensionEventMatch[1]);
+    const body = await readBody(req);
+    const response = recordTelemetryPayload(req, {
+      ...body,
+      event_type: body.event_type || "browser_extension.event.v1",
+      schema_version: body.schema_version || "browser-extension-event.v1"
+    }, { kind: "browser_extension", tenantIdFromPath: tenantId });
+    sendJson(res, 202, response);
+    return true;
+  }
+
+  const browserExtensionStatusMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/browser-extension\/status$/);
+  if (req.method === "GET" && browserExtensionStatusMatch) {
+    const tenantId = decodeURIComponent(browserExtensionStatusMatch[1]);
+    const events = telemetryEventsFor(tenantId, (event) => String(event.event_type || "").startsWith("browser_extension."));
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.browser-extension-status.v1",
+      tenant_id: tenantId,
+      count: events.length,
+      connectors: events.map((event) => ({
+        id: event.payload?.raw?.connector_id || event.payload?.raw?.extension_id || event.event_id,
+        status: "observed",
+        last_seen_at: event.received_at,
+        event
+      }))
     });
     return true;
   }
 
-  if (req.method === "POST" && pathname === "/v1/telemetry/envelopes") {
-    const body = await readBody(req);
-    const event = recordEvent({
-      event_id: body.event_id || `evt_${crypto.randomUUID()}`,
-      tenant_id: body.tenant_id || req.headers["x-pollek-tenant-id"] || "unknown",
-      device_id: body.device_id || req.headers["x-pollek-device-id"] || "unknown",
-      event_type: body.event_type || "telemetry.envelope.v1",
-      severity: body.severity || "info",
-      payload: body
-    });
-    sendJson(res, 202, { accepted: true, event_id: event.event_id });
+  const capabilitySnapshotMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/capability-snapshot$/);
+  if (req.method === "GET" && capabilitySnapshotMatch) {
+    sendJson(res, 200, cloudCapabilitySnapshot(decodeURIComponent(capabilitySnapshotMatch[1]), "local"));
+    return true;
+  }
+
+  const deviceCapabilitySnapshotMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/devices\/([^/]+)\/capability-snapshot-v2$/);
+  if (req.method === "GET" && deviceCapabilitySnapshotMatch) {
+    sendJson(res, 200, cloudCapabilitySnapshot(decodeURIComponent(deviceCapabilitySnapshotMatch[1]), decodeURIComponent(deviceCapabilitySnapshotMatch[2])));
+    return true;
+  }
+
+  const registryPageMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/registry\/(agents|entities|relationships|resources|tools)$/);
+  if (req.method === "GET" && registryPageMatch) {
+    sendJson(res, 200, registryPage(decodeURIComponent(registryPageMatch[1]), registryPageMatch[2]));
+    return true;
+  }
+
+  const discoveryPageMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/discovery\/(candidates|entities)$/);
+  if (req.method === "GET" && discoveryPageMatch) {
+    sendJson(res, 200, discoveryPage(decodeURIComponent(discoveryPageMatch[1]), discoveryPageMatch[2]));
     return true;
   }
 
@@ -6569,33 +6874,26 @@ async function handleApi(req, res) {
   const latestBundleMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/bundles\/latest$/);
   if (req.method === "GET" && latestBundleMatch) {
     const tenantId = decodeURIComponent(latestBundleMatch[1]);
-    const bundle = state.fleet.policyBundles.find((item) => item.status === "active")
-      || state.fleet.policyBundles.find((item) => item.status === "available")
-      || state.fleet.policyBundles[0];
+    const bundle = activePolicyBundle();
     if (!bundle) {
       sendJson(res, 404, { error: "policy_bundle_not_found", tenant_id: tenantId });
       return true;
     }
-    const manifest = signedPolicyBundleManifest(bundle);
-    sendJson(res, 200, {
-      schema_version: "bundle-envelope.v1",
-      tenant_id: tenantId,
-      bundle_id: bundle.id,
-      revision: bundle.revision || "2026.06.29.001",
-      status: "available",
-      manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/manifest`,
-      artifact_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/artifact`,
-      hot_reload: Boolean(bundle.hot_reload ?? true),
-      enterprise_compliance: Boolean(bundle.compliance_bundle_id),
-      signature_status: manifest.verification.status,
-      payload_hash: manifest.payload_hash,
-      signatures: manifest.signatures.map((signature) => ({
-        key_id: signature.key_id,
-        alg: signature.alg,
-        payload_hash: signature.payload_hash,
-        signed_at: signature.signed_at
-      }))
-    });
+    sendJson(res, 200, latestBundleEnvelope(bundle, tenantId));
+    return true;
+  }
+
+  const deviceLatestBundleMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/devices\/([^/]+)\/bundles\/latest$/);
+  if (req.method === "POST" && deviceLatestBundleMatch) {
+    const tenantId = decodeURIComponent(deviceLatestBundleMatch[1]);
+    const deviceId = decodeURIComponent(deviceLatestBundleMatch[2]);
+    const bundle = activePolicyBundle();
+    if (!bundle) {
+      sendJson(res, 404, { error: "policy_bundle_not_found", tenant_id: tenantId, device_id: deviceId });
+      return true;
+    }
+    recordAudit("policy_bundle.latest_requested", "device", deviceId, { tenant_id: tenantId, bundle_id: bundle.id });
+    sendJson(res, 200, latestBundleEnvelope(bundle, tenantId, deviceId));
     return true;
   }
 
