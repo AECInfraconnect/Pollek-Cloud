@@ -1242,16 +1242,24 @@ function persistEntityGroupState() {
 }
 
 function entityGroupCollapsed(key, defaultCollapsed, hasActiveEntity) {
+  if (app.collapsedEntityGroups.has(key)) return true;
+  if (defaultCollapsed) {
+    if (app.expandedEntityGroups.has(key)) return false;
+    if (hasActiveEntity) return false;
+    return true;
+  }
   if (hasActiveEntity) return false;
-  return defaultCollapsed ? !app.expandedEntityGroups.has(key) : app.collapsedEntityGroups.has(key);
+  return false;
 }
 
-function toggleEntityGroup(key, defaultCollapsed = false) {
-  const targetSet = defaultCollapsed ? app.expandedEntityGroups : app.collapsedEntityGroups;
-  if (targetSet.has(key)) {
-    targetSet.delete(key);
+function toggleEntityGroup(key, defaultCollapsed = false, hasActiveEntity = false) {
+  const collapsed = entityGroupCollapsed(key, defaultCollapsed, hasActiveEntity);
+  if (collapsed) {
+    app.collapsedEntityGroups.delete(key);
+    if (defaultCollapsed) app.expandedEntityGroups.add(key);
   } else {
-    targetSet.add(key);
+    app.collapsedEntityGroups.add(key);
+    if (defaultCollapsed) app.expandedEntityGroups.delete(key);
   }
   persistEntityGroupState();
   renderEntities();
@@ -1320,7 +1328,7 @@ function renderEntities() {
       <div class="entity-scope-body"></div>
     `;
     section.querySelector(".entity-scope-toggle").addEventListener("click", () => {
-      toggleEntityGroup(scopeGroup.key, scopeDefaultCollapsed);
+      toggleEntityGroup(scopeGroup.key, scopeDefaultCollapsed, scopeHasActive);
     });
     refs.entityList.append(section);
     if (scopeCollapsed) continue;
@@ -1347,7 +1355,7 @@ function renderEntities() {
         <div class="entity-kind-body ${category.entities.length > 20 ? "large" : ""}"></div>
       `;
       categorySection.querySelector(".entity-kind-toggle").addEventListener("click", () => {
-        toggleEntityGroup(categoryKey, categoryDefaultCollapsed);
+        toggleEntityGroup(categoryKey, categoryDefaultCollapsed, categoryHasActive);
       });
       body.append(categorySection);
       if (categoryCollapsed) continue;

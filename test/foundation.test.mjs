@@ -637,7 +637,7 @@ test("console wires fleet operations controls", async () => {
   const css = await readFile("apps/web/static/styles.css", "utf8");
 
   assert.match(html, /styles\.css\?v=20260629-layout-polish/);
-  assert.match(html, /app\.js\?v=20260629-lcp-dispatch-ux/);
+  assert.match(html, /app\.js\?v=20260629-entity-collapse-fix/);
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="appShell"/);
@@ -704,6 +704,11 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /async function acknowledgeAlarm/);
   assert.match(app, /function setActiveTab/);
   assert.match(app, /function renderEntities/);
+  assert.match(app, /function entityGroupCollapsed\(key, defaultCollapsed, hasActiveEntity\)/);
+  assert.match(app, /if \(app\.collapsedEntityGroups\.has\(key\)\) return true/);
+  assert.match(app, /function toggleEntityGroup\(key, defaultCollapsed = false, hasActiveEntity = false\)/);
+  assert.match(app, /toggleEntityGroup\(scopeGroup\.key, scopeDefaultCollapsed, scopeHasActive\)/);
+  assert.match(app, /toggleEntityGroup\(categoryKey, categoryDefaultCollapsed, categoryHasActive\)/);
   assert.match(app, /async function syncEntities/);
   assert.match(app, /async function refreshLiveWatch/);
   assert.match(app, /async function dispatchConfigUpdate/);
