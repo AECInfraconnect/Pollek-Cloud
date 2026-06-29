@@ -31,8 +31,15 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/api/entities", "/api/entities/ingest", "/api/entities/sync", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync"],
+      "paths": ["/api/entities", "/api/entities/health", "/api/entities/dedupe", "/api/entities/ingest", "/api/entities/sync", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync"],
       "entity_types": ["registered_agent", "found_agent", "policy", "enforcement", "observability"]
+    },
+    "pollek.cloud.contract_artifacts": {
+      "direction": "local_to_cloud",
+      "requires_oauth": false,
+      "requires_spiffe": false,
+      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/api/contract-hub/drift"],
+      "purpose": "Contract Hub publishes machine-readable cloud protocol artifacts and drift status for Local Pollek compatibility checks."
     },
     "pollek.cloud.policy_bundle": {
       "direction": "cloud_to_local",
@@ -91,7 +98,7 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates", "/api/hot-reload/events"],
+      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates", "/api/hot-reload/events", "/api/events", "/api/hot-reload/stream"],
       "purpose": "Contract Hub mediates endpoint, trust scope, registry sync, telemetry, bundle, enterprise entitlement, and hot reload connection updates for many Local Pollek instances."
     }
   },
@@ -114,6 +121,9 @@
     "policy_sandbox": true,
     "breakglass": true,
     "enterprise_compliance_policy_bundles": true,
+    "openapi_artifact": true,
+    "contract_drift_guard": true,
+    "sse_event_stream": true,
     "dev_loopback_protocol_test": true
   }
 }

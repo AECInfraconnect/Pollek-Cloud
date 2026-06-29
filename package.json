@@ -5,6 +5,8 @@
   "description": "Pollek Cloud commercial control-plane foundation for SaaS and private cloud deployments.",
   "type": "module",
   "scripts": {
+    "contracts:openapi": "node scripts/generate-openapi.mjs",
+    "contracts:check": "node scripts/check-contract-drift.mjs",
     "dev": "node apps/api/server.mjs",
     "start": "node apps/api/server.mjs",
     "test:lcp": "node scripts/test-lcp-connection.mjs",

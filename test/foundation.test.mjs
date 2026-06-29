@@ -16,6 +16,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.trust_scope"]);
   assert.ok(contract.interfaces["pollek.cloud.connection_update"]);
   assert.ok(contract.interfaces["pollek.cloud.policy_authoring"]);
+  assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"]);
   assert.ok(contract.interfaces["pollek.cloud.enterprise_compliance"]);
   assert.ok(contract.interfaces["pollek.cloud.breakglass"]);
   assert.ok(contract.interfaces["pollek.cloud.adapter_catalog"]);
@@ -33,6 +34,34 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.adapter_catalog, true);
   assert.equal(contract.features.entity_health, true);
   assert.equal(contract.features.entity_dedupe, true);
+  assert.equal(contract.features.openapi_artifact, true);
+  assert.equal(contract.features.contract_drift_guard, true);
+  assert.equal(contract.features.sse_event_stream, true);
+  assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events"));
+  assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/hot-reload/stream"));
+});
+
+test("openapi artifact covers every contract discovery path", async () => {
+  const contract = JSON.parse(await readFile("packages/contracts/pollek-contract.json", "utf8"));
+  const openapi = JSON.parse(await readFile("packages/contracts/openapi.json", "utf8"));
+  const declaredPaths = new Set(
+    Object.values(contract.interfaces).flatMap((spec) => spec.paths || [])
+  );
+  const openApiPaths = new Set(Object.keys(openapi.paths || {}));
+  const allowedRuntimePaths = new Set(["/health", "/api/cloud/status"]);
+  const missing = [...declaredPaths].filter((apiPath) => !openApiPaths.has(apiPath)).sort();
+  const extra = [...openApiPaths]
+    .filter((apiPath) => !declaredPaths.has(apiPath) && !allowedRuntimePaths.has(apiPath))
+    .sort();
+
+  assert.equal(openapi.openapi, "3.1.0");
+  assert.equal(openapi["x-pollek-contract-version"], contract.contract_version);
+  assert.ok(openapi.paths["/contracts/openapi.json"].get);
+  assert.ok(openapi.paths["/api/contract-hub/drift"].get);
+  assert.ok(openapi.paths["/api/events"].get);
+  assert.ok(openapi.paths["/api/hot-reload/stream"].get);
+  assert.deepEqual(missing, []);
+  assert.deepEqual(extra, []);
 });
 
 test("postgres foundation migration includes tenant RLS policies", async () => {
@@ -94,11 +123,18 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /pathname === "\/api\/trust\/scopes"/);
   assert.match(server, /pathname === "\/api\/services\/endpoints"/);
   assert.match(server, /pathname === "\/api\/contract-hub\/connection-updates"/);
+  assert.match(server, /pathname === "\/api\/contract-hub\/drift"/);
+  assert.match(server, /pathname === "\/contracts\/openapi\.json"/);
+  assert.match(server, /pathname === "\/api\/events"/);
+  assert.match(server, /pathname === "\/api\/hot-reload\/stream"/);
   assert.match(server, /pathname === "\/api\/policy\/sandbox"/);
   assert.match(server, /pathname === "\/api\/compliance\/policy-bundles"/);
   assert.match(server, /pathname === "\/api\/compliance\/score"/);
   assert.match(server, /pathname === "\/api\/breakglass"/);
   assert.match(server, /pathname === "\/api\/hot-reload\/events"/);
+  assert.match(server, /function openEventStream/);
+  assert.match(server, /broadcastSse\("hot_reload\.event"/);
+  assert.match(server, /contractDriftReport/);
   assert.match(server, /pullLocalEntitySnapshot/);
   assert.match(server, /ingestLocalEntitySnapshot/);
   assert.match(server, /\/api\\\/alarms\\\/\(\[\^\/\]\+\)\\\/ack/);
@@ -148,6 +184,9 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /async function deployComplianceBundle/);
   assert.match(app, /async function queryTelemetry/);
   assert.match(app, /async function createEnrollment/);
+  assert.match(app, /function connectEventStream/);
+  assert.match(app, /new EventSource\("\/api\/events"\)/);
+  assert.match(app, /Cloud API streaming/);
 });
 
 test("static console assets stay ascii-only", async () => {

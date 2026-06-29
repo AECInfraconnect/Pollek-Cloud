@@ -15,6 +15,8 @@ This file maps the local MVP repository state to the SRS so later work can conti
 - Enterprise-only compliance policy bundle catalog, sandbox simulation, deploy-to-signed-bundle flow, and Contract Hub entitlement publishing.
 - Breakglass request/approve/reject/close lifecycle with time-bound audited semantics and no kernel deny bypass by default.
 - Staged rollout actions and hot-reload event records aligned with Local Pollek bundle manifest and SSE `bundle_ready` delivery.
+- SSE event stream at `/api/events` and `/api/hot-reload/stream` for Contract Hub task, telemetry, and hot-reload push updates with console EventSource fallback to polling.
+- Generated OpenAPI artifact at `/contracts/openapi.json`, contract drift status at `/api/contract-hub/drift`, and local drift checker script for Contract Hub path coverage.
 - PostgreSQL foundation migration with RLS-ready tenant-scoped tables for inventory, telemetry, audit, enrollment, policy drafts, simulations, bundles, rollouts, integrations, trust scopes, service endpoints, local entities, local entity relationships, sync runs, enterprise compliance bundles, sandbox runs, breakglass, hot-reload events, and evidence exports.
 - AI-assisted policy editor MVP using deterministic local generation, Policy IR, generated source, tests, simulation, and human approval gate.
 - Telemetry ingest MVP for Pollek envelopes/batches plus Cloud-side sample telemetry for UI testing while LCP builds.
@@ -24,11 +26,11 @@ This file maps the local MVP repository state to the SRS so later work can conti
 ## Still Pending
 
 - Durable PostgreSQL runtime persistence instead of in-memory dev state.
-- TypeSpec/OpenAPI generation and contract drift tests.
+- Full TypeSpec source model and generated SDK pipeline beyond the current OpenAPI artifact and drift checker.
 - Real OIDC login, tenant switcher, RBAC/ReBAC/Cedar authorization checks, and OpenFGA tuple storage.
 - Real SPIRE Server deployment, tenant trust-domain provisioning, SPIFFE ID issuance, and mTLS enforcement.
 - Real bundle compiler/signing service and immutable object storage.
-- SSE/WebSocket hot-reload push channel beyond current polling/probe flow.
+- WebSocket/gRPC production push channel and durable stream resume beyond the current SSE hot-reload/event stream.
 - OTLP gateway and SIEM exporters that deliver to real external systems.
 - Production-grade AI provider abstraction with redaction, citations, and policy test fixture management.
 - Next.js/React app migration with virtualization for large LCP fleets.

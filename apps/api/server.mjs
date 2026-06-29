@@ -9,10 +9,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
 const webDir = path.join(rootDir, "apps/web/static");
 const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
+const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
 
 const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
+const sseClients = new Set();
+const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status"]);
 
 const ADAPTER_CATALOG = [
   {
@@ -799,6 +802,47 @@ function sendText(res, status, text, contentType = "text/plain; charset=utf-8") 
   res.end(text);
 }
 
+function sendSse(res, event, data) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function broadcastSse(event, data) {
+  for (const client of [...sseClients]) {
+    try {
+      sendSse(client.res, event, data);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
+function openEventStream(req, res, channel) {
+  res.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "access-control-allow-origin": "*",
+    "x-accel-buffering": "no"
+  });
+  const client = { id: `sse_${crypto.randomUUID()}`, channel, res };
+  sseClients.add(client);
+  sendSse(res, "connected", {
+    client_id: client.id,
+    channel,
+    cloud_url: publicUrl,
+    contract_version: "2026.06.29",
+    connected_at: new Date().toISOString()
+  });
+  const keepAlive = setInterval(() => {
+    sendSse(res, "keepalive", { time: new Date().toISOString(), clients: sseClients.size });
+  }, 15000);
+  req.on("close", () => {
+    clearInterval(keepAlive);
+    sseClients.delete(client);
+  });
+}
+
 function addTask(type, status, summary, details = {}) {
   const task = {
     id: `task_${crypto.randomUUID()}`,
@@ -810,6 +854,7 @@ function addTask(type, status, summary, details = {}) {
   };
   state.tasks.unshift(task);
   state.tasks = state.tasks.slice(0, 25);
+  broadcastSse("task.updated", task);
   return task;
 }
 
@@ -818,6 +863,7 @@ function completeTask(task, patch = {}) {
     status: patch.status || "completed",
     updated_at: new Date().toISOString()
   });
+  broadcastSse("task.updated", task);
   return task;
 }
 
@@ -828,6 +874,7 @@ function recordEvent(event) {
   };
   state.events.unshift(normalized);
   state.events = state.events.slice(0, 100);
+  broadcastSse("telemetry.event", normalized);
   return normalized;
 }
 
@@ -1743,7 +1790,7 @@ function createHotReloadEvent({ rollout, targetId, stageIndex, status = "dispatc
   };
   state.fleet.hotReloadEvents.unshift(event);
   state.fleet.hotReloadEvents = state.fleet.hotReloadEvents.slice(0, 50);
-  recordEvent({
+  const telemetryEvent = recordEvent({
     event_id: `evt_${crypto.randomUUID()}`,
     tenant_id: "local",
     device_id: targetId,
@@ -1751,6 +1798,7 @@ function createHotReloadEvent({ rollout, targetId, stageIndex, status = "dispatc
     severity: status === "failed" ? "warning" : "info",
     payload: event
   });
+  broadcastSse("hot_reload.event", { ...event, telemetry_event_id: telemetryEvent.event_id });
   return event;
 }
 
@@ -2006,6 +2054,36 @@ async function fetchJson(url, options = {}) {
   }
 }
 
+function collectContractPaths(contract) {
+  const paths = new Set();
+  for (const spec of Object.values(contract.interfaces || {})) {
+    for (const apiPath of spec.paths || []) {
+      paths.add(apiPath);
+    }
+  }
+  return [...paths].sort();
+}
+
+function contractDriftReport(contract, openApi) {
+  const contractPaths = new Set(collectContractPaths(contract));
+  const openApiPaths = new Set(Object.keys(openApi.paths || {}));
+  const missing_openapi_paths = [...contractPaths].filter((apiPath) => !openApiPaths.has(apiPath)).sort();
+  const extra_openapi_paths = [...openApiPaths]
+    .filter((apiPath) => !contractPaths.has(apiPath) && !contractDriftAllowedRuntimePaths.has(apiPath))
+    .sort();
+  return {
+    schema_version: "pollek.cloud.contract-drift-report.v1",
+    status: missing_openapi_paths.length || extra_openapi_paths.length ? "drift" : "in_sync",
+    contract_version: contract.contract_version,
+    checked_at: new Date().toISOString(),
+    contract_path_count: contractPaths.size,
+    openapi_path_count: openApiPaths.size,
+    missing_openapi_paths,
+    extra_openapi_paths,
+    allowed_runtime_paths: [...contractDriftAllowedRuntimePaths].sort()
+  };
+}
+
 async function contractDiscovery() {
   const contract = JSON.parse(await readFile(contractPath, "utf8"));
   return {
@@ -2024,6 +2102,7 @@ async function contractDiscovery() {
       enroll: "/enroll",
       telemetry_batches: "/v1/telemetry/batches",
       telemetry_query: "/api/telemetry/query",
+      event_stream: "/api/events",
       registry_sync: "/v1/tenants/{tenant_id}/registry/sync",
       local_entities: "/api/entities",
       local_entity_health: "/api/entities/health",
@@ -2033,6 +2112,7 @@ async function contractDiscovery() {
       adapter_catalog: "/api/adapters/catalog",
       latest_bundle: "/v1/tenants/{tenant_id}/bundles/latest",
       hot_reload_events: "/api/hot-reload/events",
+      hot_reload_stream: "/api/hot-reload/stream",
       staged_rollout_advance: "/api/rollouts/{rollout_id}/advance",
       suggested_pdp_routes: "/v1/tenants/{tenant_id}/pdp/routes/suggested",
       policy_assist: "/api/policy/assist",
@@ -2046,6 +2126,8 @@ async function contractDiscovery() {
       trust_scopes: "/api/trust/scopes",
       service_endpoints: "/api/services/endpoints",
       connection_updates: "/api/contract-hub/connection-updates",
+      contract_drift: "/api/contract-hub/drift",
+      openapi: "/contracts/openapi.json",
       local_pollek_pdp_route_simulate: "/v1/tenants/{tenant_id}/pdp/routes/simulate"
     }
   };
@@ -2069,6 +2151,11 @@ async function handleApi(req, res) {
     return true;
   }
 
+  if (req.method === "GET" && (pathname === "/api/events" || pathname === "/api/hot-reload/stream")) {
+    openEventStream(req, res, pathname === "/api/hot-reload/stream" ? "hot-reload" : "contract-hub");
+    return true;
+  }
+
   if (req.method === "GET" && pathname === "/health") {
     sendJson(res, 200, {
       status: "ok",
@@ -2081,6 +2168,18 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && pathname === "/.well-known/pollek-contract") {
     sendJson(res, 200, await contractDiscovery());
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/contracts/openapi.json") {
+    sendJson(res, 200, JSON.parse(await readFile(openApiPath, "utf8")));
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/contract-hub/drift") {
+    const contract = JSON.parse(await readFile(contractPath, "utf8"));
+    const openApi = JSON.parse(await readFile(openApiPath, "utf8"));
+    sendJson(res, 200, contractDriftReport(contract, openApi));
     return true;
   }
 
@@ -2489,7 +2588,14 @@ async function handleApi(req, res) {
         pdp_route_simulate: "/v1/tenants/{tenant_id}/pdp/routes/simulate",
         cloud_bundle_latest: "/v1/tenants/{tenant_id}/bundles/latest",
         cloud_bundle_manifest: "/v1/policy-bundles/{bundle_id}/manifest",
-        hot_reload_events: "/api/hot-reload/events"
+        hot_reload_events: "/api/hot-reload/events",
+        hot_reload_stream: "/api/hot-reload/stream",
+        event_stream: "/api/events"
+      },
+      event_streams: {
+        contract_hub: "/api/events",
+        hot_reload: "/api/hot-reload/stream",
+        event_types: ["connected", "keepalive", "task.updated", "telemetry.event", "hot_reload.event"]
       }
     });
     return true;

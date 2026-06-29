@@ -14,6 +14,9 @@ Open:
 
 - Web console: `http://127.0.0.1:8790`
 - Cloud contract discovery: `http://127.0.0.1:8790/.well-known/pollek-contract`
+- OpenAPI artifact: `http://127.0.0.1:8790/contracts/openapi.json`
+- Contract drift report: `http://127.0.0.1:8790/api/contract-hub/drift`
+- Contract Hub SSE stream: `http://127.0.0.1:8790/api/events`
 - API health: `http://127.0.0.1:8790/health`
 
 Default ports can be changed with:
@@ -77,7 +80,14 @@ This repository is intentionally starting with a dependency-light local foundati
 - `packages/contracts` for Contract Hub artifacts.
 - `docs` for architecture, SRS, UX, and runbooks.
 
-The next implementation phase should add TypeSpec/OpenAPI generation, Drizzle schema generation, durable PostgreSQL persistence, tenant isolation integration tests, and the Next.js enterprise console.
+The next implementation phase should add full TypeSpec source generation, SDK generation, Drizzle schema generation, durable PostgreSQL persistence, tenant isolation integration tests, and the Next.js enterprise console.
+
+Contract artifacts can be regenerated and checked with:
+
+```powershell
+npm run contracts:openapi
+npm run contracts:check
+```
 
 ## Database Direction
 

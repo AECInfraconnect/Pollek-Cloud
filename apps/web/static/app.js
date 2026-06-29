@@ -77,6 +77,8 @@ const app = {
   selectedObjectId: "tenant_local_lab",
   activeTab: "summary",
   query: "",
+  streamConnected: false,
+  streamRefreshPending: false,
   statusFilter: "all",
   entityTypeFilter: "all",
   entityDeviceFilter: "all",
@@ -148,12 +150,37 @@ async function refresh() {
     if (!app.latestPolicyDraftId && app.data.policy_drafts?.length) {
       app.latestPolicyDraftId = app.data.policy_drafts[0].id;
     }
-    setCloudStatus(true, "Cloud API online");
+    setCloudStatus(true, app.streamConnected ? "Cloud API streaming" : "Cloud API online");
     render();
   } catch (error) {
     setCloudStatus(false, "Cloud API offline");
     refs.probeResult.textContent = String(error);
   }
+}
+
+function scheduleStreamRefresh() {
+  if (app.streamRefreshPending) return;
+  app.streamRefreshPending = true;
+  window.setTimeout(async () => {
+    app.streamRefreshPending = false;
+    await refresh();
+  }, 250);
+}
+
+function connectEventStream() {
+  if (!("EventSource" in window)) return;
+  const stream = new EventSource("/api/events");
+  stream.addEventListener("connected", () => {
+    app.streamConnected = true;
+    setCloudStatus(true, "Cloud API streaming");
+  });
+  stream.addEventListener("task.updated", scheduleStreamRefresh);
+  stream.addEventListener("telemetry.event", scheduleStreamRefresh);
+  stream.addEventListener("hot_reload.event", scheduleStreamRefresh);
+  stream.onerror = () => {
+    app.streamConnected = false;
+    setCloudStatus(Boolean(app.data), app.data ? "Cloud API polling" : "Cloud API reconnecting");
+  };
 }
 
 function render() {
@@ -1245,5 +1272,6 @@ window.addEventListener("hashchange", () => {
 });
 
 setActiveTab(tabFromHash(), { updateHash: false });
+connectEventStream();
 await refresh();
 setInterval(refresh, 5000);
