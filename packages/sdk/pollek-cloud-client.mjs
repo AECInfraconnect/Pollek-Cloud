@@ -42,6 +42,18 @@ export class PollekCloudClient {
     return this.request("/contracts/openapi.json");
   }
 
+  getEventSchema() {
+    return this.request("/contracts/events.schema.json");
+  }
+
+  getBundleManifestSchema() {
+    return this.request("/contracts/bundle-manifest.schema.json");
+  }
+
+  getTelemetryEnvelopeSchema() {
+    return this.request("/contracts/telemetry-envelope.schema.json");
+  }
+
   getFleet() {
     return this.request("/api/fleet");
   }
@@ -67,8 +79,24 @@ export class PollekCloudClient {
     return this.request(`/v1/tenants/${encodeURIComponent(tenantId)}/members`);
   }
 
+  updateMemberRoles(tenantId, accountId, request) {
+    return this.request(`/v1/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(accountId)}/roles`, { method: "POST", body: request });
+  }
+
+  removeMember(tenantId, accountId, request = {}) {
+    return this.request(`/v1/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(accountId)}`, { method: "DELETE", body: request });
+  }
+
   configureIdentityProvider(tenantId, request) {
     return this.request(`/v1/tenants/${encodeURIComponent(tenantId)}/identity-providers`, { method: "PUT", body: request });
+  }
+
+  createScimUser(tenantId, request) {
+    return this.request("/scim/v2/Users", { method: "POST", body: request, headers: { "x-pollek-tenant-id": tenantId } });
+  }
+
+  createScimGroup(tenantId, request) {
+    return this.request("/scim/v2/Groups", { method: "POST", body: request, headers: { "x-pollek-tenant-id": tenantId } });
   }
 
   getBillingUsage(tenantId) {
@@ -83,8 +111,16 @@ export class PollekCloudClient {
     return this.request(`/v1/tenants/${encodeURIComponent(tenantId)}/billing/invoices`);
   }
 
+  addPaymentMethod(tenantId, request) {
+    return this.request(`/v1/tenants/${encodeURIComponent(tenantId)}/billing/payment-methods`, { method: "POST", body: request });
+  }
+
   issueOfflineLicense(tenantId, request = {}) {
     return this.request(`/v1/tenants/${encodeURIComponent(tenantId)}/billing/license/issue`, { method: "POST", body: request });
+  }
+
+  sendBillingWebhook(provider, request) {
+    return this.request(`/v1/billing/webhooks/${encodeURIComponent(provider)}`, { method: "POST", body: request });
   }
 
   getKmsHealth() {

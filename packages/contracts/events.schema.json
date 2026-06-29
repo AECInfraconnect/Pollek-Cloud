@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pollek.cloud/events.schema.json",
+  "title": "Pollek Cloud Event Stream Envelope",
+  "type": "object",
+  "required": ["schema_version", "event_id", "tenant_id", "event_type", "occurred_at"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "pollek.cloud.event.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lcp_id": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "user_subject": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["debug", "info", "warning", "critical"]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trace_id": { "type": "string" },
+        "span_id": { "type": "string" },
+        "spiffe_id": { "type": "string" },
+        "oidc_subject": { "type": "string" },
+        "oauth_client_id": { "type": "string" },
+        "mtls_subject": { "type": "string" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["none", "metadata_only", "tokenized", "redacted"] },
+        "rules": { "type": "array", "items": { "type": "string" } },
+        "contains_secrets": { "type": "boolean" }
+      }
+    }
+  }
+}

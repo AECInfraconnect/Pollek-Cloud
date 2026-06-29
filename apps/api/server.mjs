@@ -10,6 +10,11 @@ const rootDir = path.resolve(__dirname, "../..");
 const webDir = path.join(rootDir, "apps/web/static");
 const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
 const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
+const contractArtifactPaths = new Map([
+  ["/contracts/events.schema.json", path.join(rootDir, "packages/contracts/events.schema.json")],
+  ["/contracts/bundle-manifest.schema.json", path.join(rootDir, "packages/contracts/bundle-manifest.schema.json")],
+  ["/contracts/telemetry-envelope.schema.json", path.join(rootDir, "packages/contracts/telemetry-envelope.schema.json")]
+]);
 const stateFilePath = process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
 
 const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
@@ -69,6 +74,15 @@ const persistedFleetKeys = [
   "paymentMethods",
   "licenses",
   "billingEvents"
+];
+
+const ROLE_TEST_USER_TEMPLATES = [
+  { role: "admin", email: "admin@pollek.test", display_name: "Test Admin", relation: "admin" },
+  { role: "security_admin", email: "security-admin@pollek.test", display_name: "Test Security Admin", relation: "security_admin" },
+  { role: "iam_admin", email: "iam-admin@pollek.test", display_name: "Test IAM Admin", relation: "iam_admin" },
+  { role: "billing_admin", email: "billing-admin@pollek.test", display_name: "Test Billing Admin", relation: "billing_admin" },
+  { role: "operator", email: "operator@pollek.test", display_name: "Test Operator", relation: "operator" },
+  { role: "viewer", email: "viewer@pollek.test", display_name: "Test Viewer", relation: "viewer" }
 ];
 
 const ADAPTER_CATALOG = [
@@ -1391,6 +1405,131 @@ function upsertTenantMember({ tenant_id, account_id, roles = ["viewer"], status 
     }
   }
   return member;
+}
+
+function ensureRoleAuthorizationTuples({ tenant_id, account_id, roles = [], source = "role_user_seed", actor_id = "system", emitEvidence = false }) {
+  const tenantId = requiredTenantContext(tenant_id);
+  for (const role of roles.map(String)) {
+    const object = `tenant:${tenantId}`;
+    const principal = `user:${account_id}`;
+    const exists = (state.fleet.authorizationTuples || []).some((tuple) => (
+      tuple.tenant_id === tenantId && tuple.principal === principal && tuple.relation === role && tuple.object === object
+    ));
+    if (exists) continue;
+    if (emitEvidence) {
+      createAuthorizationTuple({
+        tenant_id: tenantId,
+        principal,
+        relation: role,
+        object,
+        source,
+        created_by: actor_id
+      });
+    } else {
+      state.fleet.authorizationTuples.unshift({
+        id: `authz_tuple_${sha256(`${tenantId}:${account_id}:${role}:${object}`).slice(0, 18)}`,
+        schema_version: "pollek.cloud.authorization-tuple.v1",
+        tenant_id: tenantId,
+        principal,
+        relation: role,
+        object,
+        condition: null,
+        source,
+        created_by: actor_id,
+        created_at: nowIso()
+      });
+    }
+  }
+}
+
+function setTenantMemberRoles({ tenant_id, account_id, roles = ["viewer"], status = "active", actor_id = "system" }) {
+  const tenantId = requiredTenantContext(tenant_id);
+  const nextRoles = [...new Set((Array.isArray(roles) && roles.length ? roles : ["viewer"]).map(String))];
+  const member = upsertTenantMember({
+    tenant_id: tenantId,
+    account_id,
+    roles: nextRoles,
+    status,
+    invited_by: actor_id
+  });
+  member.roles = nextRoles;
+  member.status = status;
+  member.updated_at = nowIso();
+  state.fleet.memberRoleAssignments = (state.fleet.memberRoleAssignments || [])
+    .filter((item) => !(item.tenant_id === tenantId && item.account_id === account_id));
+  for (const role of nextRoles) {
+    state.fleet.memberRoleAssignments.unshift({
+      id: `role_${sha256(`${tenantId}:${account_id}:${role}`).slice(0, 16)}`,
+      tenant_id: tenantId,
+      account_id,
+      role,
+      granted_by: actor_id,
+      created_at: nowIso()
+    });
+  }
+  const knownRelations = new Set(ROLE_TEST_USER_TEMPLATES.map((item) => item.relation));
+  state.fleet.authorizationTuples = (state.fleet.authorizationTuples || [])
+    .filter((tuple) => !(
+      tuple.tenant_id === tenantId
+      && tuple.principal === `user:${account_id}`
+      && tuple.object === `tenant:${tenantId}`
+      && knownRelations.has(tuple.relation)
+      && !nextRoles.includes(tuple.relation)
+    ));
+  ensureRoleAuthorizationTuples({
+    tenant_id: tenantId,
+    account_id,
+    roles: nextRoles,
+    source: "member_role_assignment",
+    actor_id,
+    emitEvidence: true
+  });
+  return member;
+}
+
+function ensureRoleTestUsers(tenantId = "local", { actor_id = "system", emitEvidence = false } = {}) {
+  const tenant_id = requiredTenantContext(tenantId);
+  const users = [];
+  for (const template of ROLE_TEST_USER_TEMPLATES) {
+    const [localPart, domain] = template.email.split("@");
+    const email = tenant_id === "local" ? template.email : `${localPart}+${slugify(tenant_id)}@${domain}`;
+    const account = ensureAccount({
+      email,
+      display_name: `${template.display_name}${tenant_id === "local" ? "" : ` (${tenant_id})`}`
+    });
+    const member = upsertTenantMember({
+      tenant_id,
+      account_id: account.id,
+      roles: [template.role],
+      status: "active",
+      invited_by: actor_id
+    });
+    ensureRoleAuthorizationTuples({
+      tenant_id,
+      account_id: account.id,
+      roles: [template.relation],
+      source: "role_user_seed",
+      actor_id,
+      emitEvidence
+    });
+    users.push({
+      account_id: account.id,
+      email: account.email,
+      display_name: account.display_name,
+      tenant_id,
+      roles: member.roles,
+      status: member.status
+    });
+  }
+  recordUsage(tenant_id, "console_seats", countActiveSeats(tenant_id), "role_user_seed");
+  return users;
+}
+
+function ensureRuntimeBackfills() {
+  ensureRoleTestUsers("local", { actor_id: "startup-backfill", emitEvidence: false });
+  for (const account of state.fleet.billingAccounts || []) {
+    if (account.tenant_id) ensureRoleTestUsers(account.tenant_id, { actor_id: "startup-backfill", emitEvidence: false });
+  }
 }
 
 function createAuthSession({ tenant_id, account_id, method = "dev-local", idp_id = "idp_keycloak_local_dev" }) {
@@ -4662,6 +4801,36 @@ async function handleApi(req, res) {
     return true;
   }
 
+  if (req.method === "POST" && pathname === "/api/dev/seed-role-users") {
+    try {
+      const body = await readBody(req);
+      const tenantId = requiredTenantContext(body.tenant_id || "local");
+      const users = ensureRoleTestUsers(tenantId, {
+        actor_id: body.actor_id || "local-dev-admin",
+        emitEvidence: true
+      });
+      recordAudit("dev.role_users_seeded", "tenant", tenantId, {
+        tenant_id: tenantId,
+        actor_id: body.actor_id || "local-dev-admin",
+        user_count: users.length,
+        roles: ROLE_TEST_USER_TEMPLATES.map((item) => item.role)
+      });
+      addTask("dev_role_user_seed", "completed", `Seeded role test users for ${tenantId}`, {
+        tenant_id: tenantId,
+        user_count: users.length
+      });
+      scheduleRuntimePersist("dev.role_users_seeded");
+      sendJson(res, 200, {
+        schema_version: "pollek.cloud.dev-role-users.v1",
+        tenant_id: tenantId,
+        users
+      });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { error: "role_user_seed_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
   if (req.method === "POST" && pathname === "/v1/signup/tenant") {
     try {
       const body = await readBody(req);
@@ -4845,20 +5014,12 @@ async function handleApi(req, res) {
         sendJson(res, 403, { error: "authorization_denied", authorization });
         return true;
       }
-      const member = upsertTenantMember({
+      const member = setTenantMemberRoles({
         tenant_id: tenantId,
         account_id: accountId,
         roles: Array.isArray(body.roles) ? body.roles : [body.role || "viewer"],
         status: body.status || "active",
-        invited_by: body.actor_id || "acc_local_admin"
-      });
-      createAuthorizationTuple({
-        tenant_id: tenantId,
-        principal: `user:${accountId}`,
-        relation: member.roles.includes("admin") ? "admin" : member.roles.includes("billing_admin") ? "billing_admin" : member.roles.includes("iam_admin") ? "iam_admin" : "viewer",
-        object: `tenant:${tenantId}`,
-        source: "member_role_assignment",
-        created_by: body.actor_id || "acc_local_admin"
+        actor_id: body.actor_id || "acc_local_admin"
       });
       recordAudit("member.roles_updated", "tenant_member", member.id, {
         tenant_id: tenantId,
@@ -4878,6 +5039,18 @@ async function handleApi(req, res) {
   if (req.method === "DELETE" && tenantMemberDeleteMatch) {
     const tenantId = decodeURIComponent(tenantMemberDeleteMatch[1]);
     const accountId = decodeURIComponent(tenantMemberDeleteMatch[2]);
+    const body = await readBody(req);
+    const authorization = checkAuthorization({
+      tenant_id: tenantId,
+      principal: body.principal || "user:acc_local_admin",
+      action: "member.write",
+      object: `tenant:${tenantId}`,
+      context: { source: "member_remove" }
+    });
+    if (authorization.decision !== "allow") {
+      sendJson(res, 403, { error: "authorization_denied", authorization });
+      return true;
+    }
     const member = tenantMemberFor(tenantId, accountId);
     if (!member) {
       sendJson(res, 404, { error: "member_not_found", tenant_id: tenantId, account_id: accountId });
@@ -4885,9 +5058,13 @@ async function handleApi(req, res) {
     }
     member.status = "removed";
     member.removed_at = nowIso();
-    recordAudit("member.removed", "tenant_member", member.id, { tenant_id: tenantId, actor_id: "acc_local_admin", account_id: accountId });
+    state.fleet.memberRoleAssignments = (state.fleet.memberRoleAssignments || [])
+      .filter((item) => !(item.tenant_id === tenantId && item.account_id === accountId));
+    state.fleet.authorizationTuples = (state.fleet.authorizationTuples || [])
+      .filter((tuple) => !(tuple.tenant_id === tenantId && tuple.principal === `user:${accountId}` && tuple.object === `tenant:${tenantId}`));
+    recordAudit("member.removed", "tenant_member", member.id, { tenant_id: tenantId, actor_id: body.actor_id || "acc_local_admin", account_id: accountId });
     scheduleRuntimePersist("member.removed");
-    sendJson(res, 200, { schema_version: "pollek.cloud.member-remove.v1", member });
+    sendJson(res, 200, { schema_version: "pollek.cloud.member-remove.v1", member, authorization });
     return true;
   }
 
@@ -5209,14 +5386,17 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "GET" && pathname.startsWith("/contracts/")) {
-    const contract = await contractDiscovery();
-    sendJson(res, 200, {
-      schema_version: "dev-contract-artifact.v1",
-      path: pathname,
-      generated: false,
-      note: "Placeholder artifact served by the local Contract Hub. TypeSpec/OpenAPI generation lands in the next phase.",
-      contract
-    });
+    const artifactPath = contractArtifactPaths.get(pathname);
+    if (!artifactPath || !existsSync(artifactPath)) {
+      sendJson(res, 404, {
+        error: "contract_artifact_not_found",
+        path: pathname,
+        available_artifacts: ["/contracts/openapi.json", ...contractArtifactPaths.keys()]
+      });
+      return true;
+    }
+    const artifact = JSON.parse(await readFile(artifactPath, "utf8"));
+    sendJson(res, 200, artifact);
     return true;
   }
 
@@ -6506,6 +6686,8 @@ const server = createServer(async (req, res) => {
 });
 
 await loadRuntimeState();
+ensureRuntimeBackfills();
+scheduleRuntimePersist("runtime.backfill");
 initializeStreamEventSequence();
 initializePolicyBundleSigningLedger();
 startLcpEntityWatch();

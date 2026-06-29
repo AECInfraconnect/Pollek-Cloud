@@ -81,8 +81,25 @@ const refs = {
   complianceDeployButton: document.querySelector("#complianceDeployButton"),
   auditList: document.querySelector("#auditList"),
   integrationHealthList: document.querySelector("#integrationHealthList"),
+  bundleStatusCenterList: document.querySelector("#bundleStatusCenterList"),
+  bundleDeliveryList: document.querySelector("#bundleDeliveryList"),
+  objectSettingsList: document.querySelector("#objectSettingsList"),
+  contractSettingsList: document.querySelector("#contractSettingsList"),
+  tenantSwitcher: document.querySelector("#tenantSwitcher"),
+  tenantContextSummary: document.querySelector("#tenantContextSummary"),
   signupTenantButton: document.querySelector("#signupTenantButton"),
+  seedRoleUsersButton: document.querySelector("#seedRoleUsersButton"),
+  loginDemoButton: document.querySelector("#loginDemoButton"),
+  logoutDemoButton: document.querySelector("#logoutDemoButton"),
   inviteMemberButton: document.querySelector("#inviteMemberButton"),
+  acceptInviteButton: document.querySelector("#acceptInviteButton"),
+  configureIdpButton: document.querySelector("#configureIdpButton"),
+  provisionScimUserButton: document.querySelector("#provisionScimUserButton"),
+  provisionScimGroupButton: document.querySelector("#provisionScimGroupButton"),
+  updateSubscriptionButton: document.querySelector("#updateSubscriptionButton"),
+  addPaymentButton: document.querySelector("#addPaymentButton"),
+  refreshInvoicesButton: document.querySelector("#refreshInvoicesButton"),
+  billingWebhookButton: document.querySelector("#billingWebhookButton"),
   issueLicenseButton: document.querySelector("#issueLicenseButton"),
   adminOrgList: document.querySelector("#adminOrgList"),
   adminMembersList: document.querySelector("#adminMembersList"),
@@ -116,6 +133,10 @@ const app = {
   collapsedOpsSections: readStoredSet("pollek.cloud.ops.sections.collapsed"),
   collapsedEntityGroups: readStoredSet("pollek.cloud.entities.groups.collapsed"),
   expandedEntityGroups: readStoredSet("pollek.cloud.entities.groups.expanded"),
+  selectedTenantId: localStorage.getItem("pollek.cloud.selected_tenant_id") || "local",
+  currentSessionId: sessionStorage.getItem("pollek.cloud.current_session_id") || "",
+  currentSessionToken: sessionStorage.getItem("pollek.cloud.current_session_token") || "",
+  lastInvitationToken: sessionStorage.getItem("pollek.cloud.last_invitation_token") || "",
   statusFilter: "all",
   entityTypeFilter: "all",
   entityDeviceFilter: "all",
@@ -148,6 +169,109 @@ function statusClass(status) {
   if (["offline", "critical", "failed", "untrusted", "denied", "deny"].includes(status)) return "bad";
   if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp", "warning", "pending_approval", "warn", "trialing", "preview", "pending"].includes(status)) return "warn";
   return "neutral";
+}
+
+function encodePathPart(value) {
+  return encodeURIComponent(String(value || "local"));
+}
+
+function tenantPath(pathTemplate, tenantId = selectedTenantId()) {
+  return pathTemplate.replace("{tenant_id}", encodePathPart(tenantId));
+}
+
+function availableRoles() {
+  const roles = Object.keys(app.data?.authorization_model?.roles || {});
+  return roles.length ? roles : ["admin", "security_admin", "iam_admin", "billing_admin", "operator", "viewer"];
+}
+
+function roleLabel(role) {
+  return String(role || "viewer").replaceAll("_", " ");
+}
+
+function tenantCatalog() {
+  if (!app.data) return [{ tenant_id: "local", name: "Local Lab Tenant", deployment_mode: "private-cloud-dev", status: "active" }];
+  const tenants = new Map();
+  const addTenant = (tenantId, patch = {}) => {
+    if (!tenantId) return;
+    const id = String(tenantId);
+    tenants.set(id, {
+      tenant_id: id,
+      name: id === "local" ? app.data.tenant?.name || "Local Lab Tenant" : id,
+      deployment_mode: id === "local" ? app.data.tenant?.mode || "private-cloud-dev" : "saas",
+      status: "active",
+      ...tenants.get(id),
+      ...patch
+    });
+  };
+  addTenant("local", { name: app.data.tenant?.name || "Local Lab Tenant", deployment_mode: app.data.tenant?.mode || "private-cloud-dev" });
+  for (const account of app.data.billing_accounts || []) {
+    addTenant(account.tenant_id, {
+      name: account.organization_name || account.tenant_id,
+      deployment_mode: account.deployment_mode,
+      status: account.status,
+      billing_email: account.billing_email
+    });
+  }
+  for (const member of app.data.tenant_members || []) addTenant(member.tenant_id);
+  for (const subscription of app.data.subscriptions || []) addTenant(subscription.tenant_id, { status: subscription.status });
+  for (const lcp of app.data.local_control_planes || []) addTenant(lcp.tenant_id);
+  return [...tenants.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function selectedTenantId() {
+  const tenants = tenantCatalog();
+  const exists = tenants.some((tenant) => tenant.tenant_id === app.selectedTenantId);
+  if (!exists && tenants.length) {
+    app.selectedTenantId = tenants[0].tenant_id;
+    localStorage.setItem("pollek.cloud.selected_tenant_id", app.selectedTenantId);
+  }
+  return app.selectedTenantId || "local";
+}
+
+function selectedTenantRecord() {
+  const tenantId = selectedTenantId();
+  return tenantCatalog().find((tenant) => tenant.tenant_id === tenantId) || { tenant_id: tenantId, name: tenantId };
+}
+
+function setSelectedTenant(tenantId) {
+  app.selectedTenantId = tenantId || "local";
+  localStorage.setItem("pollek.cloud.selected_tenant_id", app.selectedTenantId);
+  render();
+}
+
+function filteredByTenant(collection, tenantId = selectedTenantId()) {
+  return (collection || []).filter((item) => item.tenant_id === tenantId);
+}
+
+function accountById(accountId) {
+  return (app.data?.accounts || []).find((account) => account.id === accountId) || null;
+}
+
+function tenantAdminMember(tenantId = selectedTenantId()) {
+  const members = filteredByTenant(app.data?.tenant_members, tenantId).filter((member) => member.status === "active");
+  return members.find((member) => (member.roles || []).includes("admin")) || members[0] || null;
+}
+
+function tenantActorId(tenantId = selectedTenantId()) {
+  return tenantAdminMember(tenantId)?.account_id || "acc_local_admin";
+}
+
+function tenantPrincipal(tenantId = selectedTenantId()) {
+  return `user:${tenantActorId(tenantId)}`;
+}
+
+function activePlanId(tenantId = selectedTenantId()) {
+  const subscription = (app.data?.subscriptions || []).find((item) => item.tenant_id === tenantId && ["active", "trialing"].includes(item.status))
+    || (app.data?.subscriptions || []).find((item) => item.tenant_id === tenantId);
+  return subscription?.plan_id || "";
+}
+
+function reportAdminAction(title, detail = "", payload = null) {
+  refs.probeResult.innerHTML = `
+    <strong>${escapeHtml(title)}</strong>
+    ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+    ${payload ? `<code>${escapeHtml(JSON.stringify(payload, null, 2))}</code>` : ""}
+  `;
 }
 
 const kindLabels = {
@@ -472,6 +596,8 @@ function render() {
   renderTimeline();
   renderComplianceWorkspace();
   renderAudit();
+  renderBundleStatusCenter();
+  renderSettingsWorkspace();
   renderAdministrationWorkspace();
   setActiveTab(app.activeTab, { updateHash: false });
 }
@@ -1744,34 +1870,201 @@ function renderAudit() {
   }
 }
 
+function renderBundleStatusCenter() {
+  if (!refs.bundleStatusCenterList) return;
+  refs.bundleStatusCenterList.innerHTML = "";
+  refs.bundleDeliveryList.innerHTML = "";
+  const tenantId = selectedTenantId();
+  const bundles = (app.data.policy_bundles || []).filter((bundle) => !bundle.tenant_id || bundle.tenant_id === tenantId || tenantId === "local");
+  const artifacts = app.data.policy_bundle_artifacts || [];
+  for (const bundle of (bundles.length ? bundles : [{ id: "bundle_pending", name: "No bundle for selected tenant", status: "pending", revision: "pending" }]).slice(0, 10)) {
+    const artifact = artifacts.find((item) => item.bundle_id === bundle.id);
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(bundle.status)}`;
+    row.innerHTML = `
+      ${iconHtml("policy_bundle", bundle.status)}
+      <span>
+        <strong>${escapeHtml(bundle.name || bundle.id)}</strong>
+        <small>${escapeHtml(bundle.tenant_id || tenantId)} | ${escapeHtml(bundle.revision || "revision pending")} | ${escapeHtml(bundle.status || "unknown")}</small>
+      </span>
+      <code>${escapeHtml(JSON.stringify({
+        bundle_id: bundle.id,
+        coverage: bundle.coverage,
+        hot_reload: bundle.hot_reload,
+        artifact_hash: artifact?.payload_hash || bundle.artifact_hash || "pending"
+      }, null, 2))}</code>
+    `;
+    refs.bundleStatusCenterList.append(row);
+  }
+
+  const deliveryRows = [
+    ...(app.data.hot_reload_events || []).map((event) => ({ kind: "wasm", status: event.status, title: event.bundle_id || event.id, detail: `${event.target_id || event.device_id || "fleet"} | generation ${event.generation ?? "pending"}`, code: event })),
+    ...(app.data.cloud_to_local_dispatches || []).map((dispatch) => ({ kind: "rollout", status: dispatch.status, title: dispatch.control_type || dispatch.id, detail: `${dispatch.tenant_id || tenantId} | ${dispatch.lcp_id || "lcp pending"}`, code: dispatch })),
+    ...(app.data.rollout_plans || []).map((rollout) => ({ kind: "rollout", status: rollout.status, title: rollout.bundle_id || rollout.id, detail: `${(rollout.target_ids || []).length} targets | ${rollout.wave_strategy || "manual"}`, code: rollout }))
+  ];
+  for (const item of (deliveryRows.length ? deliveryRows : [{ kind: "rollout", status: "pending", title: "No delivery events yet", detail: "Dispatch or hot reload events will appear here.", code: {} }]).slice(0, 12)) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(item.status)}`;
+    row.innerHTML = `
+      ${iconHtml(item.kind, item.status)}
+      <span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.detail)} | ${escapeHtml(item.status || "pending")}</small>
+      </span>
+      <code>${escapeHtml(JSON.stringify(item.code || {}, null, 2))}</code>
+    `;
+    refs.bundleDeliveryList.append(row);
+  }
+}
+
+function renderSettingsWorkspace() {
+  if (!refs.objectSettingsList) return;
+  refs.objectSettingsList.innerHTML = "";
+  refs.contractSettingsList.innerHTML = "";
+  const object = selectedObject();
+  const tenantId = selectedTenantId();
+  const settingsRows = [
+    {
+      kind: objectKind(object),
+      status: object.status,
+      title: object.name || object.id,
+      detail: `${kindLabel(objectKind(object))} | ${object.tenant_id || tenantId}`,
+      code: {
+        id: object.id,
+        type: objectKind(object),
+        status: object.status || "unknown",
+        risk: object.risk || "low",
+        endpoint: object.endpoint || undefined,
+        spiffe_id: object.spiffe_id || object.trace?.spiffe_id || object.identity?.spiffe_id || undefined
+      }
+    },
+    {
+      kind: "tenant",
+      status: "active",
+      title: "Selected tenant context",
+      detail: `${tenantId} | actor ${tenantActorId(tenantId)}`,
+      code: {
+        tenant_id: tenantId,
+        principal: tenantPrincipal(tenantId),
+        roles: tenantAdminMember(tenantId)?.roles || []
+      }
+    },
+    {
+      kind: "task",
+      status: app.data.persistence?.load_status || "unknown",
+      title: "Runtime persistence",
+      detail: `${app.data.persistence?.mode || "unknown"} | ${app.data.persistence?.production_target || "postgresql"}`,
+      code: {
+        load_status: app.data.persistence?.load_status,
+        last_saved_at: app.data.persistence?.last_saved_at,
+        postgres_migration: app.data.persistence?.postgres_migration,
+        identity_billing_migration: app.data.persistence?.identity_billing_migration
+      }
+    }
+  ];
+  for (const item of settingsRows) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(item.status)}`;
+    row.innerHTML = `
+      ${iconHtml(item.kind, item.status)}
+      <span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+      </span>
+      <code>${escapeHtml(JSON.stringify(item.code, null, 2))}</code>
+    `;
+    refs.objectSettingsList.append(row);
+  }
+
+  const artifactRows = [
+    ["/.well-known/pollek-contract", "Contract discovery"],
+    ["/contracts/openapi.json", "OpenAPI artifact"],
+    ["/contracts/events.schema.json", "Event schema"],
+    ["/contracts/bundle-manifest.schema.json", "Bundle manifest schema"],
+    ["/contracts/telemetry-envelope.schema.json", "Telemetry envelope schema"]
+  ];
+  for (const [pathName, title] of artifactRows) {
+    const row = document.createElement("div");
+    row.className = "detail-row trace-row ok";
+    row.innerHTML = `
+      ${iconHtml("integration", "configured")}
+      <span>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(app.data.cloud_url || "")}${escapeHtml(pathName)}</small>
+      </span>
+      <code>${escapeHtml(pathName)}</code>
+    `;
+    refs.contractSettingsList.append(row);
+  }
+  const security = app.data.security_posture || {};
+  const securityRow = document.createElement("div");
+  securityRow.className = `detail-row trace-row ${statusClass(security.status || "designed")}`;
+  securityRow.innerHTML = `
+    ${iconHtml("identity", security.status || "designed")}
+    <span>
+      <strong>Security posture</strong>
+      <small>${escapeHtml(security.status || "designed")} | ${escapeHtml((security.production_required_controls || []).length)} production controls</small>
+    </span>
+    <code>${escapeHtml(JSON.stringify(security, null, 2))}</code>
+  `;
+  refs.contractSettingsList.append(securityRow);
+}
+
 function renderAdministrationWorkspace() {
   if (!refs.adminOrgList) return;
   const tenant = app.data.tenant || {};
-  const members = app.data.tenant_members || [];
+  const tenantId = selectedTenantId();
+  const tenantRecord = selectedTenantRecord();
+  const members = filteredByTenant(app.data.tenant_members, tenantId);
   const accounts = new Map((app.data.accounts || []).map((account) => [account.id, account]));
-  const idps = app.data.identity_providers || [];
+  const idps = filteredByTenant(app.data.identity_providers, tenantId);
   const plans = new Map((app.data.billing_plans || []).map((plan) => [plan.id, plan]));
-  const subscriptions = app.data.subscriptions || [];
+  const subscriptions = filteredByTenant(app.data.subscriptions, tenantId);
   const billingAccounts = app.data.billing_accounts || [];
-  const subscription = subscriptions.find((item) => item.tenant_id === "local") || subscriptions[0];
+  const subscription = subscriptions.find((item) => ["active", "trialing"].includes(item.status)) || subscriptions[0];
   const plan = plans.get(subscription?.plan_id) || app.data.billing_plans?.[0] || {};
-  const usage = app.data.usage_counters || [];
-  const invoices = app.data.invoices || [];
-  const licenses = app.data.licenses || [];
+  const usage = filteredByTenant(app.data.usage_counters, tenantId);
+  const invoices = filteredByTenant(app.data.invoices, tenantId);
+  const licenses = filteredByTenant(app.data.licenses, tenantId);
+  const paymentMethods = filteredByTenant(app.data.payment_methods, tenantId);
+  const billingEvents = filteredByTenant(app.data.billing_events, tenantId);
+  const roleOptions = availableRoles();
   const kmsProviders = app.data.kms_health?.providers || [];
   const identityControls = app.data.contract?.interfaces?.["pollek.cloud.identity"]?.controls || [];
 
+  if (refs.tenantSwitcher) {
+    const selected = tenantId;
+    refs.tenantSwitcher.innerHTML = tenantCatalog().map((item) => (
+      `<option value="${escapeHtml(item.tenant_id)}" ${item.tenant_id === selected ? "selected" : ""}>${escapeHtml(item.name || item.tenant_id)}</option>`
+    )).join("");
+  }
+  if (refs.tenantContextSummary) {
+    refs.tenantContextSummary.innerHTML = `
+      ${iconHtml("tenant", subscription?.status || tenantRecord.status || "active")}
+      <strong>${escapeHtml(tenantRecord.name || tenantRecord.tenant_id)}</strong>
+      <span>${escapeHtml(tenantId)}</span>
+      <span>${escapeHtml(tenantRecord.deployment_mode || tenant.mode || "saas")}</span>
+      <span>${escapeHtml(subscription?.status || "subscription pending")}</span>
+      <span>${escapeHtml(members.length)} members</span>
+      <span>${escapeHtml(idps.length)} IdPs</span>
+    `;
+  }
+
   refs.adminOrgList.innerHTML = "";
-  const orgRows = billingAccounts.length ? billingAccounts : [{ tenant_id: "local", organization_name: tenant.name || "Local Lab Tenant", deployment_mode: tenant.mode || "private-cloud-dev", status: "active" }];
-  for (const org of orgRows.slice(0, 8)) {
+  const orgRows = tenantCatalog().map((item) => ({
+    ...item,
+    ...(billingAccounts.find((account) => account.tenant_id === item.tenant_id) || {})
+  }));
+  for (const org of orgRows.slice(0, 12)) {
     const orgSubscription = subscriptions.find((item) => item.tenant_id === org.tenant_id);
     const orgPlan = plans.get(orgSubscription?.plan_id) || plan || {};
     const row = document.createElement("div");
-    row.className = `detail-row trace-row ${statusClass(orgSubscription?.status || org.status || "active")}`;
+    const isSelected = org.tenant_id === tenantId;
+    row.className = `detail-row trace-row ${statusClass(orgSubscription?.status || org.status || "active")} ${isSelected ? "is-selected" : ""}`;
     row.innerHTML = `
       ${iconHtml("tenant", orgSubscription?.status || org.status || "active")}
       <span>
-        <strong>${escapeHtml(org.organization_name || org.tenant_id)}</strong>
+        <strong>${escapeHtml(org.organization_name || org.name || org.tenant_id)}</strong>
         <small>${escapeHtml(org.deployment_mode || tenant.mode || "private-cloud-dev")} | ${escapeHtml(orgSubscription?.status || org.status || "active")} | ${escapeHtml(orgPlan.name || "Plan pending")}</small>
       </span>
       <code>${escapeHtml(JSON.stringify({
@@ -1780,6 +2073,7 @@ function renderAdministrationWorkspace() {
         identity_controls: identityControls
       }, null, 2))}</code>
     `;
+    row.addEventListener("click", () => setSelectedTenant(org.tenant_id));
     refs.adminOrgList.append(row);
   }
   const identitySeparationRow = document.createElement("div");
@@ -1788,28 +2082,46 @@ function renderAdministrationWorkspace() {
     ${iconHtml("identity", "configured")}
     <span>
       <strong>Console identity is separate from device users</strong>
-      <small>${members.length} console members | ${(app.data.device_users || []).length} observed device users</small>
+      <small>${members.length} console members in ${escapeHtml(tenantId)} | ${(app.data.device_users || []).length} observed device users from Local Pollek telemetry</small>
     </span>
   `;
   refs.adminOrgList.append(identitySeparationRow);
 
   refs.adminMembersList.innerHTML = "";
   const visibleMembers = members.length ? members : [{ id: "none", email: "No members", display_name: "No members", roles: [], status: "unknown" }];
-  for (const member of visibleMembers.slice(0, 12)) {
+  for (const member of visibleMembers.slice(0, 20)) {
     const account = accounts.get(member.account_id) || {};
     const row = document.createElement("div");
-    row.className = `detail-row trace-row ${statusClass(member.status)}`;
+    const activeRole = (member.roles || [])[0] || "viewer";
+    row.className = `detail-row trace-row with-actions ${statusClass(member.status)}`;
     row.innerHTML = `
       ${iconHtml("account", member.status)}
       <span>
         <strong>${escapeHtml(member.display_name || account.display_name || member.email)}</strong>
         <small>${escapeHtml(member.tenant_id)} | ${escapeHtml(member.email || account.email || "")} | ${escapeHtml((member.roles || []).join(", ") || "viewer")}</small>
       </span>
+      <div class="row-actions">
+        <select data-role-select="${escapeHtml(member.account_id || "")}" aria-label="Role for ${escapeHtml(member.email || account.email || "")}">
+          ${roleOptions.map((role) => `<option value="${escapeHtml(role)}" ${role === activeRole ? "selected" : ""}>${escapeHtml(roleLabel(role))}</option>`).join("")}
+        </select>
+        <button class="mini-button" data-role-update="${escapeHtml(member.account_id || "")}">Set Role</button>
+        <button class="mini-button danger" data-member-remove="${escapeHtml(member.account_id || "")}">Remove</button>
+      </div>
       <code>${escapeHtml(member.account_id || "")}</code>
     `;
+    row.querySelector("[data-role-update]")?.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const accountId = event.currentTarget.dataset.roleUpdate;
+      const role = row.querySelector("select")?.value || "viewer";
+      await updateMemberRoles(accountId, [role]);
+    });
+    row.querySelector("[data-member-remove]")?.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await removeTenantMember(event.currentTarget.dataset.memberRemove);
+    });
     refs.adminMembersList.append(row);
   }
-  for (const invite of (app.data.invitations || []).slice(0, 8)) {
+  for (const invite of filteredByTenant(app.data.invitations, tenantId).slice(0, 8)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(invite.status)}`;
     row.innerHTML = `
@@ -1843,10 +2155,24 @@ function renderAdministrationWorkspace() {
     ${iconHtml("identity", "planned")}
     <span>
       <strong>SCIM Provisioning</strong>
-      <small>${escapeHtml((app.data.scim_users || []).length)} users | ${escapeHtml((app.data.scim_groups || []).length)} groups | tenant header required</small>
+      <small>${escapeHtml(filteredByTenant(app.data.scim_users, tenantId).length)} users | ${escapeHtml(filteredByTenant(app.data.scim_groups, tenantId).length)} groups | x-pollek-tenant-id ${escapeHtml(tenantId)}</small>
     </span>
   `;
   refs.adminIdpList.append(scimRow);
+  for (const session of filteredByTenant(app.data.auth_sessions, tenantId).slice(0, 4)) {
+    const account = accounts.get(session.account_id) || {};
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(session.status)}`;
+    row.innerHTML = `
+      ${iconHtml("identity", session.status)}
+      <span>
+        <strong>${escapeHtml(account.email || session.account_id)}</strong>
+        <small>${escapeHtml(session.method)} | ${escapeHtml(session.status)} | expires ${escapeHtml(fmtTime(session.expires_at))}</small>
+      </span>
+      <code>${escapeHtml(session.id)}</code>
+    `;
+    refs.adminIdpList.append(row);
+  }
 
   refs.billingUsageList.innerHTML = "";
   const usageRows = usage.length ? usage : [{ metric: "usage pending", quantity: 0, status: "pending" }];
@@ -1857,7 +2183,7 @@ function renderAdministrationWorkspace() {
       ${iconHtml("billing", "active")}
       <span>
         <strong>${escapeHtml(item.metric)}</strong>
-        <small>${escapeHtml(item.tenant_id || "local")} | ${escapeHtml(item.period || "current")} | updated ${escapeHtml(fmtTime(item.updated_at))}</small>
+        <small>${escapeHtml(item.tenant_id || tenantId)} | ${escapeHtml(item.period || "current")} | updated ${escapeHtml(fmtTime(item.updated_at))}</small>
       </span>
       <code>${escapeHtml(item.quantity)}</code>
     `;
@@ -1874,6 +2200,19 @@ function renderAdministrationWorkspace() {
     <code>${escapeHtml(JSON.stringify({ seats: plan.included_seats, lcps: plan.included_lcps, devices: plan.included_devices }, null, 2))}</code>
   `;
   refs.billingUsageList.append(planRow);
+  for (const method of paymentMethods.slice(0, 4)) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(method.status)}`;
+    row.innerHTML = `
+      ${iconHtml("billing", method.status)}
+      <span>
+        <strong>${escapeHtml(method.provider)} ${escapeHtml(method.type)}</strong>
+        <small>${escapeHtml(method.billing_email)} | ${escapeHtml(method.status)}</small>
+      </span>
+      <code>${escapeHtml(method.reference_hash || "")}</code>
+    `;
+    refs.billingUsageList.append(row);
+  }
 
   refs.billingInvoiceList.innerHTML = "";
   for (const invoice of (invoices.length ? invoices : [{ id: "No invoice preview", status: "preview", total_cents: 0, currency: "USD", line_items: [] }]).slice(0, 5)) {
@@ -1886,6 +2225,19 @@ function renderAdministrationWorkspace() {
         <small>${escapeHtml(invoice.status)} | ${escapeHtml(fmtMoney(invoice.total_cents, invoice.currency || "USD"))}</small>
       </span>
       <code>${escapeHtml((invoice.line_items || []).map((item) => `${item.metric}:${item.quantity}`).join(" | "))}</code>
+    `;
+    refs.billingInvoiceList.append(row);
+  }
+  for (const event of billingEvents.slice(0, 4)) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${statusClass(event.status)}`;
+    row.innerHTML = `
+      ${iconHtml("integration", event.status)}
+      <span>
+        <strong>${escapeHtml(event.event_type)}</strong>
+        <small>${escapeHtml(event.provider)} | ${escapeHtml(event.status)} | ${escapeHtml(fmtTime(event.received_at))}</small>
+      </span>
+      <code>${escapeHtml(event.provider_event_id || event.id)}</code>
     `;
     refs.billingInvoiceList.append(row);
   }
@@ -1947,15 +2299,31 @@ async function runProbe(lcpUrl) {
   }
 }
 
-async function postJson(url, body = {}) {
+async function requestJson(url, { method = "GET", body, headers = {} } = {}) {
   const response = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body)
+    method,
+    headers: {
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...(app.currentSessionToken ? { authorization: `Bearer ${app.currentSessionToken}` } : {}),
+      ...headers
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
   return payload;
+}
+
+async function postJson(url, body = {}, options = {}) {
+  return requestJson(url, { method: "POST", body, ...options });
+}
+
+async function putJson(url, body = {}, options = {}) {
+  return requestJson(url, { method: "PUT", body, ...options });
+}
+
+async function deleteJson(url, body = undefined, options = {}) {
+  return requestJson(url, { method: "DELETE", body, ...options });
 }
 
 async function createDemoTenant() {
@@ -1971,11 +2339,14 @@ async function createDemoTenant() {
       deployment_mode: "saas",
       plan_id: "plan_enterprise_cloud"
     });
-    refs.probeResult.innerHTML = `
-      <strong>Tenant signup created</strong>
-      <span>${escapeHtml(payload.tenant.id)} | ${escapeHtml(payload.account.email)}</span>
-      <code>${escapeHtml(JSON.stringify({ session: payload.session.id, subscription: payload.subscription.id }, null, 2))}</code>
-    `;
+    app.selectedTenantId = payload.tenant.id;
+    localStorage.setItem("pollek.cloud.selected_tenant_id", app.selectedTenantId);
+    app.currentSessionId = payload.session.id;
+    app.currentSessionToken = payload.session.access_token || "";
+    sessionStorage.setItem("pollek.cloud.current_session_id", app.currentSessionId);
+    if (app.currentSessionToken) sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
+    await postJson("/api/dev/seed-role-users", { tenant_id: payload.tenant.id });
+    reportAdminAction("Tenant signup created", `${payload.tenant.id} | ${payload.account.email}`, { session: payload.session.id, subscription: payload.subscription.id });
     await refresh();
     setActiveTab("administration");
   } catch (error) {
@@ -1986,27 +2357,304 @@ async function createDemoTenant() {
   }
 }
 
-async function inviteDemoMember() {
+async function inviteDemoMember(options = {}) {
   refs.inviteMemberButton.disabled = true;
   refs.inviteMemberButton.textContent = "Inviting";
   try {
     const stamp = Date.now().toString().slice(-5);
-    const payload = await postJson("/v1/tenants/local/invitations", {
+    const tenantId = selectedTenantId();
+    const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/invitations", tenantId), {
       email: `analyst-${stamp}@example.com`,
-      roles: ["viewer", "iam_admin"]
+      roles: options.roles || ["viewer", "iam_admin"],
+      principal: tenantPrincipal(tenantId),
+      actor_id: tenantActorId(tenantId)
     });
-    refs.probeResult.innerHTML = `
-      <strong>Invitation created</strong>
-      <span>${escapeHtml(payload.invitation.email)} | ${escapeHtml((payload.invitation.roles || []).join(", "))}</span>
-      <code>${escapeHtml(payload.invitation.invite_url || "")}</code>
-    `;
+    app.lastInvitationToken = payload.token || "";
+    if (app.lastInvitationToken) sessionStorage.setItem("pollek.cloud.last_invitation_token", app.lastInvitationToken);
+    reportAdminAction("Invitation created", `${payload.invitation.email} | ${(payload.invitation.roles || []).join(", ")}`, { invite_url: payload.invitation.invite_url || "", token_available_for_accept_test: Boolean(payload.token) });
+    await refresh();
+    setActiveTab("administration");
+    return payload;
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+    return null;
+  } finally {
+    refs.inviteMemberButton.disabled = false;
+    refs.inviteMemberButton.textContent = "Invite Member";
+  }
+}
+
+async function seedRoleUsers() {
+  refs.seedRoleUsersButton.disabled = true;
+  refs.seedRoleUsersButton.textContent = "Seeding";
+  try {
+    const tenantId = selectedTenantId();
+    const payload = await postJson("/api/dev/seed-role-users", { tenant_id: tenantId });
+    reportAdminAction("Role test users ready", `${tenantId} | ${payload.users.length} users`, payload.users.map((user) => ({ email: user.email, roles: user.roles })));
     await refresh();
     setActiveTab("administration");
   } catch (error) {
     refs.probeResult.textContent = String(error);
   } finally {
-    refs.inviteMemberButton.disabled = false;
-    refs.inviteMemberButton.textContent = "Invite Member";
+    refs.seedRoleUsersButton.disabled = false;
+    refs.seedRoleUsersButton.textContent = "Seed Role Users";
+  }
+}
+
+async function loginDemoUser() {
+  refs.loginDemoButton.disabled = true;
+  refs.loginDemoButton.textContent = "Logging in";
+  try {
+    const tenantId = selectedTenantId();
+    const member = tenantAdminMember(tenantId);
+    const account = accountById(member?.account_id);
+    const email = account?.email || member?.email || "local-admin@pollek.local";
+    const login = await requestJson(`/v1/auth/login?tenant_id=${encodePathPart(tenantId)}`);
+    const callback = await requestJson(`/v1/auth/callback?tenant_id=${encodePathPart(tenantId)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(account?.display_name || member?.display_name || "Demo Admin")}`);
+    app.currentSessionId = callback.session.id;
+    app.currentSessionToken = callback.session.access_token || "";
+    sessionStorage.setItem("pollek.cloud.current_session_id", app.currentSessionId);
+    if (app.currentSessionToken) sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
+    reportAdminAction("Local-dev login completed", `${email} | ${login.provider_type}`, { session: callback.session.id, provider_id: login.provider_id });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.loginDemoButton.disabled = false;
+    refs.loginDemoButton.textContent = "Login";
+  }
+}
+
+async function logoutDemoUser() {
+  refs.logoutDemoButton.disabled = true;
+  refs.logoutDemoButton.textContent = "Logging out";
+  try {
+    const payload = await postJson("/v1/auth/logout", { session_id: app.currentSessionId || undefined });
+    app.currentSessionId = "";
+    app.currentSessionToken = "";
+    sessionStorage.removeItem("pollek.cloud.current_session_id");
+    sessionStorage.removeItem("pollek.cloud.current_session_token");
+    reportAdminAction("Session logged out", payload.session_id || "dev browser session", { ok: payload.ok });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.logoutDemoButton.disabled = false;
+    refs.logoutDemoButton.textContent = "Logout";
+  }
+}
+
+async function acceptLatestInvite() {
+  refs.acceptInviteButton.disabled = true;
+  refs.acceptInviteButton.textContent = "Accepting";
+  try {
+    let token = app.lastInvitationToken || sessionStorage.getItem("pollek.cloud.last_invitation_token") || "";
+    if (!token) {
+      const invite = await inviteDemoMember({ roles: ["viewer"] });
+      token = invite?.token || "";
+    }
+    const payload = await postJson("/v1/invitations/accept", {
+      token,
+      display_name: "Accepted Demo User"
+    });
+    app.currentSessionId = payload.session.id;
+    app.currentSessionToken = payload.session.access_token || "";
+    sessionStorage.setItem("pollek.cloud.current_session_id", app.currentSessionId);
+    if (app.currentSessionToken) sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
+    app.lastInvitationToken = "";
+    sessionStorage.removeItem("pollek.cloud.last_invitation_token");
+    reportAdminAction("Invitation accepted", `${payload.account.email} joined ${payload.membership.tenant_id}`, { roles: payload.membership.roles, session: payload.session.id });
+    await refresh();
+    setActiveTab("administration");
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.acceptInviteButton.disabled = false;
+    refs.acceptInviteButton.textContent = "Accept Invite";
+  }
+}
+
+async function updateMemberRoles(accountId, roles) {
+  const tenantId = selectedTenantId();
+  const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/members/{account_id}/roles", tenantId).replace("{account_id}", encodePathPart(accountId)), {
+    roles,
+    status: "active",
+    principal: tenantPrincipal(tenantId),
+    actor_id: tenantActorId(tenantId)
+  });
+  reportAdminAction("Member role updated", `${payload.member.email} | ${(payload.member.roles || []).join(", ")}`, { tenant_id: tenantId, account_id: accountId });
+  await refresh();
+}
+
+async function removeTenantMember(accountId) {
+  if (!accountId) return;
+  const account = accountById(accountId);
+  const label = account?.email || accountId;
+  if (!window.confirm(`Remove ${label} from ${selectedTenantId()}?`)) return;
+  const tenantId = selectedTenantId();
+  const payload = await deleteJson(tenantPath("/v1/tenants/{tenant_id}/members/{account_id}", tenantId).replace("{account_id}", encodePathPart(accountId)), {
+    principal: tenantPrincipal(tenantId),
+    actor_id: tenantActorId(tenantId)
+  });
+  reportAdminAction("Member removed", `${payload.member.email} | ${payload.member.status}`, { tenant_id: tenantId, account_id: accountId });
+  await refresh();
+}
+
+async function configureIdentityProvider() {
+  refs.configureIdpButton.disabled = true;
+  refs.configureIdpButton.textContent = "Configuring";
+  try {
+    const tenantId = selectedTenantId();
+    const payload = await putJson(tenantPath("/v1/tenants/{tenant_id}/identity-providers", tenantId), {
+      id: `idp_keycloak_${tenantId.replace(/[^a-z0-9]/gi, "_")}`,
+      provider_type: "keycloak_oidc",
+      display_name: `Keycloak ${tenantId}`,
+      status: "configured",
+      issuer_url: `http://127.0.0.1:8080/realms/${tenantId}`,
+      client_id: "pollek-cloud-console",
+      discovery_url: `http://127.0.0.1:8080/realms/${tenantId}/.well-known/openid-configuration`,
+      scopes: ["openid", "profile", "email", "groups"],
+      client_secret: `local-dev-${tenantId}`,
+      principal: tenantPrincipal(tenantId),
+      actor_id: tenantActorId(tenantId)
+    });
+    reportAdminAction("Identity provider configured", `${payload.provider.display_name} | ${payload.provider.status}`, { issuer_url: payload.provider.issuer_url, secret_ref: payload.provider.secret_ref });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.configureIdpButton.disabled = false;
+    refs.configureIdpButton.textContent = "Configure IDP";
+  }
+}
+
+async function provisionScimUser() {
+  refs.provisionScimUserButton.disabled = true;
+  refs.provisionScimUserButton.textContent = "Provisioning";
+  try {
+    const tenantId = selectedTenantId();
+    const stamp = Date.now().toString().slice(-5);
+    const payload = await postJson("/scim/v2/Users", {
+      userName: `scim-user-${stamp}@example.com`,
+      displayName: `SCIM User ${stamp}`,
+      active: true
+    }, { headers: { "x-pollek-tenant-id": tenantId } });
+    reportAdminAction("SCIM user provisioned", `${payload.userName} | ${tenantId}`, { id: payload.id, schemas: payload.schemas });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.provisionScimUserButton.disabled = false;
+    refs.provisionScimUserButton.textContent = "SCIM User";
+  }
+}
+
+async function provisionScimGroup() {
+  refs.provisionScimGroupButton.disabled = true;
+  refs.provisionScimGroupButton.textContent = "Provisioning";
+  try {
+    const tenantId = selectedTenantId();
+    const stamp = Date.now().toString().slice(-5);
+    const payload = await postJson("/scim/v2/Groups", {
+      displayName: `Pollek Security Operators ${stamp}`,
+      members: filteredByTenant(app.data.tenant_members, tenantId).slice(0, 3).map((member) => ({ value: member.account_id, display: member.email }))
+    }, { headers: { "x-pollek-tenant-id": tenantId } });
+    reportAdminAction("SCIM group provisioned", `${payload.displayName} | ${tenantId}`, { id: payload.id, member_count: payload.members?.length || 0 });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.provisionScimGroupButton.disabled = false;
+    refs.provisionScimGroupButton.textContent = "SCIM Group";
+  }
+}
+
+async function updateSubscriptionPlan() {
+  refs.updateSubscriptionButton.disabled = true;
+  refs.updateSubscriptionButton.textContent = "Updating";
+  try {
+    const tenantId = selectedTenantId();
+    const currentPlan = activePlanId(tenantId);
+    const nextPlan = currentPlan === "plan_private_cloud" ? "plan_enterprise_cloud" : "plan_private_cloud";
+    const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/billing/subscription", tenantId), {
+      plan_id: nextPlan,
+      status: "active",
+      billing_period: "monthly",
+      actor_id: tenantActorId(tenantId)
+    });
+    reportAdminAction("Subscription updated", `${tenantId} | ${payload.plan?.name || nextPlan}`, { subscription: payload.subscription.id, plan_id: payload.subscription.plan_id });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.updateSubscriptionButton.disabled = false;
+    refs.updateSubscriptionButton.textContent = "Update Plan";
+  }
+}
+
+async function addPaymentReference() {
+  refs.addPaymentButton.disabled = true;
+  refs.addPaymentButton.textContent = "Adding";
+  try {
+    const tenantId = selectedTenantId();
+    const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/billing/payment-methods", tenantId), {
+      provider: "manual-dev",
+      type: "enterprise_purchase_order",
+      reference: `po-${tenantId}-${Date.now()}`,
+      billing_email: selectedTenantRecord().billing_email || `billing+${tenantId}@pollek.local`,
+      actor_id: tenantActorId(tenantId)
+    });
+    reportAdminAction("Payment reference added", `${payload.payment_method.provider} | ${payload.payment_method.type}`, { reference_hash: payload.payment_method.reference_hash });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.addPaymentButton.disabled = false;
+    refs.addPaymentButton.textContent = "Add Payment Ref";
+  }
+}
+
+async function refreshInvoicePreview() {
+  refs.refreshInvoicesButton.disabled = true;
+  refs.refreshInvoicesButton.textContent = "Refreshing";
+  try {
+    const tenantId = selectedTenantId();
+    const payload = await requestJson(tenantPath("/v1/tenants/{tenant_id}/billing/invoices", tenantId));
+    reportAdminAction("Invoice preview refreshed", `${tenantId} | ${payload.invoices.length} invoices`, payload.invoices[0]);
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.refreshInvoicesButton.disabled = false;
+    refs.refreshInvoicesButton.textContent = "Invoice Preview";
+  }
+}
+
+async function sendBillingWebhookTest() {
+  refs.billingWebhookButton.disabled = true;
+  refs.billingWebhookButton.textContent = "Sending";
+  try {
+    const tenantId = selectedTenantId();
+    const body = {
+      id: `evt_${tenantId}_${Date.now()}`,
+      tenant_id: tenantId,
+      type: "invoice.payment_succeeded",
+      data: { tenant_id: tenantId, source: "admin-ui-test" }
+    };
+    const first = await postJson("/v1/billing/webhooks/manual-dev", body);
+    const second = await postJson("/v1/billing/webhooks/manual-dev", body);
+    reportAdminAction("Billing webhook idempotency tested", `${first.event.status} then ${second.event.status}`, {
+      event_id: first.event.provider_event_id,
+      first_status: first.event.status,
+      second_status: second.event.status,
+      payload_hash: first.event.payload_hash
+    });
+    await refresh();
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+  } finally {
+    refs.billingWebhookButton.disabled = false;
+    refs.billingWebhookButton.textContent = "Webhook Test";
   }
 }
 
@@ -2014,17 +2662,14 @@ async function issueAdminLicense() {
   refs.issueLicenseButton.disabled = true;
   refs.issueLicenseButton.textContent = "Issuing";
   try {
-    const payload = await postJson("/v1/tenants/local/billing/license/issue", {
+    const tenantId = selectedTenantId();
+    const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/billing/license/issue", tenantId), {
       deployment_mode: "private_cloud",
       max_seats: 100,
       max_lcps: 50,
       max_devices: 1000
     });
-    refs.probeResult.innerHTML = `
-      <strong>Offline license issued</strong>
-      <span>${escapeHtml(payload.license.id)} | ${escapeHtml(payload.license.algorithm)}</span>
-      <code>${escapeHtml(payload.license.payload_hash)}</code>
-    `;
+    reportAdminAction("Offline license issued", `${payload.license.id} | ${payload.license.algorithm}`, { tenant_id: payload.license.tenant_id, payload_hash: payload.license.payload_hash });
     await refresh();
     setActiveTab("administration");
   } catch (error) {
@@ -2148,7 +2793,9 @@ async function approveLatestPolicy() {
   refs.approvePolicyButton.textContent = "Approving";
   try {
     const payload = await postJson(`/api/policy/drafts/${encodeURIComponent(draftId)}/approve`, {
-      tenant_id: "local"
+      tenant_id: selectedTenantId(),
+      principal: tenantPrincipal(),
+      approved_by: tenantActorId()
     });
     refs.policyAssistantResult.innerHTML = `
       <strong>Approved, not deployed</strong>
@@ -2369,7 +3016,9 @@ async function deployComplianceBundle() {
     const targets = (app.data.local_control_planes || []).filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
     const payload = await postJson("/api/compliance/policy-bundles/deploy", {
       bundle_id: bundleId,
-      tenant_id: "local",
+      tenant_id: selectedTenantId(),
+      principal: tenantPrincipal(),
+      approved_by: tenantActorId(),
       target_ids: targets
     });
     const advanced = await postJson(`/api/rollouts/${encodeURIComponent(payload.rollout.id)}/advance`, {});
@@ -2416,6 +3065,7 @@ refs.entitySearch.addEventListener("input", (event) => {
   renderEntities();
 });
 
+refs.tenantSwitcher?.addEventListener("change", (event) => setSelectedTenant(event.target.value));
 refs.navCollapseButton?.addEventListener("click", () => setNavCollapsed(!app.navCollapsed));
 refs.opsCollapseButton?.addEventListener("click", () => setOpsCollapsed(!app.opsCollapsed));
 document.querySelectorAll("[data-ops-section-toggle]").forEach((button) => {
@@ -2440,7 +3090,18 @@ refs.sandboxButton.addEventListener("click", runComplianceSandbox);
 refs.breakglassButton.addEventListener("click", requestBreakglass);
 refs.complianceDeployButton.addEventListener("click", deployComplianceBundle);
 refs.signupTenantButton?.addEventListener("click", createDemoTenant);
+refs.seedRoleUsersButton?.addEventListener("click", seedRoleUsers);
+refs.loginDemoButton?.addEventListener("click", loginDemoUser);
+refs.logoutDemoButton?.addEventListener("click", logoutDemoUser);
 refs.inviteMemberButton?.addEventListener("click", inviteDemoMember);
+refs.acceptInviteButton?.addEventListener("click", acceptLatestInvite);
+refs.configureIdpButton?.addEventListener("click", configureIdentityProvider);
+refs.provisionScimUserButton?.addEventListener("click", provisionScimUser);
+refs.provisionScimGroupButton?.addEventListener("click", provisionScimGroup);
+refs.updateSubscriptionButton?.addEventListener("click", updateSubscriptionPlan);
+refs.addPaymentButton?.addEventListener("click", addPaymentReference);
+refs.refreshInvoicesButton?.addEventListener("click", refreshInvoicePreview);
+refs.billingWebhookButton?.addEventListener("click", sendBillingWebhookTest);
 refs.issueLicenseButton?.addEventListener("click", issueAdminLicense);
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });

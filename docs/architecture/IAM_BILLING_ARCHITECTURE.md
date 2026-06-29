@@ -26,6 +26,8 @@ References:
 - Keep billing provider neutral. The API stores plans, subscriptions, usage counters, usage records, invoices, payment-method references, offline licenses, and webhook events so Stripe, Paddle, Metronome, Lago, or manual enterprise billing can plug in later.
 - Use `offline_license` for private-cloud or air-gapped deployments. Production signing must use the KMS abstraction; local dev uses an ephemeral Ed25519 key only for protocol tests.
 - Every write endpoint receives tenant context from the route, body, or explicit SCIM tenant header and emits audit/task evidence for security-sensitive or long-running operations.
+- The local console includes a tenant switcher and visible admin workflows for signup, login/session, role test user seeding, invitation accept, member role update/remove, IDP config, SCIM User/Group provisioning, subscription update, payment reference, invoice preview, billing webhook idempotency, and offline license issuance.
+- Smoke tests run these workflows against the local API and assert tenant isolation, cross-tenant denial, hashed/sealed payment and IDP references, and absence of raw secrets in fleet snapshots.
 
 ## Production Hardening Backlog
 
@@ -34,4 +36,4 @@ References:
 - Add webhook signature verification per billing provider before accepting provider events.
 - Move KMS signing to OpenBao/Cosmian/cloud KMS with key rotation and signing attestations.
 - Add SCIM PATCH/DELETE, group membership mapping, and Just-in-Time provisioning policies.
-- Add tenant switcher and i18n keys when the app framework moves from static assets to the production frontend stack.
+- Add Thai/English i18n keys when the app framework moves from static assets to the production frontend stack.

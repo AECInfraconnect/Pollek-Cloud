@@ -44,7 +44,7 @@
       "direction": "local_to_cloud",
       "requires_oauth": false,
       "requires_spiffe": false,
-      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/api/contract-hub/drift"],
+      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/api/contract-hub/drift"],
       "purpose": "Contract Hub publishes machine-readable cloud protocol artifacts and drift status for Local Pollek compatibility checks."
     },
     "pollek.cloud.policy_bundle": {

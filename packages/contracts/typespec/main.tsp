@@ -73,6 +73,11 @@ model InvitationRequest {
   roles?: string[];
 }
 
+model MemberRoleRequest {
+  roles: string[];
+  status?: string;
+}
+
 model IdentityProviderRequest {
   provider_type: string;
   display_name?: string;
@@ -85,6 +90,21 @@ model IdentityProviderRequest {
 model BillingSubscriptionRequest {
   plan_id: string;
   status?: string;
+}
+
+model PaymentMethodRequest {
+  provider?: string;
+  type?: string;
+  reference?: string;
+  provider_token?: string;
+  billing_email?: string;
+}
+
+model BillingWebhookRequest {
+  id?: string;
+  tenant_id: string;
+  type: string;
+  data?: Record<unknown>;
 }
 
 model OfflineLicenseRequest {
@@ -100,6 +120,15 @@ model OfflineLicenseRequest {
 
 @route("/contracts/openapi.json")
 @get op getOpenApi(): unknown;
+
+@route("/contracts/events.schema.json")
+@get op getEventSchema(): unknown;
+
+@route("/contracts/bundle-manifest.schema.json")
+@get op getBundleManifestSchema(): unknown;
+
+@route("/contracts/telemetry-envelope.schema.json")
+@get op getTelemetryEnvelopeSchema(): unknown;
 
 @route("/api/events/replay")
 @get op replayEvents(@query since?: string, @query channel?: string, @query limit?: int32): EventReplayResponse;
@@ -122,8 +151,20 @@ model OfflineLicenseRequest {
 @route("/v1/tenants/{tenant_id}/members")
 @get op listMembers(@path tenant_id: string): unknown;
 
+@route("/v1/tenants/{tenant_id}/members/{account_id}/roles")
+@post op updateMemberRoles(@path tenant_id: string, @path account_id: string, @body request: MemberRoleRequest): unknown;
+
+@route("/v1/tenants/{tenant_id}/members/{account_id}")
+@delete op removeMember(@path tenant_id: string, @path account_id: string): unknown;
+
 @route("/v1/tenants/{tenant_id}/identity-providers")
 @put op configureIdentityProvider(@path tenant_id: string, @body request: IdentityProviderRequest): unknown;
+
+@route("/scim/v2/Users")
+@post op createScimUser(@header("x-pollek-tenant-id") tenant_id: string, @body request: Record<unknown>): unknown;
+
+@route("/scim/v2/Groups")
+@post op createScimGroup(@header("x-pollek-tenant-id") tenant_id: string, @body request: Record<unknown>): unknown;
 
 @route("/v1/tenants/{tenant_id}/billing/subscription")
 @post op updateSubscription(@path tenant_id: string, @body request: BillingSubscriptionRequest): unknown;
@@ -131,8 +172,17 @@ model OfflineLicenseRequest {
 @route("/v1/tenants/{tenant_id}/billing/usage")
 @get op getBillingUsage(@path tenant_id: string): unknown;
 
+@route("/v1/tenants/{tenant_id}/billing/invoices")
+@get op listInvoices(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/billing/payment-methods")
+@post op addPaymentMethod(@path tenant_id: string, @body request: PaymentMethodRequest): unknown;
+
 @route("/v1/tenants/{tenant_id}/billing/license/issue")
 @post op issueOfflineLicense(@path tenant_id: string, @body request: OfflineLicenseRequest): unknown;
+
+@route("/v1/billing/webhooks/{provider}")
+@post op sendBillingWebhook(@path provider: string, @body request: BillingWebhookRequest): unknown;
 
 @route("/v1/kms/health")
 @get op getKmsHealth(): unknown;

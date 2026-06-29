@@ -15,6 +15,9 @@ Open:
 - Web console: `http://127.0.0.1:8790`
 - Cloud contract discovery: `http://127.0.0.1:8790/.well-known/pollek-contract`
 - OpenAPI artifact: `http://127.0.0.1:8790/contracts/openapi.json`
+- Event schema artifact: `http://127.0.0.1:8790/contracts/events.schema.json`
+- Bundle manifest schema artifact: `http://127.0.0.1:8790/contracts/bundle-manifest.schema.json`
+- Telemetry envelope schema artifact: `http://127.0.0.1:8790/contracts/telemetry-envelope.schema.json`
 - Contract drift report: `http://127.0.0.1:8790/api/contract-hub/drift`
 - Contract Hub SSE stream: `http://127.0.0.1:8790/api/events`
 - Runtime persistence status: `http://127.0.0.1:8790/api/persistence/status`
@@ -90,20 +93,22 @@ This repository is intentionally starting with a dependency-light local foundati
 - `packages/contracts` for Contract Hub artifacts.
 - `docs` for architecture, SRS, UX, and runbooks.
 
-The next implementation phase should add full TypeSpec source generation, SDK generation, Drizzle schema generation, durable PostgreSQL persistence, tenant isolation integration tests, and the Next.js enterprise console.
+The next production phase should add full TypeSpec compiler execution, Drizzle/runtime repository implementation for PostgreSQL, multi-language package publishing, production identity/billing provider integrations, and the Next.js enterprise console. The local MVP already includes generated OpenAPI, dependency-light JavaScript SDK, tenant-scoped PostgreSQL migrations, and smoke tests for admin tenant isolation/security flows.
 
 Contract artifacts can be regenerated and checked with:
 
 ```powershell
 npm run contracts:openapi
+npm run contracts:sdk
 npm run contracts:check
+npm test
 ```
 
 ## Database Direction
 
 Production will use PostgreSQL. Development should also use PostgreSQL through `deploy/docker-compose/docker-compose.yml` so Row Level Security, JSONB, indexing, tenant context, and migrations behave like production.
 
-The current local protocol server can run without a database to keep the first local URL easy to test. It persists local runtime state to `pollek-cloud-dev-state.json` by default, including telemetry events, audit events, tasks, probes, policy drafts, sandbox runs, breakglass requests, entity syncs, rollouts, hot-reload events, evidence exports, enrollments, and current fleet status. The file is ignored by git.
+The current local protocol server can run without a database to keep the first local URL easy to test. It persists local runtime state to `pollek-cloud-dev-state.json` by default, including telemetry events, audit events, tasks, probes, policy drafts, sandbox runs, breakglass requests, entity syncs, rollouts, hot-reload events, evidence exports, enrollments, tenant members, sessions, billing records, and current fleet status. The file is ignored by git.
 
 Useful local persistence commands:
 
@@ -112,7 +117,7 @@ curl.exe http://127.0.0.1:8790/api/persistence/status
 curl.exe -X POST http://127.0.0.1:8790/api/persistence/flush
 ```
 
-Set `POLLEK_CLOUD_STATE_FILE` to move the dev state file, or set `POLLEK_CLOUD_PERSISTENCE=disabled` for a seed-only run. Production durable product state should be implemented against `packages/db/migrations/0001_foundation.sql`.
+Set `POLLEK_CLOUD_STATE_FILE` to move the dev state file, or set `POLLEK_CLOUD_PERSISTENCE=disabled` for a seed-only run. Production durable product state should be implemented against `packages/db/migrations/0001_foundation.sql` and `packages/db/migrations/0002_identity_billing.sql`.
 
 ## Research Basis
 
@@ -124,11 +129,12 @@ The first console is now inventory-first:
 
 - Left navigator: tenant, site, device group, device, Local Control Plane, agents.
 - Main fleet datagrid: status, site, version, contract, active bundle, agent count, coverage, heartbeat.
-- Working object detail tabs: Summary, Entities, Relationships, Policies, Telemetry, Alarms, Timeline, Audit.
+- Working object detail tabs: Summary, Entities, Relationships, Policies, Telemetry, Alerts, Timeline, Bundle Status, Compliance, Audit, Settings, and Administration.
 - Entities tab: device/user scoped Local Pollek entity inventory with OAuth/OIDC/SPIFFE/mTLS/WASM readiness.
 - Policy Center MVP: AI-assisted deterministic draft generation, simulation, human approval gate, signed-bundle-ready state.
 - Observe Center MVP: telemetry query and synthetic sample ingest for Cloud-side testing while LCP is still building.
 - Timeline MVP: rollout records, enrollment sessions, and evidence export records.
+- Administration MVP: tenant switcher, local-dev login/session, signup, invitation accept, seeded role test users, member role update/remove, IDP config, SCIM User/Group provisioning, subscription update, payment reference, invoice preview, webhook idempotency test, and offline license issue.
 - Operations rail: secure-channel probe, policy packs, open alarms, recent tasks, integration status.
 - Live Sync rail: near-real-time entity/config watch status, manual refresh, config dispatch, and hot-reload dispatch outcomes.
 

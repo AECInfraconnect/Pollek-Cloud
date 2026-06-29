@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pollek.cloud/bundle-manifest.schema.json",
+  "title": "Pollek Policy Bundle Manifest",
+  "type": "object",
+  "required": ["schema_version", "bundle_id", "tenant_id", "revision", "artifacts", "signature"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "pollek.policy.bundle-manifest.v1"
+    },
+    "bundle_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "approved", "signed", "published", "revoked"]
+    },
+    "engine_targets": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["rego", "cedar", "openfga", "wasm"]
+      },
+      "uniqueItems": true
+    },
+    "hot_reload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "generation": { "type": "integer", "minimum": 0 },
+        "requires_lcp_ack": { "type": "boolean" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "media_type", "sha256", "size_bytes"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "media_type": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size_bytes": { "type": "integer", "minimum": 0 },
+          "url": { "type": "string" }
+        }
+      }
+    },
+    "approval_record": {
+      "type": "object",
+      "required": ["approved_by", "approved_at"],
+      "additionalProperties": true,
+      "properties": {
+        "approved_by": { "type": "string", "minLength": 1 },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "risk": { "type": "string" },
+        "breakglass_id": { "type": "string" }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "required": ["algorithm", "key_id", "payload_hash", "signature"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["Ed25519"] },
+        "key_id": { "type": "string", "minLength": 1 },
+        "payload_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "signature": { "type": "string", "minLength": 32 }
+      }
+    }
+  }
+}

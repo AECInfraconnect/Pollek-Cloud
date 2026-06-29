@@ -101,10 +101,12 @@
           <button class="tab" data-tab="relationships">Relationships</button>
           <button class="tab" data-tab="policies">Policies</button>
           <button class="tab" data-tab="telemetry">Telemetry</button>
-          <button class="tab" data-tab="alarms">Alarms</button>
           <button class="tab" data-tab="timeline">Timeline</button>
+          <button class="tab" data-tab="alarms">Alerts</button>
+          <button class="tab" data-tab="bundle_status">Bundle Status</button>
           <button class="tab" data-tab="compliance">Compliance</button>
           <button class="tab" data-tab="audit">Audit</button>
+          <button class="tab" data-tab="settings">Settings</button>
           <button class="tab" data-tab="administration">Administration</button>
         </section>
 
@@ -430,15 +432,91 @@
               </div>
             </div>
 
+            <div class="tab-panel" data-tab-panel="bundle_status" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Bundle Status</p>
+                  <h3>Signed Artifacts, Hot Reload, Rollout Delivery</h3>
+                </div>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Policy Bundles</p>
+                      <h3>Approval and Signatures</h3>
+                    </div>
+                  </div>
+                  <div id="bundleStatusCenterList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Local Delivery</p>
+                      <h3>Hot Reload and Dispatch</h3>
+                    </div>
+                  </div>
+                  <div id="bundleDeliveryList" class="detail-list"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="settings" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Settings</p>
+                  <h3>Object, Tenant, Contract Hub, Security</h3>
+                </div>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Object Settings</p>
+                      <h3>Selected Scope</h3>
+                    </div>
+                  </div>
+                  <div id="objectSettingsList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Contract Hub</p>
+                      <h3>Artifacts and Security Posture</h3>
+                    </div>
+                  </div>
+                  <div id="contractSettingsList" class="detail-list"></div>
+                </section>
+              </div>
+            </div>
+
             <div class="tab-panel" data-tab-panel="administration" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Administration</p>
                   <h3>Organization, Identity, Users, Billing</h3>
                 </div>
-                <div class="button-row compact-actions">
+                <div class="tenant-switcher">
+                  <label for="tenantSwitcher">Tenant</label>
+                  <select id="tenantSwitcher" aria-label="Selected tenant"></select>
+                </div>
+              </div>
+              <div class="admin-command-bar">
+                <div id="tenantContextSummary" class="tenant-context-summary"></div>
+                <div class="button-row compact-actions admin-actions">
                   <button id="signupTenantButton" class="secondary-button">Create Demo Tenant</button>
+                  <button id="seedRoleUsersButton" class="secondary-button">Seed Role Users</button>
+                  <button id="loginDemoButton" class="secondary-button">Login</button>
+                  <button id="logoutDemoButton" class="secondary-button">Logout</button>
                   <button id="inviteMemberButton" class="secondary-button">Invite Member</button>
+                  <button id="acceptInviteButton" class="secondary-button">Accept Invite</button>
+                  <button id="configureIdpButton" class="secondary-button">Configure IDP</button>
+                  <button id="provisionScimUserButton" class="secondary-button">SCIM User</button>
+                  <button id="provisionScimGroupButton" class="secondary-button">SCIM Group</button>
+                  <button id="updateSubscriptionButton" class="secondary-button">Update Plan</button>
+                  <button id="addPaymentButton" class="secondary-button">Add Payment Ref</button>
+                  <button id="refreshInvoicesButton" class="secondary-button">Invoice Preview</button>
+                  <button id="billingWebhookButton" class="secondary-button">Webhook Test</button>
                   <button id="issueLicenseButton" class="primary-button">Issue License</button>
                 </div>
               </div>
