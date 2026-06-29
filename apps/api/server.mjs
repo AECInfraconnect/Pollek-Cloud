@@ -14,9 +14,275 @@ const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
 
+function createLocalEntityState(now) {
+  const user = {
+    id: "user_dell_localadmin",
+    tenant_id: "local",
+    device_id: "device_local_windows",
+    display_name: "DELL LocalAdmin",
+    user_subject: "DELL\\LocalAdmin",
+    oidc_subject: "local-admin@pollek.local",
+    last_seen_at: now
+  };
+
+  const trace = {
+    oauth_client_id: "pollek-local-control-plane",
+    oidc_issuer: "https://cloud.pollek.ai",
+    oidc_subject: "agent-antigravity",
+    spiffe_id: "spiffe://local.pollek/device/dev-win/agent/antigravity",
+    mtls_subject: "spiffe-svid:agent-antigravity",
+    mtls_fingerprint: "pending-local-dev",
+    confirmation: "spiffe_svid"
+  };
+
+  const entities = [
+    {
+      id: "entity_agent_antigravity",
+      tenant_id: "local",
+      local_object_id: "agent-antigravity",
+      entity_type: "registered_agent",
+      class: "agent",
+      name: "Antigravity",
+      vendor: "Google",
+      device_id: "device_local_windows",
+      device_name: "DELL-WINDOWS",
+      lcp_id: "lcp_local",
+      user_id: user.id,
+      user_subject: user.user_subject,
+      status: "registered",
+      risk: "medium",
+      source: "registry/agents",
+      trust_level: "medium",
+      identity: {
+        spiffe_id: trace.spiffe_id,
+        process_path: "C:\\Program Files\\Google\\Antigravity\\antigravity.exe",
+        user_subject: user.user_subject,
+        token_bindings: [
+          {
+            kind: "oidc_id_token",
+            provider: "Pollek Cloud",
+            issuer: trace.oidc_issuer,
+            subject: trace.oidc_subject,
+            audience: ["pollek-cloud"],
+            scopes: ["telemetry.write"],
+            confirmation: trace.confirmation,
+            expires_at: "2026-06-29T18:00:00Z"
+          }
+        ]
+      },
+      trace,
+      policy_ids: ["policy-protect-workspace-files"],
+      enforcement: {
+        mode: "Enforce",
+        pep_plane: "windows_user_mode_observer",
+        pdp_engine: "opa_wasm",
+        last_decision: "allow"
+      },
+      observability: {
+        telemetry_streams: ["tool_usage", "resource_access", "identity_access"],
+        last_event_at: now,
+        capture_quality: "exact"
+      },
+      wasm: {
+        hot_reload: true,
+        active_bundle_id: "bundle-local-1",
+        active_module: "opa_wasm",
+        generation: 1,
+        last_reload_at: now
+      },
+      raw_schema: "agent.v1",
+      last_seen_at: now
+    },
+    {
+      id: "entity_agent_shadow_browser",
+      tenant_id: "local",
+      local_object_id: "candidate-shadow-browser-ai",
+      entity_type: "found_agent",
+      class: "agent",
+      name: "Unregistered Browser AI",
+      vendor: "Unknown",
+      device_id: "device_local_windows",
+      device_name: "DELL-WINDOWS",
+      lcp_id: "lcp_local",
+      user_id: user.id,
+      user_subject: user.user_subject,
+      status: "found_unregistered",
+      risk: "high",
+      source: "discovery/candidates",
+      trust_level: "untrusted",
+      identity: {
+        spiffe_id: null,
+        process_path: "browser-extension-not-installed",
+        user_subject: user.user_subject,
+        token_bindings: []
+      },
+      trace: {
+        oauth_client_id: null,
+        oidc_issuer: null,
+        oidc_subject: null,
+        spiffe_id: null,
+        mtls_subject: null,
+        mtls_fingerprint: null,
+        confirmation: "missing"
+      },
+      policy_ids: [],
+      enforcement: {
+        mode: "Observe",
+        pep_plane: "browser_extension_pending",
+        pdp_engine: "none",
+        last_decision: "not_evaluated"
+      },
+      observability: {
+        telemetry_streams: ["process_metadata", "network_sni"],
+        last_event_at: now,
+        capture_quality: "metadata_only"
+      },
+      wasm: {
+        hot_reload: false,
+        active_bundle_id: null,
+        active_module: null,
+        generation: 0,
+        last_reload_at: null
+      },
+      raw_schema: "discovery.candidate.v2",
+      last_seen_at: now
+    },
+    {
+      id: "entity_policy_workspace_files",
+      tenant_id: "local",
+      local_object_id: "policy-protect-workspace-files",
+      entity_type: "policy",
+      class: "policy",
+      name: "Protect workspace source files",
+      device_id: "device_local_windows",
+      device_name: "DELL-WINDOWS",
+      lcp_id: "lcp_local",
+      user_id: user.id,
+      user_subject: user.user_subject,
+      status: "published",
+      risk: "medium",
+      source: "policies",
+      engine: "opa_wasm",
+      mode: "enforce",
+      policy_ids: ["policy-protect-workspace-files"],
+      enforcement: {
+        mode: "Enforce",
+        pep_plane: "windows_user_mode_observer",
+        pdp_engine: "opa_wasm",
+        last_decision: "allow"
+      },
+      observability: {
+        telemetry_streams: ["decision", "policy_deployment"],
+        last_event_at: now,
+        capture_quality: "exact"
+      },
+      wasm: {
+        hot_reload: true,
+        active_bundle_id: "bundle-local-1",
+        active_module: "policy.wasm",
+        generation: 1,
+        last_reload_at: now
+      },
+      raw_schema: "policy.v1",
+      last_seen_at: now
+    },
+    {
+      id: "entity_enforcement_windows_observer",
+      tenant_id: "local",
+      local_object_id: "windows_process_observer",
+      entity_type: "enforcement",
+      class: "enforcement",
+      name: "Windows Process Observer",
+      device_id: "device_local_windows",
+      device_name: "DELL-WINDOWS",
+      lcp_id: "lcp_local",
+      user_id: user.id,
+      user_subject: user.user_subject,
+      status: "available",
+      risk: "medium",
+      source: "capability-snapshot-v2",
+      enforcement: {
+        mode: "Enforce",
+        pep_plane: "windows_process_observer",
+        pdp_engine: "opa_wasm",
+        last_decision: "ready"
+      },
+      observability: {
+        telemetry_streams: ["process", "filesystem"],
+        last_event_at: now,
+        capture_quality: "metadata_only"
+      },
+      wasm: {
+        hot_reload: true,
+        active_bundle_id: "bundle-local-1",
+        active_module: "opa_wasm",
+        generation: 1,
+        last_reload_at: now
+      },
+      raw_schema: "local-capability-snapshot.v2",
+      last_seen_at: now
+    },
+    {
+      id: "entity_observability_workspace_files",
+      tenant_id: "local",
+      local_object_id: "resource-workspace-src",
+      entity_type: "observability",
+      class: "resource",
+      name: "repo/src",
+      device_id: "device_local_windows",
+      device_name: "DELL-WINDOWS",
+      lcp_id: "lcp_local",
+      user_id: user.id,
+      user_subject: user.user_subject,
+      status: "observed",
+      risk: "medium",
+      source: "telemetry/resources",
+      sensitivity: "internal_source",
+      enforcement: {
+        mode: "Enforce",
+        pep_plane: "windows_user_mode_observer",
+        pdp_engine: "opa_wasm",
+        last_decision: "allow"
+      },
+      observability: {
+        telemetry_streams: ["resource_access", "tool_usage"],
+        last_event_at: now,
+        capture_quality: "exact"
+      },
+      wasm: {
+        hot_reload: true,
+        active_bundle_id: "bundle-local-1",
+        active_module: "opa_wasm",
+        generation: 1,
+        last_reload_at: now
+      },
+      raw_schema: "resource-inventory.v1",
+      last_seen_at: now
+    }
+  ];
+
+  return {
+    users: [user],
+    entities,
+    relationships: [
+      { from: "lcp_local", to: "entity_agent_antigravity", label: "reports_entity" },
+      { from: "lcp_local", to: "entity_agent_shadow_browser", label: "reports_entity" },
+      { from: "lcp_local", to: "entity_policy_workspace_files", label: "reports_entity" },
+      { from: "lcp_local", to: "entity_enforcement_windows_observer", label: "reports_entity" },
+      { from: "lcp_local", to: "entity_observability_workspace_files", label: "reports_entity" },
+      { from: "entity_agent_antigravity", to: "entity_observability_workspace_files", label: "uses_tool_to_access" },
+      { from: "entity_policy_workspace_files", to: "entity_agent_antigravity", label: "governs" },
+      { from: "entity_enforcement_windows_observer", to: "entity_policy_workspace_files", label: "evaluates" },
+      { from: "entity_observability_workspace_files", to: "entity_agent_antigravity", label: "observed_for" }
+    ],
+    syncRuns: []
+  };
+}
+
 function createFleetState() {
   const now = new Date().toISOString();
   const localEndpoint = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
+  const localEntityState = createLocalEntityState(now);
   return {
     tree: [
       { id: "tenant_local_lab", parent_id: null, type: "tenant", name: "Local Lab Tenant", status: "connected", risk: "medium" },
@@ -205,8 +471,69 @@ function createFleetState() {
       { id: "int_syslog_cef", name: "Syslog CEF", type: "siem", status: "not_configured", direction: "outbound" },
       { id: "int_keycloak", name: "Keycloak OIDC", type: "identity", status: "configured", direction: "inbound" }
     ],
+    tenantTrustScopes: [
+      {
+        id: "trust_local_lab",
+        tenant_id: "local",
+        trust_domain: "local.pollek.cloud",
+        spire_server: "spiffe://local.pollek.cloud/spire/server/pollek-cloud",
+        oidc_issuer: "https://cloud.pollek.ai/realms/local",
+        mtls_profile: "x509-svid-required",
+        oauth_scopes: ["pollek.enroll", "telemetry.write", "registry.sync", "bundle.read", "policy.rollout"],
+        entity_scope_template: "spiffe://local.pollek.cloud/tenant/{tenant}/site/{site}/device/{device}/lcp/{lcp}/agent/{agent}",
+        status: "designed"
+      }
+    ],
+    serviceEndpoints: [
+      { id: "svc_spire", tenant_id: "local", name: "SPIRE Server", type: "spiffe", status: "planned", endpoint: "spire://spire-server.pollek-cloud.svc:8081", scope: "tenant-trust-domain" },
+      { id: "svc_opa", tenant_id: "local", name: "OPA Bundle Service", type: "opa", status: "configured", endpoint: "/v1/tenants/{tenant_id}/bundles/latest", scope: "policy-evaluation" },
+      { id: "svc_cedar", tenant_id: "local", name: "Cedar Authorization Service", type: "cedar", status: "planned", endpoint: "/internal/cedar/check", scope: "app-authz" },
+      { id: "svc_openfga", tenant_id: "local", name: "OpenFGA Relationship Service", type: "openfga", status: "planned", endpoint: "/internal/openfga/check", scope: "rebac" },
+      { id: "svc_ner", tenant_id: "local", name: "NER Redaction Model", type: "ner", status: "planned", endpoint: "/internal/models/ner/redact", scope: "telemetry-redaction" },
+      { id: "svc_wasm", tenant_id: "local", name: "WASM Hot Reload Registry", type: "wasm", status: "configured", endpoint: "/v1/policy-bundles/{bundle_id}/manifest", scope: "hot-reload" }
+    ],
+    connectionProfiles: [
+      {
+        id: "conn_local_lab_default",
+        tenant_id: "local",
+        name: "Local Lab Default Connection Profile",
+        contract_version: "2026.06.29",
+        trust_scope_id: "trust_local_lab",
+        applies_to: {
+          lcp_ids: ["lcp_local", "lcp_dc_gpu_01"],
+          site_ids: ["site_bkk_hq", "site_private_dc"],
+          device_group_ids: ["group_developers", "group_gpu_nodes"]
+        },
+        endpoints: {
+          contract_hub: "/.well-known/pollek-contract",
+          registry_sync: "/api/entities/ingest",
+          telemetry_ingest: "/v1/telemetry/batches",
+          bundle_latest: "/v1/tenants/{tenant_id}/bundles/latest",
+          hot_reload_manifest: "/v1/policy-bundles/{bundle_id}/manifest",
+          service_catalog: "/api/services/endpoints"
+        },
+        required_identity: {
+          oauth_scopes: ["telemetry.write", "registry.sync", "bundle.read"],
+          spiffe_required: true,
+          mtls_required: true,
+          oidc_required_for_user_binding: true
+        },
+        update_strategy: {
+          mode: "poll-with-sse-upgrade",
+          poll_seconds: 30,
+          hot_reload: true,
+          wasm_generation_required: true
+        },
+        status: "active",
+        updated_at: now
+      }
+    ],
     evidenceExports: [],
     enrollmentSessions: [],
+    deviceUsers: localEntityState.users,
+    localEntities: localEntityState.entities,
+    localEntityRelationships: localEntityState.relationships,
+    localEntitySyncRuns: localEntityState.syncRuns,
     rolloutPlans: []
   };
 }
@@ -292,6 +619,478 @@ function recordAudit(action, targetType, targetId, payload = {}) {
   state.auditEvents.unshift(event);
   state.auditEvents = state.auditEvents.slice(0, 100);
   return event;
+}
+
+function normalizeItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.events)) return payload.events;
+  if (Array.isArray(payload?.activity_sets)) return payload.activity_sets.flatMap((set) => set.items || []);
+  if (payload && typeof payload === "object") return [payload];
+  return [];
+}
+
+function entityIdFrom(kind, value) {
+  return `entity_${kind}_${String(value || crypto.randomUUID()).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48)}`;
+}
+
+function entityRef(kind, value) {
+  if (!value) return null;
+  const raw = String(value);
+  return raw.startsWith("entity_") ? raw : entityIdFrom(kind, raw);
+}
+
+function userIdFromSubject(subject) {
+  return `user_${String(subject || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "unknown"}`;
+}
+
+function upsertDeviceUser({ tenant_id = "local", device_id = "device_local_windows", user_subject = "unknown", display_name, oidc_subject }) {
+  const id = userIdFromSubject(user_subject);
+  const existingIndex = state.fleet.deviceUsers.findIndex((item) => item.id === id);
+  const user = {
+    id,
+    tenant_id,
+    device_id,
+    display_name: display_name || user_subject || "Unknown user",
+    user_subject: user_subject || "unknown",
+    oidc_subject: oidc_subject || null,
+    last_seen_at: new Date().toISOString()
+  };
+  if (existingIndex >= 0) {
+    state.fleet.deviceUsers[existingIndex] = { ...state.fleet.deviceUsers[existingIndex], ...user };
+  } else {
+    state.fleet.deviceUsers.unshift(user);
+  }
+  return user;
+}
+
+function findDeviceName(deviceId) {
+  const lcp = state.fleet.localControlPlanes.find((item) => item.device_id === deviceId || item.device_name === deviceId || item.id === deviceId);
+  return lcp?.device_name || deviceId || "unknown-device";
+}
+
+function defaultLocalTrace(entity) {
+  const identity = entity.identity || {};
+  const binding = Array.isArray(identity.token_bindings) ? identity.token_bindings[0] : null;
+  return {
+    oauth_client_id: binding?.audience?.[0] || null,
+    oidc_issuer: binding?.issuer || null,
+    oidc_subject: binding?.subject || identity.user_subject || null,
+    spiffe_id: identity.spiffe_id || null,
+    mtls_subject: identity.spiffe_id ? `spiffe-svid:${identity.spiffe_id}` : null,
+    mtls_fingerprint: identity.signing_key_fingerprint || null,
+    confirmation: binding?.confirmation || "unconfirmed"
+  };
+}
+
+function upsertLocalEntity(entity) {
+  const userSubject = entity.user_subject || entity.identity?.user_subject || "unknown";
+  const user = upsertDeviceUser({
+    tenant_id: entity.tenant_id || "local",
+    device_id: entity.device_id || "device_local_windows",
+    user_subject: userSubject,
+    oidc_subject: entity.trace?.oidc_subject
+  });
+  const existingIndex = state.fleet.localEntities.findIndex((item) => item.id === entity.id);
+  const normalized = {
+    tenant_id: "local",
+    device_id: "device_local_windows",
+    device_name: findDeviceName(entity.device_id || "device_local_windows"),
+    lcp_id: "lcp_local",
+    user_id: entity.user_id || user.id,
+    user_subject: userSubject,
+    status: "observed",
+    risk: "medium",
+    policy_ids: [],
+    enforcement: {},
+    observability: {},
+    wasm: { hot_reload: false, generation: 0 },
+    last_seen_at: new Date().toISOString(),
+    ...entity
+  };
+  if (!normalized.trace) normalized.trace = defaultLocalTrace(normalized);
+  if (existingIndex >= 0) {
+    state.fleet.localEntities[existingIndex] = { ...state.fleet.localEntities[existingIndex], ...normalized };
+  } else {
+    state.fleet.localEntities.unshift(normalized);
+  }
+  addLocalEntityRelationship(normalized.lcp_id, normalized.id, "reports_entity");
+  return normalized;
+}
+
+function addLocalEntityRelationship(from, to, label) {
+  if (!from || !to) return;
+  if (state.fleet.localEntityRelationships.some((rel) => rel.from === from && rel.to === to && rel.label === label)) return;
+  state.fleet.localEntityRelationships.push({ from, to, label });
+}
+
+function ingestLocalEntitySnapshot(snapshot, context = {}) {
+  const now = new Date().toISOString();
+  const deviceId = context.device_id || "device_local_windows";
+  const deviceName = findDeviceName(deviceId);
+  const lcpId = context.lcp_id || "lcp_local";
+  const userSubject = context.user_subject || "unknown";
+  let count = 0;
+
+  for (const agent of normalizeItems(snapshot.agents)) {
+    const id = entityIdFrom("agent", agent.agent_id || agent.id || agent.name);
+    const entity = upsertLocalEntity({
+      id,
+      local_object_id: agent.agent_id || agent.id,
+      entity_type: "registered_agent",
+      class: "agent",
+      name: agent.name || agent.display_name || agent.agent_id || "Registered Agent",
+      vendor: agent.vendor || null,
+      device_id: deviceId,
+      device_name: deviceName,
+      lcp_id: lcpId,
+      user_subject: agent.identity?.user_subject || userSubject,
+      status: String(agent.meta?.status || "registered").toLowerCase(),
+      risk: agent.trust_level === "untrusted" ? "high" : "medium",
+      source: "registry/agents",
+      trust_level: agent.trust_level || "unknown",
+      identity: agent.identity || {},
+      trace: defaultLocalTrace(agent),
+      policy_ids: [],
+      enforcement: { mode: agent.enforcement_mode || "Observe", pdp_engine: "opa_wasm" },
+      observability: { telemetry_streams: ["tool_usage", "resource_access", "identity_access"], last_event_at: now },
+      wasm: { hot_reload: true, active_bundle_id: agent.active_bundle_id || null, active_module: "opa_wasm", generation: 1 },
+      raw_schema: agent.meta?.schema_version || "agent.v1",
+      raw: agent,
+      last_seen_at: now
+    });
+    count += 1;
+    for (const toolId of agent.declared_tools || []) addLocalEntityRelationship(entity.id, entityIdFrom("tool", toolId), "declares_tool");
+    for (const resourceId of agent.declared_resources || []) addLocalEntityRelationship(entity.id, entityIdFrom("resource", resourceId), "declares_resource");
+  }
+
+  for (const inventory of normalizeItems(snapshot.agent_inventory)) {
+    const id = entityIdFrom("agent", inventory.agent_id || inventory.candidate_id || inventory.display_name);
+    const entity = upsertLocalEntity({
+      id,
+      local_object_id: inventory.agent_id || inventory.candidate_id,
+      entity_type: inventory.candidate_id ? "found_agent" : "registered_agent",
+      class: "agent",
+      name: inventory.display_name || inventory.agent_id || "Agent Inventory Item",
+      vendor: inventory.vendor || null,
+      device_id: inventory.device_id || deviceId,
+      device_name: findDeviceName(inventory.device_id || deviceId),
+      lcp_id: lcpId,
+      user_subject: inventory.user_subject || userSubject,
+      status: inventory.candidate_id ? "found_unregistered" : "registered",
+      risk: (inventory.risk_score || 0) > 70 ? "high" : "medium",
+      source: "agent-inventory",
+      trust_level: inventory.trust_level || "unknown",
+      identity: { user_subject: inventory.user_subject || userSubject, token_bindings: [] },
+      trace: { oauth_client_id: null, oidc_issuer: null, oidc_subject: null, spiffe_id: null, mtls_subject: null, mtls_fingerprint: null, confirmation: inventory.candidate_id ? "candidate" : "inventory" },
+      policy_ids: [],
+      enforcement: { mode: "Observe", pdp_engine: "opa_wasm", supported_pep_bindings: inventory.supported_pep_bindings || [] },
+      observability: {
+        telemetry_streams: Object.entries(inventory.telemetry_capabilities || {})
+          .filter(([, value]) => value === true)
+          .map(([key]) => key),
+        last_event_at: inventory.last_seen_at || now
+      },
+      wasm: { hot_reload: false, active_bundle_id: null, active_module: null, generation: 0 },
+      raw_schema: inventory.schema_version || "agent-capability-inventory.v1",
+      raw: inventory,
+      last_seen_at: inventory.last_seen_at || now
+    });
+    count += 1;
+    for (const surface of inventory.mcp_surfaces || []) addLocalEntityRelationship(entity.id, entityIdFrom("tool", surface.server_name), "exposes_mcp_surface");
+  }
+
+  for (const candidate of normalizeItems(snapshot.candidates)) {
+    const id = entityIdFrom("agent", candidate.candidate_id || candidate.agent_id || candidate.display_name);
+    const registered = String(candidate.status || "").toLowerCase() === "registered";
+    upsertLocalEntity({
+      id,
+      local_object_id: candidate.candidate_id || candidate.agent_id,
+      entity_type: registered ? "registered_agent" : "found_agent",
+      class: "agent",
+      name: candidate.display_name || candidate.name || "Found Agent",
+      vendor: candidate.vendor || null,
+      device_id: candidate.device_id || deviceId,
+      device_name: findDeviceName(candidate.device_id || deviceId),
+      lcp_id: lcpId,
+      user_subject: candidate.user_subject || userSubject,
+      status: registered ? "registered" : "found_unregistered",
+      risk: (candidate.risk_score || 0) > 70 ? "high" : "medium",
+      source: "discovery/candidates",
+      trust_level: candidate.suggested_registration?.trust_level || "untrusted",
+      identity: { user_subject: candidate.user_subject || userSubject, token_bindings: [] },
+      trace: { oauth_client_id: null, oidc_issuer: null, oidc_subject: null, spiffe_id: null, mtls_subject: null, mtls_fingerprint: null, confirmation: registered ? "registered" : "missing" },
+      policy_ids: [],
+      enforcement: { mode: registered ? "Enforce" : "Observe", pdp_engine: registered ? "opa_wasm" : "none" },
+      observability: { telemetry_streams: candidate.suggested_observation_profile?.sources || ["process_metadata"], last_event_at: candidate.last_seen || now },
+      wasm: { hot_reload: registered, active_bundle_id: null, active_module: registered ? "opa_wasm" : null, generation: registered ? 1 : 0 },
+      raw_schema: candidate.schema_version || "discovery.candidate.v2",
+      raw: candidate,
+      last_seen_at: candidate.last_seen || now
+    });
+    count += 1;
+  }
+
+  for (const registryEntity of normalizeItems(snapshot.entities)) {
+    const data = registryEntity.data_json || registryEntity.data || registryEntity;
+    const objectType = registryEntity.object_type || data.object_type || data.entity_type || "observed_entity";
+    const objectId = registryEntity.object_id || data.entity_id || data.candidate_id || data.id || data.name;
+    upsertLocalEntity({
+      id: entityIdFrom(objectType, objectId),
+      local_object_id: objectId,
+      entity_type: ["registered_agent", "found_agent", "policy", "enforcement"].includes(data.entity_type) ? data.entity_type : "observability",
+      class: data.class || objectType,
+      name: data.display_name || data.name || objectId || objectType,
+      device_id: data.device_id || deviceId,
+      device_name: findDeviceName(data.device_id || deviceId),
+      lcp_id: lcpId,
+      user_subject: data.user_subject || userSubject,
+      status: data.status || registryEntity.status || "observed",
+      risk: data.risk || "medium",
+      source: `registry/entities/${objectType}`,
+      identity: data.identity || { user_subject: data.user_subject || userSubject },
+      trace: data.trace,
+      policy_ids: data.policy_ids || [],
+      enforcement: data.enforcement || {},
+      observability: data.observability || { telemetry_streams: [objectType], last_event_at: now },
+      wasm: data.wasm || { hot_reload: false, generation: 0 },
+      raw_schema: data.schema_version || "registry-entity.v1",
+      raw: registryEntity,
+      last_seen_at: data.updated_at || registryEntity.updated_at || now
+    });
+    count += 1;
+  }
+
+  for (const policy of normalizeItems(snapshot.policies)) {
+    const policyId = policy.policy_id || policy.id || policy.name;
+    upsertLocalEntity({
+      id: entityIdFrom("policy", policyId),
+      local_object_id: policyId,
+      entity_type: "policy",
+      class: "policy",
+      name: policy.name || policyId || "Policy",
+      device_id: deviceId,
+      device_name: deviceName,
+      lcp_id: lcpId,
+      user_subject: userSubject,
+      status: String(policy.meta?.status || policy.status || "active").toLowerCase(),
+      risk: "medium",
+      source: "policies",
+      engine: policy.engine || policy.policy_type || policy.source?.language || "unknown",
+      mode: policy.mode || "enforce",
+      policy_ids: [policyId].filter(Boolean),
+      enforcement: { mode: policy.mode || "Enforce", pdp_engine: policy.engine || "opa_wasm" },
+      observability: { telemetry_streams: ["decision", "policy_deployment"], last_event_at: now },
+      wasm: { hot_reload: true, active_bundle_id: policy.bundle_id || null, active_module: policy.engine || "opa_wasm", generation: 1 },
+      raw_schema: policy.meta?.schema_version || "policy.v1",
+      raw: policy,
+      last_seen_at: policy.updated_at || policy.meta?.updated_at || now
+    });
+    count += 1;
+  }
+
+  for (const method of normalizeItems(snapshot.capability?.control_methods)) {
+    upsertLocalEntity({
+      id: entityIdFrom("enforcement", method.method_id),
+      local_object_id: method.method_id,
+      entity_type: "enforcement",
+      class: "enforcement",
+      name: method.display_name_en || method.method_id,
+      device_id: snapshot.capability?.device_id || deviceId,
+      device_name: findDeviceName(snapshot.capability?.device_id || deviceId),
+      lcp_id: lcpId,
+      user_subject: userSubject,
+      status: method.status || "unknown",
+      risk: method.status === "available" ? "medium" : "high",
+      source: "capability-snapshot-v2",
+      enforcement: { mode: method.max_level || "observe", pep_plane: method.method_id, pdp_engine: "opa_wasm" },
+      observability: { telemetry_streams: method.domains || [], last_event_at: now },
+      wasm: { hot_reload: method.status === "available", active_bundle_id: null, active_module: "opa_wasm", generation: method.status === "available" ? 1 : 0 },
+      raw_schema: snapshot.capability?.schema_version || "local-capability-snapshot.v2",
+      raw: method,
+      last_seen_at: snapshot.capability?.generated_at || now
+    });
+    count += 1;
+  }
+
+  for (const source of normalizeItems(snapshot.capability?.observation_sources)) {
+    upsertLocalEntity({
+      id: entityIdFrom("observability", source.source_id),
+      local_object_id: source.source_id,
+      entity_type: "observability",
+      class: "observability",
+      name: source.display_name_en || source.source_id,
+      device_id: snapshot.capability?.device_id || deviceId,
+      device_name: findDeviceName(snapshot.capability?.device_id || deviceId),
+      lcp_id: lcpId,
+      user_subject: userSubject,
+      status: source.status || "unknown",
+      risk: "medium",
+      source: "capability-snapshot-v2",
+      observability: { telemetry_streams: source.domains || [], last_event_at: now, privacy_note: source.privacy_note_en },
+      wasm: { hot_reload: false, generation: 0 },
+      raw_schema: snapshot.capability?.schema_version || "local-capability-snapshot.v2",
+      raw: source,
+      last_seen_at: snapshot.capability?.generated_at || now
+    });
+    count += 1;
+  }
+
+  for (const identity of normalizeItems(snapshot.telemetry_identities)) {
+    const observedSubject = identity.user_subject || identity.subject || identity.identity || userSubject;
+    const user = upsertDeviceUser({
+      device_id: identity.device_id || deviceId,
+      user_subject: observedSubject,
+      display_name: identity.display_name || observedSubject,
+      oidc_subject: identity.oidc_subject || identity.subject
+    });
+    upsertLocalEntity({
+      id: entityIdFrom("identity", observedSubject),
+      local_object_id: identity.identity_id || observedSubject,
+      entity_type: "observability",
+      class: "identity",
+      name: identity.display_name || observedSubject,
+      device_id: identity.device_id || deviceId,
+      device_name: findDeviceName(identity.device_id || deviceId),
+      lcp_id: lcpId,
+      user_id: user.id,
+      user_subject: user.user_subject,
+      status: identity.status || "observed",
+      risk: "medium",
+      source: "telemetry/identities",
+      identity: { user_subject: user.user_subject, token_bindings: [] },
+      trace: { oidc_subject: user.oidc_subject, spiffe_id: identity.spiffe_id || null, confirmation: "telemetry_identity" },
+      observability: { telemetry_streams: ["identity_access"], last_event_at: identity.last_seen_at || now },
+      wasm: { hot_reload: false, generation: 0 },
+      raw_schema: "identity-inventory.v1",
+      raw: identity,
+      last_seen_at: identity.last_seen_at || now
+    });
+    count += 1;
+  }
+
+  for (const tool of [...normalizeItems(snapshot.tools), ...normalizeItems(snapshot.telemetry_tools)]) {
+    const id = entityIdFrom("tool", tool.tool_id || tool.id || tool.name);
+    upsertLocalEntity({
+      id,
+      local_object_id: tool.tool_id || tool.id,
+      entity_type: "observability",
+      class: "tool",
+      name: tool.name || tool.tool_id || "Observed Tool",
+      device_id: deviceId,
+      device_name: deviceName,
+      lcp_id: lcpId,
+      user_subject: userSubject,
+      status: tool.status || "observed",
+      risk: "medium",
+      source: "registry/tools",
+      observability: { telemetry_streams: ["tool_usage"], last_event_at: tool.last_used || now, call_count: tool.call_count },
+      wasm: { hot_reload: false, generation: 0 },
+      raw_schema: "tool-inventory.v1",
+      raw: tool,
+      last_seen_at: tool.last_used || now
+    });
+    count += 1;
+    if (tool.agent_id) addLocalEntityRelationship(entityIdFrom("agent", tool.agent_id), id, "uses_tool");
+  }
+
+  for (const resource of [...normalizeItems(snapshot.resources), ...normalizeItems(snapshot.telemetry_resources)]) {
+    const id = entityIdFrom("resource", resource.resource_id || resource.id || resource.name);
+    upsertLocalEntity({
+      id,
+      local_object_id: resource.resource_id || resource.id,
+      entity_type: "observability",
+      class: "resource",
+      name: resource.name || resource.resource_id || "Observed Resource",
+      device_id: deviceId,
+      device_name: deviceName,
+      lcp_id: lcpId,
+      user_subject: userSubject,
+      status: resource.status || "observed",
+      risk: resource.sensitivity ? "medium" : "low",
+      source: "registry/resources",
+      sensitivity: resource.sensitivity,
+      observability: { telemetry_streams: ["resource_access"], last_event_at: resource.last_accessed || now },
+      wasm: { hot_reload: false, generation: 0 },
+      raw_schema: "resource-inventory.v1",
+      raw: resource,
+      last_seen_at: resource.last_accessed || now
+    });
+    count += 1;
+  }
+
+  for (const observation of normalizeItems(snapshot.observations)) {
+    const eventId = observation.event_id || observation.id || observation.trace_id || observation.received_at;
+    upsertLocalEntity({
+      id: entityIdFrom("observation", eventId),
+      local_object_id: eventId,
+      entity_type: "observability",
+      class: "telemetry_observation",
+      name: observation.event_type || observation.kind || "Telemetry Observation",
+      device_id: observation.device_id || deviceId,
+      device_name: findDeviceName(observation.device_id || deviceId),
+      lcp_id: observation.payload?.lcp_id || lcpId,
+      user_subject: observation.user_subject || userSubject,
+      status: observation.severity === "critical" ? "critical" : "observed",
+      risk: observation.severity === "critical" ? "high" : "medium",
+      source: "telemetry/observations",
+      observability: { telemetry_streams: [observation.event_type || "observation"], last_event_at: observation.received_at || now },
+      wasm: { hot_reload: false, generation: 0 },
+      raw_schema: "telemetry-observation.v1",
+      raw: observation,
+      last_seen_at: observation.received_at || now
+    });
+    count += 1;
+  }
+
+  for (const relationship of normalizeItems(snapshot.relationships)) {
+    const from = relationship.from_entity_id
+      || relationship.from
+      || relationship.source_entity_id
+      || relationship.source_id
+      || relationship.agent_id;
+    const to = relationship.to_entity_id
+      || relationship.to
+      || relationship.target_entity_id
+      || relationship.target_id
+      || relationship.resource_id
+      || relationship.tool_id;
+    const label = relationship.label || relationship.relationship_type || relationship.type || "relates_to";
+    addLocalEntityRelationship(entityRef("agent", from), entityRef("observed", to), label);
+  }
+
+  return count;
+}
+
+async function pullLocalEntitySnapshot(lcpUrl, headers = {}) {
+  const endpoints = [
+    ["agents", "/v1/tenants/local/registry/agents"],
+    ["candidates", "/v1/tenants/local/discovery/candidates"],
+    ["agent_inventory", "/v1/tenants/local/agent-inventory"],
+    ["policies", "/v1/tenants/local/policies"],
+    ["tools", "/v1/tenants/local/registry/tools"],
+    ["resources", "/v1/tenants/local/registry/resources"],
+    ["entities", "/v1/tenants/local/registry/entities"],
+    ["relationships", "/v1/tenants/local/registry/relationships"],
+    ["telemetry_resources", "/v1/tenants/local/telemetry/resources"],
+    ["telemetry_tools", "/v1/tenants/local/telemetry/tools"],
+    ["telemetry_identities", "/v1/tenants/local/telemetry/identities"],
+    ["observations", "/v1/tenants/local/telemetry/observations"],
+    ["bundles", "/v1/tenants/local/bundles"],
+    ["capability", "/v1/tenants/local/devices/local/capability-snapshot-v2"]
+  ];
+  const snapshot = {};
+  const results = [];
+  for (const [key, endpoint] of endpoints) {
+    try {
+      const result = await fetchJson(`${lcpUrl}${endpoint}`, { headers, timeoutMs: 3500 });
+      results.push({ key, endpoint, ok: result.ok, status: result.status, latency_ms: result.latency_ms });
+      if (result.ok) snapshot[key] = result.body;
+    } catch (error) {
+      results.push({ key, endpoint, ok: false, error: String(error) });
+    }
+  }
+  return { snapshot, results, ok: results.some((item) => item.ok) };
 }
 
 function policySlug(value) {
@@ -443,11 +1242,20 @@ function fleetObjectMap() {
   for (const bundle of state.fleet.policyBundles) {
     objects.set(bundle.id, { ...bundle, type: "policy_bundle", status: bundle.status, risk: bundle.coverage < 60 ? "high" : "medium" });
   }
+  for (const entity of state.fleet.localEntities) {
+    objects.set(entity.id, {
+      ...entity,
+      type: entity.entity_type,
+      status: entity.status,
+      risk: entity.risk
+    });
+  }
   return objects;
 }
 
 function fleetSummary() {
   const lcps = state.fleet.localControlPlanes;
+  const entities = state.fleet.localEntities;
   const connected = lcps.filter((item) => item.status === "connected").length;
   const degraded = lcps.filter((item) => item.status === "degraded" || item.status === "unknown").length;
   const offline = lcps.filter((item) => item.status === "offline").length;
@@ -475,7 +1283,17 @@ function fleetSummary() {
     integrations_configured: state.fleet.integrations.filter((item) => item.status === "configured").length,
     evidence_exports: state.fleet.evidenceExports.length,
     enrollment_sessions: state.fleet.enrollmentSessions.length,
-    audit_events: state.auditEvents.length
+    audit_events: state.auditEvents.length,
+    local_entities: entities.length,
+    registered_agents: entities.filter((item) => item.entity_type === "registered_agent").length,
+    found_agents: entities.filter((item) => item.entity_type === "found_agent").length,
+    local_policies: entities.filter((item) => item.entity_type === "policy").length,
+    enforcement_points: entities.filter((item) => item.entity_type === "enforcement").length,
+    observability_entities: entities.filter((item) => item.entity_type === "observability").length,
+    wasm_hot_reload_ready: entities.filter((item) => item.wasm?.hot_reload).length,
+    tenant_trust_scopes: state.fleet.tenantTrustScopes.length,
+    service_endpoints: state.fleet.serviceEndpoints.length,
+    connection_profiles: state.fleet.connectionProfiles.length
   };
 }
 
@@ -562,6 +1380,9 @@ async function contractDiscovery() {
     ...contract,
     cloud_url: publicUrl,
     checked_at: new Date().toISOString(),
+    tenant_trust_scopes: state.fleet.tenantTrustScopes,
+    service_endpoints: state.fleet.serviceEndpoints,
+    connection_profiles: state.fleet.connectionProfiles,
     endpoints: {
       health: "/health",
       enrollment_device_authorization: "/oauth/device_authorization",
@@ -570,12 +1391,18 @@ async function contractDiscovery() {
       telemetry_batches: "/v1/telemetry/batches",
       telemetry_query: "/api/telemetry/query",
       registry_sync: "/v1/tenants/{tenant_id}/registry/sync",
+      local_entities: "/api/entities",
+      local_entity_ingest: "/api/entities/ingest",
+      local_entity_sync: "/api/entities/sync",
       latest_bundle: "/v1/tenants/{tenant_id}/bundles/latest",
       suggested_pdp_routes: "/v1/tenants/{tenant_id}/pdp/routes/suggested",
       policy_assist: "/api/policy/assist",
       policy_drafts: "/api/policy/drafts",
       enrollment_sessions: "/api/enrollments",
-      evidence_exports: "/api/evidence/exports"
+      evidence_exports: "/api/evidence/exports",
+      trust_scopes: "/api/trust/scopes",
+      service_endpoints: "/api/services/endpoints",
+      connection_updates: "/api/contract-hub/connection-updates"
     }
   };
 }
@@ -800,6 +1627,13 @@ async function handleApi(req, res) {
       policy_drafts: state.fleet.policyDrafts,
       policy_simulations: state.fleet.policySimulations,
       integrations: state.fleet.integrations,
+      tenant_trust_scopes: state.fleet.tenantTrustScopes,
+      service_endpoints: state.fleet.serviceEndpoints,
+      connection_profiles: state.fleet.connectionProfiles,
+      device_users: state.fleet.deviceUsers,
+      local_entities: state.fleet.localEntities,
+      local_entity_relationships: state.fleet.localEntityRelationships,
+      local_entity_sync_runs: state.fleet.localEntitySyncRuns,
       evidence_exports: state.fleet.evidenceExports,
       enrollment_sessions: state.fleet.enrollmentSessions,
       rollout_plans: state.fleet.rolloutPlans,
@@ -809,6 +1643,147 @@ async function handleApi(req, res) {
       tasks: state.tasks.slice(0, 30),
       probes: state.probes.slice(0, 10),
       contract: await contractDiscovery()
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/entities") {
+    const type = url.searchParams.get("type") || "all";
+    const deviceId = url.searchParams.get("device_id") || "";
+    const userId = url.searchParams.get("user_id") || "";
+    const lcpId = url.searchParams.get("lcp_id") || "";
+    const q = (url.searchParams.get("q") || "").toLowerCase();
+    const entities = state.fleet.localEntities.filter((entity) => {
+      if (type !== "all" && entity.entity_type !== type && entity.class !== type) return false;
+      if (deviceId && entity.device_id !== deviceId && entity.device_name !== deviceId) return false;
+      if (userId && entity.user_id !== userId && entity.user_subject !== userId) return false;
+      if (lcpId && entity.lcp_id !== lcpId) return false;
+      if (q && !JSON.stringify(entity).toLowerCase().includes(q)) return false;
+      return true;
+    });
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.local-entity-page.v1",
+      tenant_id: "local",
+      count: entities.length,
+      entities,
+      relationships: state.fleet.localEntityRelationships,
+      users: state.fleet.deviceUsers
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/entities/summary") {
+    const summary = fleetSummary();
+    sendJson(res, 200, {
+      local_entities: summary.local_entities,
+      registered_agents: summary.registered_agents,
+      found_agents: summary.found_agents,
+      local_policies: summary.local_policies,
+      enforcement_points: summary.enforcement_points,
+      observability_entities: summary.observability_entities,
+      wasm_hot_reload_ready: summary.wasm_hot_reload_ready,
+      users: state.fleet.deviceUsers.length,
+      sync_runs: state.fleet.localEntitySyncRuns.length
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/entities/ingest") {
+    const body = await readBody(req);
+    const count = ingestLocalEntitySnapshot(body.snapshot || body, {
+      device_id: body.device_id || "device_local_windows",
+      lcp_id: body.lcp_id || "lcp_local",
+      user_subject: body.user_subject || "unknown"
+    });
+    const run = {
+      id: `entity_sync_${crypto.randomUUID()}`,
+      mode: "push_ingest",
+      status: "completed",
+      entity_count: count,
+      lcp_id: body.lcp_id || "lcp_local",
+      device_id: body.device_id || "device_local_windows",
+      created_at: new Date().toISOString()
+    };
+    state.fleet.localEntitySyncRuns.unshift(run);
+    state.fleet.localEntitySyncRuns = state.fleet.localEntitySyncRuns.slice(0, 20);
+    recordAudit("local_entities.ingested", "lcp", run.lcp_id, run);
+    addTask("local_entity_ingest", "completed", `Ingested ${count} Local Pollek entities`, run);
+    sendJson(res, 202, { accepted: true, run, summary: fleetSummary() });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/entities/sync") {
+    const body = await readBody(req);
+    const localLcp = state.fleet.localControlPlanes.find((item) => item.id === (body.lcp_id || "lcp_local"))
+      || state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+    const lcpUrl = (body.lcpUrl || localLcp?.endpoint || "http://127.0.0.1:43891").replace(/\/+$/, "");
+    const headers = body.token ? { authorization: `Bearer ${body.token}` } : {};
+    const pulled = await pullLocalEntitySnapshot(lcpUrl, headers);
+    const count = ingestLocalEntitySnapshot(pulled.snapshot, {
+      device_id: localLcp?.device_id || "device_local_windows",
+      lcp_id: localLcp?.id || "lcp_local",
+      user_subject: body.user_subject || "unknown"
+    });
+    const run = {
+      id: `entity_sync_${crypto.randomUUID()}`,
+      mode: "pull_from_lcp",
+      status: pulled.ok ? "completed" : "failed",
+      entity_count: count,
+      lcp_url: lcpUrl,
+      lcp_id: localLcp?.id || "lcp_local",
+      device_id: localLcp?.device_id || "device_local_windows",
+      results: pulled.results,
+      created_at: new Date().toISOString()
+    };
+    state.fleet.localEntitySyncRuns.unshift(run);
+    state.fleet.localEntitySyncRuns = state.fleet.localEntitySyncRuns.slice(0, 20);
+    recordAudit("local_entities.synced", "lcp", run.lcp_id, { status: run.status, entity_count: count });
+    addTask("local_entity_sync", pulled.ok ? "completed" : "failed", pulled.ok ? `Synced ${count} Local Pollek entities` : "Local Pollek entity sync failed", run);
+    sendJson(res, pulled.ok ? 200 : 502, { ok: pulled.ok, run, summary: fleetSummary() });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/trust/scopes") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.tenant-trust-scope-page.v1",
+      scopes: state.fleet.tenantTrustScopes
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/services/endpoints") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.service-endpoint-page.v1",
+      endpoints: state.fleet.serviceEndpoints
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/contract-hub/connection-updates") {
+    const tenantId = url.searchParams.get("tenant_id") || "local";
+    const lcpId = url.searchParams.get("lcp_id") || "";
+    const profiles = state.fleet.connectionProfiles.filter((profile) => {
+      if (profile.tenant_id !== tenantId) return false;
+      if (!lcpId) return true;
+      return profile.applies_to?.lcp_ids?.includes(lcpId);
+    });
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.connection-update-page.v1",
+      tenant_id: tenantId,
+      cloud_url: publicUrl,
+      contract_version: "2026.06.29",
+      profiles,
+      trust_scopes: state.fleet.tenantTrustScopes.filter((scope) => scope.tenant_id === tenantId),
+      service_endpoints: state.fleet.serviceEndpoints.filter((endpoint) => endpoint.tenant_id === tenantId),
+      local_entity_paths: {
+        registry_agents: "/v1/tenants/{tenant_id}/registry/agents",
+        discovery_candidates: "/v1/tenants/{tenant_id}/discovery/candidates",
+        agent_inventory: "/v1/tenants/{tenant_id}/agent-inventory",
+        telemetry_resources: "/v1/tenants/local/telemetry/resources",
+        telemetry_tools: "/v1/tenants/local/telemetry/tools",
+        telemetry_identities: "/v1/tenants/local/telemetry/identities",
+        capability_snapshot: "/v1/tenants/local/devices/local/capability-snapshot-v2"
+      }
     });
     return true;
   }

@@ -5,10 +5,13 @@ This file maps the local MVP repository state to the SRS so later work can conti
 ## Implemented In Local MVP
 
 - Contract Hub discovery at `/.well-known/pollek-contract`.
+- Contract Hub connection updates at `/api/contract-hub/connection-updates` for distributing tenant trust scopes, service endpoints, registry sync paths, telemetry ingest paths, bundle paths, and hot-reload paths to many Local Pollek instances.
 - Local Control Plane protocol probe paths for contract discovery, cloud profile update, cloud probe, and capability snapshot.
-- vCenter-style fleet console with functional object tabs: Summary, Relationships, Policies, Telemetry, Alarms, Timeline, Audit.
+- vCenter-style fleet console with functional object tabs: Summary, Entities, Relationships, Policies, Telemetry, Alarms, Timeline, Audit.
 - Fleet inventory model for tenants, sites, device groups, devices, Local Control Planes, agents, bundles, alarms, tasks, integrations, rollouts, evidence exports, and enrollment sessions.
-- PostgreSQL foundation migration with RLS-ready tenant-scoped tables for inventory, telemetry, audit, enrollment, policy drafts, simulations, bundles, rollouts, integrations, and evidence exports.
+- Local Pollek entity aggregation for Registered Agents, Found Agents, Policies, Enforcement, Observability, device users, identity trace readiness, and WASM hot-reload readiness.
+- Tenant trust scope and service endpoint model for future SPIRE Server, OPA, Cedar, OpenFGA, NER model, and WASM registry integration.
+- PostgreSQL foundation migration with RLS-ready tenant-scoped tables for inventory, telemetry, audit, enrollment, policy drafts, simulations, bundles, rollouts, integrations, trust scopes, service endpoints, local entities, local entity relationships, sync runs, and evidence exports.
 - AI-assisted policy editor MVP using deterministic local generation, Policy IR, generated source, tests, simulation, and human approval gate.
 - Telemetry ingest MVP for Pollek envelopes/batches plus Cloud-side sample telemetry for UI testing while LCP builds.
 - SIEM/integration framework seed with OTLP, Splunk HEC, Syslog CEF, and Keycloak OIDC status plus test task recording.
@@ -19,6 +22,7 @@ This file maps the local MVP repository state to the SRS so later work can conti
 - Durable PostgreSQL runtime persistence instead of in-memory dev state.
 - TypeSpec/OpenAPI generation and contract drift tests.
 - Real OIDC login, tenant switcher, RBAC/ReBAC/Cedar authorization checks, and OpenFGA tuple storage.
+- Real SPIRE Server deployment, tenant trust-domain provisioning, SPIFFE ID issuance, and mTLS enforcement.
 - Real bundle compiler/signing service and immutable object storage.
 - SSE/WebSocket hot-reload push channel beyond current polling/probe flow.
 - OTLP gateway and SIEM exporters that deliver to real external systems.

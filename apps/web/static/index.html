@@ -18,6 +18,7 @@
         </div>
         <div class="view-switcher" aria-label="Inventory views">
           <button class="view-button active">Inventory</button>
+          <button class="view-button">Entities</button>
           <button class="view-button">Policy Center</button>
           <button class="view-button">Observe Center</button>
           <button class="view-button">Compliance</button>
@@ -79,6 +80,10 @@
             <small>Agents</small>
           </div>
           <div class="summary-cell">
+            <span id="metricEntities">0</span>
+            <small>Entities</small>
+          </div>
+          <div class="summary-cell">
             <span id="metricCoverage">0%</span>
             <small>Coverage</small>
           </div>
@@ -86,6 +91,7 @@
 
         <section class="detail-tabs" aria-label="Object detail tabs">
           <button class="tab active" data-tab="summary">Summary</button>
+          <button class="tab" data-tab="entities">Entities</button>
           <button class="tab" data-tab="relationships">Relationships</button>
           <button class="tab" data-tab="policies">Policies</button>
           <button class="tab" data-tab="telemetry">Telemetry</button>
@@ -149,6 +155,73 @@
                     </div>
                   </div>
                   <div id="eventTable" class="event-list"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="entities" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Local Pollek</p>
+                  <h3>Entity Inventory</h3>
+                </div>
+                <button id="entitySyncButton" class="primary-button">Sync From LCP</button>
+              </div>
+              <div class="filter-row entity-filter-row">
+                <select id="entityTypeFilter" aria-label="Entity type filter">
+                  <option value="all">All entity types</option>
+                  <option value="registered_agent">Registered Agents</option>
+                  <option value="found_agent">Found Agents</option>
+                  <option value="policy">Policies</option>
+                  <option value="enforcement">Enforcement</option>
+                  <option value="observability">Observability</option>
+                </select>
+                <select id="entityDeviceFilter" aria-label="Entity device filter">
+                  <option value="all">All devices</option>
+                </select>
+                <select id="entityUserFilter" aria-label="Entity user filter">
+                  <option value="all">All users</option>
+                </select>
+                <input id="entitySearch" aria-label="Entity search" placeholder="Search entity, SPIFFE, policy, source" />
+              </div>
+              <div class="entity-grid">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Device/User Scoped</p>
+                      <h3>Registered, Found, Policy, Enforcement, Observe</h3>
+                    </div>
+                  </div>
+                  <div id="entityList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Trace Readiness</p>
+                      <h3>OAuth, OIDC, SPIFFE, mTLS, WASM</h3>
+                    </div>
+                  </div>
+                  <div id="entityTracePanel" class="detail-list"></div>
+                </section>
+              </div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Contract Hub</p>
+                      <h3>Connection Profiles</h3>
+                    </div>
+                  </div>
+                  <div id="connectionProfileList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Tenant Services</p>
+                      <h3>SPIRE, OPA, Cedar, OpenFGA, NER, WASM</h3>
+                    </div>
+                  </div>
+                  <div id="serviceEndpointList" class="detail-list"></div>
                 </section>
               </div>
             </div>

@@ -12,9 +12,19 @@ const refs = {
   metricDegraded: document.querySelector("#metricDegraded"),
   metricOffline: document.querySelector("#metricOffline"),
   metricAgents: document.querySelector("#metricAgents"),
+  metricEntities: document.querySelector("#metricEntities"),
   metricCoverage: document.querySelector("#metricCoverage"),
   fleetRows: document.querySelector("#fleetRows"),
   statusFilter: document.querySelector("#statusFilter"),
+  entitySyncButton: document.querySelector("#entitySyncButton"),
+  entityTypeFilter: document.querySelector("#entityTypeFilter"),
+  entityDeviceFilter: document.querySelector("#entityDeviceFilter"),
+  entityUserFilter: document.querySelector("#entityUserFilter"),
+  entitySearch: document.querySelector("#entitySearch"),
+  entityList: document.querySelector("#entityList"),
+  entityTracePanel: document.querySelector("#entityTracePanel"),
+  connectionProfileList: document.querySelector("#connectionProfileList"),
+  serviceEndpointList: document.querySelector("#serviceEndpointList"),
   relationshipMap: document.querySelector("#relationshipMap"),
   eventTable: document.querySelector("#eventTable"),
   probeButton: document.querySelector("#probeButton"),
@@ -61,6 +71,10 @@ const app = {
   activeTab: "summary",
   query: "",
   statusFilter: "all",
+  entityTypeFilter: "all",
+  entityDeviceFilter: "all",
+  entityUserFilter: "all",
+  entityQuery: "",
   telemetryResults: [],
   latestPolicyDraftId: null
 };
@@ -79,9 +93,9 @@ function fmtTime(value) {
 }
 
 function statusClass(status) {
-  if (status === "connected" || status === "active" || status === "available") return "ok";
-  if (status === "offline" || status === "critical" || status === "failed") return "bad";
-  if (status === "degraded" || status === "unknown" || status === "stale") return "warn";
+  if (["connected", "active", "available", "registered", "published", "enforcing", "observed", "configured", "ready", "completed"].includes(status)) return "ok";
+  if (["offline", "critical", "failed", "untrusted"].includes(status)) return "bad";
+  if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp"].includes(status)) return "warn";
   return "neutral";
 }
 
@@ -141,6 +155,10 @@ function render() {
   renderTree();
   renderObjectHeader();
   renderFleetRows();
+  renderEntityFilters();
+  renderEntities();
+  renderConnectionProfiles();
+  renderServiceEndpoints();
   renderRelationships(refs.relationshipMap, 6);
   renderRelationships(refs.relationshipMapFull, 24);
   renderRelationshipDetails();
@@ -162,6 +180,7 @@ function renderSummary(summary) {
   refs.metricDegraded.textContent = summary.degraded;
   refs.metricOffline.textContent = summary.offline;
   refs.metricAgents.textContent = summary.agents;
+  refs.metricEntities.textContent = summary.local_entities || 0;
   refs.metricCoverage.textContent = `${summary.policy_coverage}%`;
 }
 
@@ -267,17 +286,25 @@ function renderFleetRows() {
   }
 }
 
+function allRelationships() {
+  return [
+    ...(app.data.relationships || []),
+    ...(app.data.local_entity_relationships || [])
+  ];
+}
+
 function renderRelationships(container = refs.relationshipMap, limit = 6) {
   if (!container) return;
   const object = selectedObject();
-  const relations = app.data.relationships.filter((rel) => rel.from === object.id || rel.to === object.id);
+  const relationships = allRelationships();
+  const relations = relationships.filter((rel) => rel.from === object.id || rel.to === object.id);
   container.innerHTML = "";
   const center = document.createElement("div");
   center.className = "relationship-node center";
   center.innerHTML = `<strong>${escapeHtml(object.name || object.id)}</strong><span>${escapeHtml(object.type || "object")}</span>`;
   container.append(center);
 
-  const visible = (relations.length ? relations : app.data.relationships).slice(0, limit);
+  const visible = (relations.length ? relations : relationships).slice(0, limit);
   for (const rel of visible) {
     const relatedId = rel.from === object.id ? rel.to : rel.from;
     const related = app.data.objects[relatedId] || { id: relatedId, name: relatedId, type: "object", status: "unknown" };
@@ -297,8 +324,9 @@ function renderRelationships(container = refs.relationshipMap, limit = 6) {
 function renderRelationshipDetails() {
   refs.relationshipDetailList.innerHTML = "";
   const object = selectedObject();
-  const relations = app.data.relationships.filter((rel) => rel.from === object.id || rel.to === object.id);
-  const rows = relations.length ? relations : app.data.relationships.slice(0, 8);
+  const relationships = allRelationships();
+  const relations = relationships.filter((rel) => rel.from === object.id || rel.to === object.id);
+  const rows = relations.length ? relations : relationships.slice(0, 8);
   for (const rel of rows) {
     const from = app.data.objects[rel.from] || { name: rel.from, type: "object" };
     const to = app.data.objects[rel.to] || { name: rel.to, type: "object" };
@@ -309,6 +337,181 @@ function renderRelationshipDetails() {
       <span>${escapeHtml(rel.label)} | ${escapeHtml(from.type)} to ${escapeHtml(to.type)}</span>
     `;
     refs.relationshipDetailList.append(row);
+  }
+}
+
+function populateSelect(select, allLabel, rows, selectedValue) {
+  if (!select) return;
+  const options = [`<option value="all">${escapeHtml(allLabel)}</option>`]
+    .concat(rows.map((row) => `<option value="${escapeHtml(row.value)}">${escapeHtml(row.label)}</option>`))
+    .join("");
+  if (select.dataset.options !== options) {
+    select.innerHTML = options;
+    select.dataset.options = options;
+  }
+  const hasSelected = [...select.options].some((option) => option.value === selectedValue);
+  select.value = hasSelected ? selectedValue : "all";
+}
+
+function uniqueEntityOptions(entities, valueKey, labelKey = valueKey) {
+  const seen = new Map();
+  for (const entity of entities) {
+    const value = entity[valueKey];
+    if (!value || seen.has(value)) continue;
+    seen.set(value, {
+      value,
+      label: entity[labelKey] || value
+    });
+  }
+  return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function renderEntityFilters() {
+  const entities = app.data.local_entities || [];
+  populateSelect(
+    refs.entityDeviceFilter,
+    "All devices",
+    uniqueEntityOptions(entities, "device_id", "device_name"),
+    app.entityDeviceFilter
+  );
+  populateSelect(
+    refs.entityUserFilter,
+    "All users",
+    uniqueEntityOptions(entities, "user_id", "user_subject"),
+    app.entityUserFilter
+  );
+}
+
+function filteredEntities() {
+  const query = app.entityQuery.trim().toLowerCase();
+  return (app.data.local_entities || []).filter((entity) => {
+    if (app.entityTypeFilter !== "all" && entity.entity_type !== app.entityTypeFilter && entity.class !== app.entityTypeFilter) return false;
+    if (app.entityDeviceFilter !== "all" && entity.device_id !== app.entityDeviceFilter && entity.device_name !== app.entityDeviceFilter) return false;
+    if (app.entityUserFilter !== "all" && entity.user_id !== app.entityUserFilter && entity.user_subject !== app.entityUserFilter) return false;
+    if (query && !JSON.stringify(entity).toLowerCase().includes(query)) return false;
+    return true;
+  });
+}
+
+function selectedLocalEntity(entities) {
+  const object = selectedObject();
+  if (object?.id && (app.data.local_entities || []).some((entity) => entity.id === object.id)) return object;
+  return entities[0] || null;
+}
+
+function renderEntities() {
+  if (!refs.entityList) return;
+  const entities = filteredEntities();
+  const activeEntity = selectedLocalEntity(entities);
+  refs.entityList.innerHTML = "";
+
+  if (!entities.length) {
+    refs.entityList.innerHTML = `<div class="detail-row"><strong>No entities match</strong><span>Adjust filters or sync from a running Local Pollek Control Plane.</span></div>`;
+    renderEntityTrace(null);
+    return;
+  }
+
+  for (const entity of entities.slice(0, 80)) {
+    const row = document.createElement("button");
+    row.className = `detail-row ${statusClass(entity.status)} ${activeEntity?.id === entity.id ? "selected" : ""}`;
+    const streams = entity.observability?.telemetry_streams || [];
+    row.innerHTML = `
+      <strong>${escapeHtml(entity.name || entity.local_object_id || entity.id)}</strong>
+      <span>${escapeHtml(entity.entity_type)} | ${escapeHtml(entity.status)} | ${escapeHtml(entity.device_name || entity.device_id)} | ${escapeHtml(entity.user_subject || "unknown user")}</span>
+      <code>${escapeHtml(entity.trace?.spiffe_id || entity.identity?.spiffe_id || entity.source || "trace pending")} | ${escapeHtml(streams.join(", ") || "no telemetry stream")}</code>
+    `;
+    row.addEventListener("click", () => {
+      app.selectedObjectId = entity.id;
+      render();
+    });
+    refs.entityList.append(row);
+  }
+  renderEntityTrace(activeEntity);
+}
+
+function renderEntityTrace(entity) {
+  refs.entityTracePanel.innerHTML = "";
+  if (!entity) {
+    refs.entityTracePanel.innerHTML = `<div class="detail-row"><strong>No selected entity</strong><span>Select a Local Pollek entity to inspect trace readiness.</span></div>`;
+    return;
+  }
+
+  const token = Array.isArray(entity.identity?.token_bindings) ? entity.identity.token_bindings[0] : null;
+  const trace = entity.trace || {};
+  const rows = [
+    {
+      title: "Tenant and user scope",
+      status: "ok",
+      detail: `${entity.tenant_id || "local"} / ${entity.lcp_id || "unknown-lcp"} / ${entity.device_name || entity.device_id || "unknown-device"} / ${entity.user_subject || "unknown-user"}`
+    },
+    {
+      title: "OAuth and OIDC",
+      status: trace.oidc_subject || token?.subject ? "ok" : "warn",
+      detail: `${trace.oauth_client_id || token?.audience?.join(", ") || "client pending"} | ${trace.oidc_issuer || token?.issuer || "issuer pending"} | ${trace.oidc_subject || token?.subject || "subject pending"}`
+    },
+    {
+      title: "SPIFFE and mTLS",
+      status: trace.spiffe_id ? "ok" : "warn",
+      detail: `${trace.spiffe_id || "spiffe id pending"} | ${trace.mtls_subject || "mTLS subject pending"} | ${trace.confirmation || "unconfirmed"}`
+    },
+    {
+      title: "Policy and enforcement",
+      status: entity.enforcement?.mode === "Enforce" || entity.status === "published" ? "ok" : "warn",
+      detail: `${(entity.policy_ids || []).join(", ") || "no policy binding"} | ${entity.enforcement?.mode || "observe"} | ${entity.enforcement?.pdp_engine || "pdp pending"}`
+    },
+    {
+      title: "Observability",
+      status: entity.observability?.telemetry_streams?.length ? "ok" : "warn",
+      detail: `${(entity.observability?.telemetry_streams || []).join(", ") || "no stream"} | ${fmtTime(entity.observability?.last_event_at || entity.last_seen_at)}`
+    },
+    {
+      title: "WASM hot reload",
+      status: entity.wasm?.hot_reload ? "ok" : "warn",
+      detail: `${entity.wasm?.hot_reload ? "enabled" : "not ready"} | ${entity.wasm?.active_bundle_id || "bundle pending"} | generation ${entity.wasm?.generation || 0}`
+    }
+  ];
+
+  for (const item of rows) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${item.status}`;
+    row.innerHTML = `<strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span>`;
+    refs.entityTracePanel.append(row);
+  }
+}
+
+function renderConnectionProfiles() {
+  if (!refs.connectionProfileList) return;
+  refs.connectionProfileList.innerHTML = "";
+  const profiles = app.data.connection_profiles || [];
+  for (const profile of profiles) {
+    const endpoints = Object.keys(profile.endpoints || {});
+    const row = document.createElement("div");
+    row.className = `detail-row ${statusClass(profile.status)}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(profile.name)}</strong>
+      <span>${escapeHtml(profile.status)} | contract ${escapeHtml(profile.contract_version)} | trust ${escapeHtml(profile.trust_scope_id)}</span>
+      <code>${escapeHtml(profile.endpoints?.contract_hub || "/.well-known/pollek-contract")} | ${escapeHtml(endpoints.join(", "))}</code>
+    `;
+    refs.connectionProfileList.append(row);
+  }
+  if (!profiles.length) {
+    refs.connectionProfileList.innerHTML = `<div class="detail-row"><strong>No profiles</strong><span>Contract Hub has not published a connection update profile.</span></div>`;
+  }
+}
+
+function renderServiceEndpoints() {
+  if (!refs.serviceEndpointList) return;
+  refs.serviceEndpointList.innerHTML = "";
+  const endpoints = app.data.service_endpoints || [];
+  for (const endpoint of endpoints) {
+    const row = document.createElement("div");
+    row.className = `detail-row ${statusClass(endpoint.status)}`;
+    row.innerHTML = `
+      <strong>${escapeHtml(endpoint.name)}</strong>
+      <span>${escapeHtml(endpoint.type)} | ${escapeHtml(endpoint.status)} | ${escapeHtml(endpoint.scope)}</span>
+      <code>${escapeHtml(endpoint.endpoint)}</code>
+    `;
+    refs.serviceEndpointList.append(row);
   }
 }
 
@@ -770,6 +973,31 @@ async function createEnrollment() {
   }
 }
 
+async function syncEntities() {
+  refs.entitySyncButton.disabled = true;
+  refs.entitySyncButton.textContent = "Syncing";
+  try {
+    const payload = await postJson("/api/entities/sync", {
+      lcpUrl: refs.lcpUrl.value,
+      token: refs.lcpToken.value || undefined,
+      user_subject: "DELL\\LocalAdmin"
+    });
+    refs.probeResult.innerHTML = `
+      <strong>${payload.ok ? "Entity sync completed" : "Entity sync failed"}</strong>
+      <span>${escapeHtml(payload.run.lcp_id)} | ${escapeHtml(payload.run.entity_count)} entities | ${escapeHtml(payload.run.status)}</span>
+      <code>${escapeHtml(JSON.stringify((payload.run.results || []).map((item) => ({ key: item.key, ok: item.ok, status: item.status })), null, 2))}</code>
+    `;
+    await refresh();
+    setActiveTab("entities");
+  } catch (error) {
+    refs.probeResult.textContent = String(error);
+    setActiveTab("entities");
+  } finally {
+    refs.entitySyncButton.disabled = false;
+    refs.entitySyncButton.textContent = "Sync From LCP";
+  }
+}
+
 async function testIntegration(integrationId) {
   const payload = await postJson(`/api/integrations/${encodeURIComponent(integrationId)}/test`, {});
   refs.probeResult.innerHTML = `
@@ -790,6 +1018,26 @@ refs.statusFilter.addEventListener("change", (event) => {
   renderFleetRows();
 });
 
+refs.entityTypeFilter.addEventListener("change", (event) => {
+  app.entityTypeFilter = event.target.value;
+  renderEntities();
+});
+
+refs.entityDeviceFilter.addEventListener("change", (event) => {
+  app.entityDeviceFilter = event.target.value;
+  renderEntities();
+});
+
+refs.entityUserFilter.addEventListener("change", (event) => {
+  app.entityUserFilter = event.target.value;
+  renderEntities();
+});
+
+refs.entitySearch.addEventListener("input", (event) => {
+  app.entityQuery = event.target.value;
+  renderEntities();
+});
+
 refs.refreshButton.addEventListener("click", refresh);
 refs.probeButton.addEventListener("click", () => runProbe(refs.lcpUrl.value));
 refs.rolloutButton.addEventListener("click", createRollout);
@@ -800,6 +1048,7 @@ refs.approvePolicyButton.addEventListener("click", approveLatestPolicy);
 refs.telemetryQueryButton.addEventListener("click", queryTelemetry);
 refs.telemetrySampleButton.addEventListener("click", sendSampleTelemetry);
 refs.enrollmentButton.addEventListener("click", createEnrollment);
+refs.entitySyncButton.addEventListener("click", syncEntities);
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });
   const payload = await response.json();
@@ -818,6 +1067,7 @@ document.querySelectorAll(".view-button").forEach((button) => {
   const label = button.textContent.trim();
   button.dataset.targetTab = {
     Inventory: "summary",
+    Entities: "entities",
     "Policy Center": "policies",
     "Observe Center": "telemetry",
     Compliance: "timeline"

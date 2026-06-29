@@ -353,7 +353,7 @@ h3 {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(6, minmax(110px, 1fr));
+  grid-template-columns: repeat(7, minmax(100px, 1fr));
   gap: 8px;
   margin: 12px 0;
 }
@@ -644,6 +644,12 @@ h3 {
   gap: 12px;
 }
 
+.entity-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 1.1fr) minmax(320px, 0.9fr);
+  gap: 12px;
+}
+
 .inline-panel {
   min-width: 0;
   border: 1px solid var(--line);
@@ -658,6 +664,10 @@ h3 {
   grid-template-columns: 150px minmax(150px, 1fr) minmax(180px, 1.4fr) auto;
   gap: 8px;
   align-items: center;
+}
+
+.entity-filter-row {
+  grid-template-columns: 170px 170px 170px minmax(220px, 1fr);
 }
 
 .button-row {
@@ -687,6 +697,11 @@ h3 {
 
 .detail-row.ok {
   border-left-color: var(--green);
+}
+
+.detail-row.selected {
+  border-color: var(--blue);
+  background: #eef5ff;
 }
 
 .detail-row strong {
@@ -830,6 +845,7 @@ h3 {
   .workspace-grid,
   .lower-grid,
   .split-panel,
+  .entity-grid,
   .filter-row {
     grid-template-columns: 1fr;
   }

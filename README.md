@@ -51,6 +51,23 @@ The test probes:
 - `GET /v1/tenants/local/devices/local/capability-snapshot-v2`.
 - `POST /v1/telemetry/batches` against Pollek Cloud.
 
+## Local Pollek Entity Sync
+
+The console now has an `Entities` tab for Cloud-side aggregation of Local Pollek state by device and user. It tracks:
+
+- Registered Agents from Local Pollek registry and agent inventory.
+- Found Agents from discovery candidates and unregistered agent inventory.
+- Policies from Local Pollek policy endpoints.
+- Enforcement points from capability snapshots.
+- Observability entities from resources, tools, identities, and observations.
+
+Contract Hub is the mediator for connection updates across many Local Pollek instances:
+
+- `GET /.well-known/pollek-contract` publishes supported Cloud interfaces and endpoint paths.
+- `GET /api/contract-hub/connection-updates?tenant_id=local&lcp_id=lcp_local` returns tenant trust scope, service endpoints, identity requirements, and per-LCP connection profile.
+- `POST /api/entities/ingest` accepts push snapshots from Local Pollek.
+- `POST /api/entities/sync` pulls from Local Pollek protocol endpoints when the LCP is running.
+
 ## Current Scope
 
 This repository is intentionally starting with a dependency-light local foundation so it can run immediately. The SRS-driven monorepo boundaries remain:
@@ -78,7 +95,8 @@ The first console is now inventory-first:
 
 - Left navigator: tenant, site, device group, device, Local Control Plane, agents.
 - Main fleet datagrid: status, site, version, contract, active bundle, agent count, coverage, heartbeat.
-- Working object detail tabs: Summary, Relationships, Policies, Telemetry, Alarms, Timeline, Audit.
+- Working object detail tabs: Summary, Entities, Relationships, Policies, Telemetry, Alarms, Timeline, Audit.
+- Entities tab: device/user scoped Local Pollek entity inventory with OAuth/OIDC/SPIFFE/mTLS/WASM readiness.
 - Policy Center MVP: AI-assisted deterministic draft generation, simulation, human approval gate, signed-bundle-ready state.
 - Observe Center MVP: telemetry query and synthetic sample ingest for Cloud-side testing while LCP is still building.
 - Timeline MVP: rollout records, enrollment sessions, and evidence export records.

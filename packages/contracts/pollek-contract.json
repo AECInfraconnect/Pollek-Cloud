@@ -26,6 +26,14 @@
       "requires_spiffe": true,
       "paths": ["/v1/telemetry/batches", "/v1/telemetry/envelopes"]
     },
+    "pollek.cloud.local_entities": {
+      "direction": "local_to_cloud",
+      "requires_oauth": true,
+      "requires_spiffe": true,
+      "tenant_scoped": true,
+      "paths": ["/api/entities", "/api/entities/ingest", "/api/entities/sync", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync"],
+      "entity_types": ["registered_agent", "found_agent", "policy", "enforcement", "observability"]
+    },
     "pollek.cloud.policy_bundle": {
       "direction": "cloud_to_local",
       "hot_reload": true,
@@ -45,6 +53,22 @@
       "requires_oauth": true,
       "requires_spiffe": false,
       "paths": ["/api/integrations/summary", "/api/integrations/{integration_id}/test", "/api/evidence/exports"]
+    },
+    "pollek.cloud.trust_scope": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "tenant_scoped": true,
+      "paths": ["/api/trust/scopes", "/api/services/endpoints", "/api/contract-hub/connection-updates"],
+      "service_types": ["spire", "spiffe", "opa", "cedar", "openfga", "ner", "wasm"]
+    },
+    "pollek.cloud.connection_update": {
+      "direction": "cloud_to_local",
+      "requires_oauth": true,
+      "requires_spiffe": true,
+      "tenant_scoped": true,
+      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates"],
+      "purpose": "Contract Hub mediates endpoint, trust scope, registry sync, telemetry, bundle, and hot reload connection updates for many Local Pollek instances."
     }
   },
   "features": {
@@ -54,6 +78,11 @@
     "oauth_device_flow": true,
     "telemetry_otlp": true,
     "ai_policy_editor": true,
+    "local_entity_inventory": true,
+    "tenant_trust_scopes": true,
+    "spire_server_scope": true,
+    "contract_hub_connection_updates": true,
+    "wasm_hot_reload_registry": true,
     "dev_loopback_protocol_test": true
   }
 }

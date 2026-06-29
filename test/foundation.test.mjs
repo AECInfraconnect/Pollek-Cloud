@@ -12,8 +12,15 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.ai_policy_editor, true);
   assert.ok(contract.supported_transports.includes("mtls"));
   assert.ok(contract.interfaces["pollek.cloud.telemetry"]);
+  assert.ok(contract.interfaces["pollek.cloud.local_entities"]);
+  assert.ok(contract.interfaces["pollek.cloud.trust_scope"]);
+  assert.ok(contract.interfaces["pollek.cloud.connection_update"]);
   assert.ok(contract.interfaces["pollek.cloud.policy_authoring"]);
   assert.equal(contract.interfaces["pollek.cloud.policy_authoring"].human_approval_required, true);
+  assert.equal(contract.features.local_entity_inventory, true);
+  assert.equal(contract.features.tenant_trust_scopes, true);
+  assert.equal(contract.features.contract_hub_connection_updates, true);
+  assert.equal(contract.features.wasm_hot_reload_registry, true);
 });
 
 test("postgres foundation migration includes tenant RLS policies", async () => {
@@ -23,9 +30,17 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_drafts/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS enrollment_sessions/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS integrations/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS tenant_trust_scopes/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS service_endpoints/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS device_users/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS local_entities/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS local_entity_relationships/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS local_entity_sync_runs/);
   assert.match(migration, /CREATE POLICY tenant_isolation_devices/);
   assert.match(migration, /CREATE POLICY tenant_isolation_policy_drafts/);
   assert.match(migration, /CREATE POLICY tenant_isolation_enrollment_sessions/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_local_entities/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_tenant_trust_scopes/);
   assert.match(migration, /current_setting\('app\.tenant_id'/);
 });
 
@@ -47,6 +62,15 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /pathname === "\/api\/enrollments"/);
   assert.match(server, /pathname === "\/api\/telemetry\/query"/);
   assert.match(server, /pathname === "\/api\/telemetry\/sample"/);
+  assert.match(server, /pathname === "\/api\/entities"/);
+  assert.match(server, /pathname === "\/api\/entities\/summary"/);
+  assert.match(server, /pathname === "\/api\/entities\/ingest"/);
+  assert.match(server, /pathname === "\/api\/entities\/sync"/);
+  assert.match(server, /pathname === "\/api\/trust\/scopes"/);
+  assert.match(server, /pathname === "\/api\/services\/endpoints"/);
+  assert.match(server, /pathname === "\/api\/contract-hub\/connection-updates"/);
+  assert.match(server, /pullLocalEntitySnapshot/);
+  assert.match(server, /ingestLocalEntitySnapshot/);
   assert.match(server, /\/api\\\/alarms\\\/\(\[\^\/\]\+\)\\\/ack/);
   assert.match(server, /\/api\\\/policy\\\/drafts\\\/\(\[\^\/\]\+\)\\\/simulate/);
   assert.match(server, /\/api\\\/policy\\\/drafts\\\/\(\[\^\/\]\+\)\\\/approve/);
@@ -63,6 +87,12 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /id="policyPackList"/);
   assert.match(html, /data-tab-panel="policies"/);
   assert.match(html, /data-tab-panel="telemetry"/);
+  assert.match(html, /data-tab-panel="entities"/);
+  assert.match(html, /id="entityList"/);
+  assert.match(html, /id="entityTracePanel"/);
+  assert.match(html, /id="entitySyncButton"/);
+  assert.match(html, /id="connectionProfileList"/);
+  assert.match(html, /id="serviceEndpointList"/);
   assert.match(html, /id="aiPolicyButton"/);
   assert.match(html, /id="telemetryQueryButton"/);
   assert.match(html, /id="enrollmentButton"/);
@@ -70,6 +100,10 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /async function exportEvidence/);
   assert.match(app, /async function acknowledgeAlarm/);
   assert.match(app, /function setActiveTab/);
+  assert.match(app, /function renderEntities/);
+  assert.match(app, /async function syncEntities/);
+  assert.match(app, /function renderConnectionProfiles/);
+  assert.match(app, /function renderServiceEndpoints/);
   assert.match(app, /async function generatePolicyDraft/);
   assert.match(app, /async function simulateLatestPolicy/);
   assert.match(app, /async function approveLatestPolicy/);

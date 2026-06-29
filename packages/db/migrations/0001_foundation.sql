@@ -231,6 +231,110 @@ CREATE TABLE IF NOT EXISTS integrations (
 
 CREATE INDEX IF NOT EXISTS integrations_tenant_type_idx ON integrations(tenant_id, type);
 
+CREATE TABLE IF NOT EXISTS tenant_trust_scopes (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  trust_domain text NOT NULL,
+  spire_server text NOT NULL,
+  oidc_issuer text,
+  mtls_profile text NOT NULL,
+  oauth_scopes jsonb NOT NULL DEFAULT '[]'::jsonb,
+  entity_scope_template text NOT NULL,
+  status text NOT NULL DEFAULT 'planned',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS tenant_trust_scopes_tenant_idx ON tenant_trust_scopes(tenant_id);
+
+CREATE TABLE IF NOT EXISTS service_endpoints (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  type text NOT NULL,
+  endpoint text NOT NULL,
+  scope text NOT NULL,
+  status text NOT NULL DEFAULT 'planned',
+  config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS service_endpoints_tenant_type_idx ON service_endpoints(tenant_id, type);
+
+CREATE TABLE IF NOT EXISTS device_users (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  device_id text REFERENCES devices(id) ON DELETE CASCADE,
+  display_name text NOT NULL,
+  user_subject text NOT NULL,
+  oidc_subject text,
+  last_seen_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS device_users_tenant_device_idx ON device_users(tenant_id, device_id);
+
+CREATE TABLE IF NOT EXISTS local_entities (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  device_id text REFERENCES devices(id) ON DELETE SET NULL,
+  lcp_id text REFERENCES local_control_planes(id) ON DELETE SET NULL,
+  user_id text REFERENCES device_users(id) ON DELETE SET NULL,
+  local_object_id text NOT NULL,
+  entity_type text NOT NULL,
+  class text NOT NULL,
+  name text NOT NULL,
+  status text NOT NULL,
+  risk text NOT NULL DEFAULT 'medium',
+  source text NOT NULL,
+  identity jsonb NOT NULL DEFAULT '{}'::jsonb,
+  trace jsonb NOT NULL DEFAULT '{}'::jsonb,
+  policy_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+  enforcement jsonb NOT NULL DEFAULT '{}'::jsonb,
+  observability jsonb NOT NULL DEFAULT '{}'::jsonb,
+  wasm jsonb NOT NULL DEFAULT '{}'::jsonb,
+  raw jsonb NOT NULL DEFAULT '{}'::jsonb,
+  last_seen_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS local_entities_tenant_device_idx ON local_entities(tenant_id, device_id);
+CREATE INDEX IF NOT EXISTS local_entities_type_status_idx ON local_entities(tenant_id, entity_type, status);
+CREATE INDEX IF NOT EXISTS local_entities_lcp_idx ON local_entities(lcp_id);
+
+CREATE TABLE IF NOT EXISTS local_entity_relationships (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  from_object_id text NOT NULL,
+  from_object_type text NOT NULL DEFAULT 'local_entity',
+  to_object_id text NOT NULL,
+  to_object_type text NOT NULL DEFAULT 'local_entity',
+  label text NOT NULL,
+  evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS local_entity_relationships_tenant_idx ON local_entity_relationships(tenant_id);
+CREATE INDEX IF NOT EXISTS local_entity_relationships_from_idx ON local_entity_relationships(tenant_id, from_object_id);
+CREATE INDEX IF NOT EXISTS local_entity_relationships_to_idx ON local_entity_relationships(tenant_id, to_object_id);
+
+CREATE TABLE IF NOT EXISTS local_entity_sync_runs (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  lcp_id text REFERENCES local_control_planes(id) ON DELETE SET NULL,
+  device_id text REFERENCES devices(id) ON DELETE SET NULL,
+  mode text NOT NULL,
+  status text NOT NULL,
+  entity_count integer NOT NULL DEFAULT 0,
+  results jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS local_entity_sync_runs_tenant_time_idx ON local_entity_sync_runs(tenant_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS evidence_exports (
   id text PRIMARY KEY,
   tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -258,6 +362,12 @@ ALTER TABLE policy_simulations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_bundles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rollout_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE integrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_trust_scopes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_endpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE device_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE local_entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE local_entity_relationships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE local_entity_sync_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE evidence_exports ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenant_isolation_sites ON sites;
@@ -314,6 +424,30 @@ CREATE POLICY tenant_isolation_rollout_plans ON rollout_plans
 
 DROP POLICY IF EXISTS tenant_isolation_integrations ON integrations;
 CREATE POLICY tenant_isolation_integrations ON integrations
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_tenant_trust_scopes ON tenant_trust_scopes;
+CREATE POLICY tenant_isolation_tenant_trust_scopes ON tenant_trust_scopes
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_service_endpoints ON service_endpoints;
+CREATE POLICY tenant_isolation_service_endpoints ON service_endpoints
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_device_users ON device_users;
+CREATE POLICY tenant_isolation_device_users ON device_users
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_local_entities ON local_entities;
+CREATE POLICY tenant_isolation_local_entities ON local_entities
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_local_entity_relationships ON local_entity_relationships;
+CREATE POLICY tenant_isolation_local_entity_relationships ON local_entity_relationships
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_local_entity_sync_runs ON local_entity_sync_runs;
+CREATE POLICY tenant_isolation_local_entity_sync_runs ON local_entity_sync_runs
   USING (tenant_id = current_setting('app.tenant_id', true));
 
 DROP POLICY IF EXISTS tenant_isolation_evidence_exports ON evidence_exports;
