@@ -39,14 +39,20 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.contract_drift_guard, true);
   assert.equal(contract.features.sse_event_stream, true);
   assert.equal(contract.features.near_real_time_lcp_watch, true);
+  assert.equal(contract.features.hybrid_lcp_delta_push, true);
+  assert.equal(contract.features.lcp_change_batch_ack_cursor, true);
   assert.equal(contract.features.secure_cloud_to_local_dispatch, true);
   assert.equal(contract.features.signed_control_envelopes, true);
+  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/api/lcp/change-batches"));
+  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/lcp/change-batches"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/hot-reload/stream"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/entities/watch"));
+  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/change-batches"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/config/dispatch"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/hot-reload/dispatch"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("signed-control-envelope"));
+  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("ack_cursor"));
 });
 
 test("openapi artifact covers every contract discovery path", async () => {
@@ -70,6 +76,8 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/api/persistence/flush"].post);
   assert.ok(openapi.paths["/api/entities/watch"].get);
   assert.ok(openapi.paths["/api/entities/watch"].post);
+  assert.ok(openapi.paths["/api/lcp/change-batches"].post);
+  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/lcp/change-batches"].post);
   assert.ok(openapi.paths["/api/lcp/config/dispatch"].post);
   assert.ok(openapi.paths["/api/lcp/hot-reload/dispatch"].post);
   assert.ok(openapi.paths["/api/events"].get);
@@ -91,6 +99,8 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS local_entities/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS local_entity_relationships/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS local_entity_sync_runs/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS local_change_cursors/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS local_change_batches/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS entity_health_snapshots/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS adapter_catalog_entries/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS staged_rollout_results/);
@@ -102,6 +112,8 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE POLICY tenant_isolation_policy_drafts/);
   assert.match(migration, /CREATE POLICY tenant_isolation_enrollment_sessions/);
   assert.match(migration, /CREATE POLICY tenant_isolation_local_entities/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_local_change_cursors/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_local_change_batches/);
   assert.match(migration, /CREATE POLICY tenant_isolation_hot_reload_events/);
   assert.match(migration, /CREATE POLICY tenant_isolation_breakglass_requests/);
   assert.match(migration, /CREATE POLICY tenant_isolation_compliance_policy_bundles/);
@@ -134,6 +146,8 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /pathname === "\/api\/entities\/ingest"/);
   assert.match(server, /pathname === "\/api\/entities\/sync"/);
   assert.match(server, /pathname === "\/api\/entities\/watch"/);
+  assert.match(server, /pathname === "\/api\/lcp\/change-batches"/);
+  assert.match(server, /\/v1\\\/tenants\\\/\(\[\^\/\]\+\)\\\/lcp\\\/change-batches/);
   assert.match(server, /pathname === "\/api\/lcp\/config\/dispatch"/);
   assert.match(server, /pathname === "\/api\/lcp\/hot-reload\/dispatch"/);
   assert.match(server, /pathname === "\/api\/adapters\/catalog"/);
@@ -160,6 +174,9 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /function securityPostureStatus/);
   assert.match(server, /function createControlEnvelope/);
   assert.match(server, /async function pollLcpEntityWatch/);
+  assert.match(server, /function ingestLcpChangeBatch/);
+  assert.match(server, /function changeCursorFor/);
+  assert.match(server, /lcp_outbox_delta_push/);
   assert.match(server, /async function dispatchControlToLcp/);
   assert.match(server, /function allowedControlPaths/);
   assert.match(server, /pullLocalEntitySnapshot/);

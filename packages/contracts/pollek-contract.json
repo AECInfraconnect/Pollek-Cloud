@@ -31,8 +31,14 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/api/entities", "/api/entities/health", "/api/entities/dedupe", "/api/entities/ingest", "/api/entities/sync", "/api/entities/watch", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync"],
-      "entity_types": ["registered_agent", "found_agent", "policy", "enforcement", "observability"]
+      "paths": ["/api/entities", "/api/entities/health", "/api/entities/dedupe", "/api/entities/ingest", "/api/entities/sync", "/api/entities/watch", "/api/lcp/change-batches", "/api/contract-hub/connection-updates", "/v1/tenants/{tenant_id}/registry/sync", "/v1/tenants/{tenant_id}/lcp/change-batches"],
+      "entity_types": ["registered_agent", "found_agent", "policy", "enforcement", "observability"],
+      "sync_strategy": {
+        "primary": "lcp_outbox_delta_push",
+        "fallback": "cloud_snapshot_reconcile",
+        "ack_cursor_required": true,
+        "idempotency": ["event_id", "sequence", "content_hash"]
+      }
     },
     "pollek.cloud.contract_artifacts": {
       "direction": "local_to_cloud",
@@ -106,8 +112,8 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "requires_mtls": true,
-      "paths": ["/api/entities/watch", "/api/lcp/config/dispatch", "/api/lcp/hot-reload/dispatch"],
-      "controls": ["signed-control-envelope", "nonce", "expiry", "payload_hash", "allowlisted_paths", "audit_event", "least_privilege_scope", "secret_redaction"]
+      "paths": ["/api/entities/watch", "/api/lcp/change-batches", "/api/lcp/config/dispatch", "/api/lcp/hot-reload/dispatch", "/v1/tenants/{tenant_id}/lcp/change-batches"],
+      "controls": ["signed-control-envelope", "nonce", "expiry", "payload_hash", "allowlisted_paths", "audit_event", "least_privilege_scope", "secret_redaction", "ack_cursor", "idempotency_key", "replay_window"]
     }
   },
   "features": {
@@ -133,6 +139,8 @@
     "contract_drift_guard": true,
     "sse_event_stream": true,
     "near_real_time_lcp_watch": true,
+    "hybrid_lcp_delta_push": true,
+    "lcp_change_batch_ack_cursor": true,
     "secure_cloud_to_local_dispatch": true,
     "signed_control_envelopes": true,
     "dev_loopback_protocol_test": true

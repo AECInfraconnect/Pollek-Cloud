@@ -16,7 +16,7 @@ const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
 const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
-const lcpWatchIntervalMs = Math.max(2000, Number(process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 5000));
+const lcpReconcileIntervalMs = Math.max(30000, Number(process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS || process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 300000));
 const sseClients = new Set();
 const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush", "/api/entities/watch"]);
 const persistedFleetKeys = [
@@ -35,6 +35,8 @@ const persistedFleetKeys = [
   "localEntities",
   "localEntityRelationships",
   "localEntitySyncRuns",
+  "localChangeCursors",
+  "localChangeBatches",
   "localConfigurationSnapshots",
   "cloudToLocalDispatches",
   "rolloutPlans",
@@ -755,6 +757,7 @@ function createFleetState() {
         },
         endpoints: {
           contract_hub: "/.well-known/pollek-contract",
+          change_batch_ingest: "/api/lcp/change-batches",
           registry_sync: "/api/entities/ingest",
           telemetry_ingest: "/v1/telemetry/batches",
           bundle_latest: "/v1/tenants/{tenant_id}/bundles/latest",
@@ -768,8 +771,15 @@ function createFleetState() {
           oidc_required_for_user_binding: true
         },
         update_strategy: {
-          mode: "poll-with-sse-upgrade",
-          poll_seconds: 30,
+          mode: "lcp_delta_push_with_snapshot_reconcile",
+          primary: "lcp_outbox_delta_push",
+          fallback: "cloud_snapshot_reconcile",
+          reconcile_seconds: 300,
+          jitter_percent: 20,
+          ack_cursor_required: true,
+          idempotency: ["event_id", "sequence", "content_hash"],
+          batch_max_events: 250,
+          compression: ["gzip", "identity"],
           hot_reload: true,
           wasm_generation_required: true
         },
@@ -783,6 +793,8 @@ function createFleetState() {
     localEntities: localEntityState.entities,
     localEntityRelationships: localEntityState.relationships,
     localEntitySyncRuns: localEntityState.syncRuns,
+    localChangeCursors: [],
+    localChangeBatches: [],
     localConfigurationSnapshots: [],
     cloudToLocalDispatches: [],
     adapterCatalog: ADAPTER_CATALOG,
@@ -829,7 +841,11 @@ let persistTimer = null;
 const lcpEntityWatch = {
   schema_version: "pollek.cloud.lcp-entity-watch.v1",
   enabled: process.env.POLLEK_LCP_WATCH !== "disabled",
-  interval_ms: lcpWatchIntervalMs,
+  mode: "hybrid_delta_push_with_reconcile",
+  primary_mode: "lcp_outbox_delta_push",
+  fallback_mode: "snapshot_reconcile",
+  interval_ms: lcpReconcileIntervalMs,
+  jitter_percent: 20,
   lcp_url: defaultLcpUrl,
   lcp_id: "lcp_local",
   status: "starting",
@@ -837,7 +853,10 @@ const lcpEntityWatch = {
   poll_count: 0,
   change_count: 0,
   last_poll_at: null,
+  last_reconcile_at: null,
+  next_reconcile_at: null,
   last_change_at: null,
+  last_delta_at: null,
   last_success_at: null,
   last_error: null,
   last_snapshot_hash: null,
@@ -850,7 +869,7 @@ const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
-  "access-control-allow-headers": "authorization,content-type,x-pollek-device-id,x-pollek-tenant-id"
+  "access-control-allow-headers": "authorization,content-type,x-pollek-device-id,x-pollek-tenant-id,x-pollek-lcp-id,x-idempotency-key"
 };
 
 function sendJson(res, status, body, extraHeaders = {}) {
@@ -898,6 +917,8 @@ function runtimePersistenceStatus() {
       breakglass_requests: state.fleet.breakglassRequests.length,
       local_entities: state.fleet.localEntities.length,
       entity_sync_runs: state.fleet.localEntitySyncRuns.length,
+      local_change_cursors: state.fleet.localChangeCursors?.length || 0,
+      local_change_batches: state.fleet.localChangeBatches?.length || 0,
       evidence_exports: state.fleet.evidenceExports.length,
       enrollment_sessions: state.fleet.enrollmentSessions.length
     }
@@ -2002,11 +2023,321 @@ function recordConfigurationSnapshot({ lcpUrl, lcpId, pulled, mode = "watch_poll
   return record;
 }
 
+function ensureHybridCollections() {
+  if (!Array.isArray(state.fleet.localChangeCursors)) state.fleet.localChangeCursors = [];
+  if (!Array.isArray(state.fleet.localChangeBatches)) state.fleet.localChangeBatches = [];
+}
+
+function changeCursorFor({ tenant_id, lcp_id, device_id }) {
+  ensureHybridCollections();
+  const tenantId = tenant_id || "local";
+  const lcpId = lcp_id || "lcp_local";
+  const deviceId = device_id || "device_local_windows";
+  let cursor = state.fleet.localChangeCursors.find((item) => (
+    item.tenant_id === tenantId && item.lcp_id === lcpId && item.device_id === deviceId
+  ));
+  if (!cursor) {
+    cursor = {
+      schema_version: "pollek.cloud.lcp-change-cursor.v1",
+      tenant_id: tenantId,
+      lcp_id: lcpId,
+      device_id: deviceId,
+      last_sequence: 0,
+      last_event_id: null,
+      last_batch_id: null,
+      last_content_hash: null,
+      recent_event_ids: [],
+      status: "created",
+      updated_at: new Date().toISOString()
+    };
+    state.fleet.localChangeCursors.unshift(cursor);
+  }
+  return cursor;
+}
+
+function normalizeChangeEvents(body) {
+  if (Array.isArray(body?.events)) return body.events;
+  if (Array.isArray(body?.items)) return body.items;
+  if (body?.type && body?.data) return [body];
+  return [];
+}
+
+function changeEventId(event, sequence) {
+  return event.id || event.event_id || event.ce_id || `${event.source || "lcp"}:${event.type || event.event_type || event.kind || "change"}:${sequence || crypto.randomUUID()}`;
+}
+
+function changeEventSequence(event, fallback) {
+  const sequence = Number(event.sequence || event.seq || event.resource_version || event.revision || fallback || 0);
+  return Number.isFinite(sequence) && sequence > 0 ? sequence : fallback;
+}
+
+function validateChangeHash(event) {
+  const expected = event.data_hash || event.content_hash || event.hash;
+  if (!expected) return { ok: true, expected: null, actual: null };
+  const actual = `sha256:${sha256(stableJson(event.data ?? event.payload ?? event))}`;
+  return { ok: expected === actual || expected === actual.replace("sha256:", ""), expected, actual };
+}
+
+function isDuplicateChange(cursor, eventId, sequence) {
+  if (eventId && cursor.recent_event_ids?.includes(eventId)) return true;
+  if (sequence && cursor.last_sequence && sequence <= cursor.last_sequence && !eventId) return true;
+  return false;
+}
+
+function rememberChange(cursor, { eventId, sequence, batchId, contentHash }) {
+  cursor.last_sequence = Math.max(Number(cursor.last_sequence || 0), Number(sequence || 0));
+  cursor.last_event_id = eventId || cursor.last_event_id;
+  cursor.last_batch_id = batchId || cursor.last_batch_id;
+  cursor.last_content_hash = contentHash || cursor.last_content_hash;
+  cursor.status = "acked";
+  cursor.updated_at = new Date().toISOString();
+  if (eventId) {
+    cursor.recent_event_ids = [eventId, ...(cursor.recent_event_ids || []).filter((id) => id !== eventId)].slice(0, 200);
+  }
+}
+
+function localEntityIdForPayload(payload = {}) {
+  return payload.id
+    || payload.entity_id
+    || payload.object_id
+    || (payload.entity_type || payload.class || payload.kind
+      ? entityIdFrom(payload.entity_type || payload.class || payload.kind, payload.local_object_id || payload.name || payload.display_name)
+      : null);
+}
+
+function removeLocalEntity(payload = {}, context = {}) {
+  const id = localEntityIdForPayload(payload);
+  const before = state.fleet.localEntities.length;
+  state.fleet.localEntities = state.fleet.localEntities.filter((entity) => {
+    if (id && entity.id === id) return false;
+    if (payload.local_object_id && entity.local_object_id === payload.local_object_id && entity.lcp_id === context.lcp_id) return false;
+    return true;
+  });
+  if (id) {
+    state.fleet.localEntityRelationships = state.fleet.localEntityRelationships.filter((rel) => rel.from !== id && rel.to !== id);
+  }
+  return before - state.fleet.localEntities.length;
+}
+
+function applyChangeEvent(event, context = {}) {
+  const eventType = String(event.type || event.event_type || event.kind || "").toLowerCase();
+  const op = String(event.op || event.operation || event.action || (eventType.includes("delete") ? "delete" : "upsert")).toLowerCase();
+  const data = event.data ?? event.payload ?? event.entity ?? {};
+  const changeContext = {
+    tenant_id: context.tenant_id || data.tenant_id || "local",
+    lcp_id: context.lcp_id || data.lcp_id || "lcp_local",
+    device_id: context.device_id || data.device_id || "device_local_windows",
+    user_subject: context.user_subject || data.user_subject || "unknown"
+  };
+
+  if (eventType.includes("snapshot") || data.snapshot) {
+    const count = ingestLocalEntitySnapshot(data.snapshot || data, changeContext);
+    return { applied: count, kind: "snapshot" };
+  }
+
+  if (eventType.includes("configuration") || eventType.includes("config")) {
+    const record = {
+      ok: true,
+      results: [{ key: "change_batch", endpoint: "/api/lcp/change-batches", ok: true, status: 202 }],
+      snapshot: data
+    };
+    const configRecord = recordConfigurationSnapshot({
+      lcpUrl: context.lcp_url || "lcp-delta-push",
+      lcpId: changeContext.lcp_id,
+      pulled: record,
+      mode: "lcp_delta_push"
+    });
+    return { applied: 1, kind: "configuration", config_snapshot_id: configRecord.id };
+  }
+
+  if (eventType.includes("relationship")) {
+    const from = data.from || data.from_entity_id || data.source_entity_id;
+    const to = data.to || data.to_entity_id || data.target_entity_id;
+    const label = data.label || data.relationship_type || data.type || "relates_to";
+    if (op === "delete" || op === "remove") {
+      const before = state.fleet.localEntityRelationships.length;
+      state.fleet.localEntityRelationships = state.fleet.localEntityRelationships.filter((rel) => !(rel.from === from && rel.to === to && rel.label === label));
+      return { applied: before - state.fleet.localEntityRelationships.length, kind: "relationship" };
+    }
+    addLocalEntityRelationship(from, to, label);
+    return { applied: 1, kind: "relationship" };
+  }
+
+  if (op === "delete" || op === "remove" || eventType.includes("deleted")) {
+    return { applied: removeLocalEntity(data, changeContext), kind: "entity_delete" };
+  }
+
+  const normalized = {
+    ...data,
+    id: localEntityIdForPayload(data) || entityIdFrom(data.entity_type || data.type || data.class || "observability", data.local_object_id || data.name || data.display_name),
+    tenant_id: changeContext.tenant_id,
+    lcp_id: changeContext.lcp_id,
+    device_id: data.device_id || changeContext.device_id,
+    user_subject: data.user_subject || changeContext.user_subject,
+    entity_type: data.entity_type || data.type || data.class || (eventType.includes("policy") ? "policy" : eventType.includes("enforcement") ? "enforcement" : eventType.includes("agent") ? "registered_agent" : "observability"),
+    source: data.source || `change-batch/${eventType || "entity"}`,
+    last_seen_at: data.last_seen_at || event.time || event.created_at || new Date().toISOString()
+  };
+  const entity = upsertLocalEntity(normalized);
+  return { applied: 1, kind: "entity_upsert", entity_id: entity.id };
+}
+
+function ingestLcpChangeBatch(body, { tenantIdFromPath = null } = {}) {
+  ensureHybridCollections();
+  if (tenantIdFromPath && body.tenant_id && body.tenant_id !== tenantIdFromPath) {
+    const error = new Error("tenant_id does not match tenant-scoped change batch path");
+    error.statusCode = 400;
+    throw error;
+  }
+  const tenantId = tenantIdFromPath || body.tenant_id || body.tenantId;
+  if (!tenantId) {
+    const error = new Error("tenant_id is required for LCP change batches");
+    error.statusCode = 400;
+    throw error;
+  }
+  const lcpId = body.lcp_id || body.lcpId || "lcp_local";
+  const deviceId = body.device_id || body.deviceId || "device_local_windows";
+  const events = normalizeChangeEvents(body);
+  if (!events.length) {
+    const error = new Error("events array is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const batchId = body.batch_id || body.batchId || `change_batch_${crypto.randomUUID()}`;
+  const cursor = changeCursorFor({ tenant_id: tenantId, lcp_id: lcpId, device_id: deviceId });
+  const accepted = [];
+  const duplicate = [];
+  const rejected = [];
+  let applied = 0;
+  const initialSequence = Number(cursor.last_sequence || 0);
+  let lastSequence = initialSequence;
+
+  events.forEach((event, index) => {
+    const sequence = changeEventSequence(event, initialSequence + index + 1);
+    const eventId = changeEventId(event, sequence);
+    const hash = validateChangeHash(event);
+    if (!hash.ok) {
+      rejected.push({ event_id: eventId, sequence, reason: "content_hash_mismatch", expected: hash.expected, actual: hash.actual });
+      return;
+    }
+    if (isDuplicateChange(cursor, eventId, sequence)) {
+      duplicate.push({ event_id: eventId, sequence });
+      return;
+    }
+    if (sequence <= Number(cursor.last_sequence || 0)) {
+      rejected.push({ event_id: eventId, sequence, reason: "sequence_replay_or_out_of_order", last_sequence: cursor.last_sequence });
+      return;
+    }
+    const result = applyChangeEvent(event, {
+      tenant_id: tenantId,
+      lcp_id: lcpId,
+      device_id: deviceId,
+      user_subject: body.user_subject || "unknown",
+      lcp_url: body.lcp_url || body.source
+    });
+    applied += result.applied;
+    lastSequence = Math.max(lastSequence, sequence);
+    rememberChange(cursor, {
+      eventId,
+      sequence,
+      batchId,
+      contentHash: hash.actual || event.content_hash || event.data_hash || null
+    });
+    accepted.push({ event_id: eventId, sequence, ...result });
+  });
+
+  const status = rejected.length ? "partially_accepted" : "accepted";
+  const now = new Date().toISOString();
+  const record = {
+    id: batchId,
+    schema_version: "pollek.cloud.lcp-change-batch-record.v1",
+    tenant_id: tenantId,
+    lcp_id: lcpId,
+    device_id: deviceId,
+    source: body.source || "lcp_outbox_delta_push",
+    status,
+    received_at: now,
+    event_count: events.length,
+    accepted_count: accepted.length,
+    duplicate_count: duplicate.length,
+    rejected_count: rejected.length,
+    applied_count: applied,
+    ack_cursor: {
+      tenant_id: tenantId,
+      lcp_id: lcpId,
+      device_id: deviceId,
+      last_sequence: cursor.last_sequence,
+      last_event_id: cursor.last_event_id,
+      last_batch_id: cursor.last_batch_id,
+      acked_at: cursor.updated_at
+    },
+    accepted,
+    duplicate,
+    rejected
+  };
+  state.fleet.localChangeBatches.unshift(record);
+  state.fleet.localChangeBatches = state.fleet.localChangeBatches.slice(0, 50);
+
+  const run = {
+    id: `entity_sync_${crypto.randomUUID()}`,
+    mode: "lcp_delta_push",
+    reason: body.reason || "lcp_outbox_change_batch",
+    status,
+    entity_count: applied,
+    lcp_id: lcpId,
+    device_id: deviceId,
+    change_batch_id: batchId,
+    ack_sequence: cursor.last_sequence,
+    accepted_count: accepted.length,
+    duplicate_count: duplicate.length,
+    rejected_count: rejected.length,
+    created_at: now
+  };
+  state.fleet.localEntitySyncRuns.unshift(run);
+  state.fleet.localEntitySyncRuns = state.fleet.localEntitySyncRuns.slice(0, 20);
+
+  lcpEntityWatch.status = "delta_push_active";
+  lcpEntityWatch.change_count += accepted.length;
+  lcpEntityWatch.last_change_at = accepted.length ? now : lcpEntityWatch.last_change_at;
+  lcpEntityWatch.last_delta_at = accepted.length ? now : lcpEntityWatch.last_delta_at;
+  lcpEntityWatch.last_success_at = now;
+  lcpEntityWatch.last_entity_count = state.fleet.localEntities.length;
+  lcpEntityWatch.last_error = rejected.length ? `${rejected.length} rejected change event(s)` : null;
+
+  recordAudit("local_entities.delta_batch_ingested", "lcp", lcpId, {
+    tenant_id: tenantId,
+    batch_id: batchId,
+    status,
+    accepted_count: accepted.length,
+    duplicate_count: duplicate.length,
+    rejected_count: rejected.length,
+    ack_sequence: cursor.last_sequence
+  });
+  recordEvent({
+    event_id: `evt_${crypto.randomUUID()}`,
+    tenant_id: tenantId,
+    device_id: deviceId,
+    event_type: "local_entities.updated.v1",
+    severity: rejected.length ? "warning" : "info",
+    payload: { mode: "lcp_delta_push", batch_id: batchId, lcp_id: lcpId, accepted_count: accepted.length, rejected_count: rejected.length, ack_sequence: cursor.last_sequence }
+  });
+  addTask("local_entity_delta_push", rejected.length ? "warning" : "completed", `Accepted ${accepted.length} LCP change events`, {
+    batch_id: batchId,
+    lcp_id: lcpId,
+    ack_sequence: cursor.last_sequence
+  });
+  broadcastSse("local_entities.updated", { run, watch: lcpWatchStatus(), summary: fleetSummary(), change_batch: record });
+  scheduleRuntimePersist("local_entity_delta_push");
+  return { record, run, cursor };
+}
+
 async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
   if (!lcpEntityWatch.enabled || lcpEntityWatch.running) return lcpWatchStatus();
   lcpEntityWatch.running = true;
   lcpEntityWatch.poll_count += 1;
   lcpEntityWatch.last_poll_at = new Date().toISOString();
+  lcpEntityWatch.last_reconcile_at = lcpEntityWatch.last_poll_at;
   const localLcp = state.fleet.localControlPlanes.find((item) => item.id === lcpEntityWatch.lcp_id)
     || state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
   const lcpUrl = (localLcp?.endpoint || lcpEntityWatch.lcp_url || defaultLcpUrl).replace(/\/+$/, "");
@@ -2016,7 +2347,7 @@ async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
       pullLocalEntitySnapshot(lcpUrl),
       pullLocalConfigurationSnapshot(lcpUrl)
     ]);
-    lcpEntityWatch.status = pulledEntities.ok || pulledConfig.ok ? "watching" : "degraded";
+    lcpEntityWatch.status = pulledEntities.ok || pulledConfig.ok ? "reconciled" : "degraded";
     lcpEntityWatch.last_success_at = pulledEntities.ok || pulledConfig.ok ? new Date().toISOString() : lcpEntityWatch.last_success_at;
     lcpEntityWatch.last_error = null;
     const count = ingestLocalEntitySnapshot(pulledEntities.snapshot, {
@@ -2035,11 +2366,11 @@ async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
         lcpUrl,
         lcpId: localLcp?.id || lcpEntityWatch.lcp_id,
         pulled: pulledConfig,
-        mode: force ? "manual_watch_refresh" : "watch_poll"
+        mode: force ? "manual_watch_refresh" : "snapshot_reconcile"
       });
       const run = {
         id: `entity_sync_${crypto.randomUUID()}`,
-        mode: force ? "manual_watch_refresh" : "near_real_time_watch",
+        mode: force ? "manual_watch_refresh" : "snapshot_reconcile",
         reason,
         status: pulledEntities.ok ? "completed" : "failed",
         entity_count: count,
@@ -2065,7 +2396,7 @@ async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
         severity: run.status === "completed" ? "info" : "warning",
         payload: { run_id: run.id, lcp_id: run.lcp_id, entity_count: count, config_snapshot_id: configRecord.id }
       });
-      addTask("local_entity_watch", run.status, run.status === "completed" ? `Live LCP update detected: ${count} records` : "Live LCP update failed", { run_id: run.id, lcp_url: lcpUrl });
+      addTask("local_entity_reconcile", run.status, run.status === "completed" ? `LCP snapshot reconcile completed: ${count} records` : "LCP snapshot reconcile failed", { run_id: run.id, lcp_url: lcpUrl });
       broadcastSse("local_entities.updated", { run, watch: lcpWatchStatus(), summary: fleetSummary() });
       scheduleRuntimePersist("local_entity_watch.updated");
     }
@@ -2078,13 +2409,24 @@ async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
   return lcpWatchStatus();
 }
 
+function nextReconcileDelayMs() {
+  const jitter = Number(lcpEntityWatch.jitter_percent || 0) / 100;
+  const spread = Math.round(lcpEntityWatch.interval_ms * jitter);
+  const offset = spread ? crypto.randomInt(0, spread * 2 + 1) - spread : 0;
+  return Math.max(30000, lcpEntityWatch.interval_ms + offset);
+}
+
 function startLcpEntityWatch() {
   if (!lcpEntityWatch.enabled || lcpWatchTimer) return;
   const tick = async () => {
-    await pollLcpEntityWatch({ reason: "timer" });
-    lcpWatchTimer = setTimeout(tick, lcpEntityWatch.interval_ms);
+    await pollLcpEntityWatch({ reason: "snapshot_reconcile_timer" });
+    const delay = nextReconcileDelayMs();
+    lcpEntityWatch.next_reconcile_at = new Date(Date.now() + delay).toISOString();
+    lcpWatchTimer = setTimeout(tick, delay);
   };
-  lcpWatchTimer = setTimeout(tick, 1000);
+  const firstDelay = process.env.POLLEK_LCP_RECONCILE_IMMEDIATE === "1" ? 1000 : Math.min(15000, nextReconcileDelayMs());
+  lcpEntityWatch.next_reconcile_at = new Date(Date.now() + firstDelay).toISOString();
+  lcpWatchTimer = setTimeout(tick, firstDelay);
 }
 
 function stopLcpEntityWatch() {
@@ -2910,6 +3252,37 @@ async function handleApi(req, res) {
     return true;
   }
 
+  const tenantScopedChangeBatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/lcp\/change-batches$/);
+  if (req.method === "POST" && (pathname === "/api/lcp/change-batches" || tenantScopedChangeBatch)) {
+    try {
+      const body = await readBody(req);
+      const { record, run, cursor } = ingestLcpChangeBatch(body, {
+        tenantIdFromPath: tenantScopedChangeBatch ? decodeURIComponent(tenantScopedChangeBatch[1]) : null
+      });
+      sendJson(res, record.rejected_count ? 207 : 202, {
+        schema_version: "pollek.cloud.lcp-change-batch-ack.v1",
+        accepted: record.accepted_count,
+        duplicates: record.duplicate_count,
+        rejected: record.rejected_count,
+        run,
+        ack_cursor: record.ack_cursor,
+        cursor,
+        summary: fleetSummary(),
+        security: {
+          mode: "signed-outbox-delta-dev",
+          required_production_controls: ["oauth_audience", "spiffe_svid", "mtls_certificate_bound_token", "content_hash", "replay_window"]
+        }
+      });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, {
+        schema_version: "pollek.cloud.lcp-change-batch-error.v1",
+        error: "change_batch_rejected",
+        detail: error instanceof Error ? error.message : String(error)
+      });
+    }
+    return true;
+  }
+
   if (req.method === "POST" && pathname === "/api/lcp/config/dispatch") {
     try {
       const body = await readBody(req);
@@ -3137,6 +3510,8 @@ async function handleApi(req, res) {
       local_entities: state.fleet.localEntities,
       local_entity_relationships: state.fleet.localEntityRelationships,
       local_entity_sync_runs: state.fleet.localEntitySyncRuns,
+      local_change_cursors: state.fleet.localChangeCursors || [],
+      local_change_batches: state.fleet.localChangeBatches || [],
       local_configuration_snapshots: state.fleet.localConfigurationSnapshots,
       cloud_to_local_dispatches: state.fleet.cloudToLocalDispatches,
       evidence_exports: state.fleet.evidenceExports,
@@ -3150,6 +3525,15 @@ async function handleApi(req, res) {
       probes: state.probes.slice(0, 10),
       persistence: runtimePersistenceStatus(),
       lcp_watch: lcpWatchStatus(),
+      hybrid_sync: {
+        schema_version: "pollek.cloud.hybrid-lcp-sync-status.v1",
+        primary: "lcp_outbox_delta_push",
+        fallback: "snapshot_reconcile",
+        change_batch_endpoint: "/api/lcp/change-batches",
+        tenant_scoped_change_batch_endpoint: "/v1/tenants/{tenant_id}/lcp/change-batches",
+        cursors: state.fleet.localChangeCursors || [],
+        recent_batches: (state.fleet.localChangeBatches || []).slice(0, 5)
+      },
       security_posture: securityPostureStatus(),
       contract: await contractDiscovery()
     });
@@ -3335,6 +3719,8 @@ async function handleApi(req, res) {
         distribution: bundle.contract_hub_distribution
       })),
       local_entity_paths: {
+        change_batch_ingest: "/api/lcp/change-batches",
+        tenant_scoped_change_batch_ingest: "/v1/tenants/{tenant_id}/lcp/change-batches",
         registry_agents: "/v1/tenants/{tenant_id}/registry/agents",
         registry_entities: "/v1/tenants/{tenant_id}/registry/entities",
         registry_relationships: "/v1/tenants/{tenant_id}/registry/relationships",
@@ -3352,10 +3738,21 @@ async function handleApi(req, res) {
         hot_reload_stream: "/api/hot-reload/stream",
         event_stream: "/api/events"
       },
+      hybrid_sync: {
+        primary: "lcp_outbox_delta_push",
+        fallback: "snapshot_reconcile",
+        ack_cursor_required: true,
+        cursor_headers: ["x-pollek-tenant-id", "x-pollek-device-id"],
+        idempotency: ["event_id", "sequence", "content_hash"],
+        batch_max_events: 250,
+        replay_window_events: 200,
+        reconcile_seconds: Math.round(lcpEntityWatch.interval_ms / 1000),
+        jitter_percent: lcpEntityWatch.jitter_percent
+      },
       event_streams: {
         contract_hub: "/api/events",
         hot_reload: "/api/hot-reload/stream",
-        event_types: ["connected", "keepalive", "task.updated", "telemetry.event", "hot_reload.event"]
+        event_types: ["connected", "keepalive", "task.updated", "telemetry.event", "hot_reload.event", "local_entities.updated"]
       }
     });
     return true;

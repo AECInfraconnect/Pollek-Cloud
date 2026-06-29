@@ -1504,6 +1504,71 @@
         "x-pollek-tenant-scoped": false
       }
     },
+    "/api/lcp/change-batches": {
+      "post": {
+        "tags": [
+          "pollek.cloud.local_entities",
+          "pollek.cloud.secure_control_channel"
+        ],
+        "summary": "Pollek Cloud POST /api/lcp/change-batches",
+        "operationId": "postApiLcpChangeBatches",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities",
+          "pollek.cloud.secure_control_channel"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud",
+          "bidirectional"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
     "/api/lcp/config/dispatch": {
       "post": {
         "tags": [
@@ -2708,6 +2773,81 @@
         ],
         "x-pollek-enterprise-only": true,
         "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/tenants/{tenant_id}/lcp/change-batches": {
+      "post": {
+        "tags": [
+          "pollek.cloud.local_entities",
+          "pollek.cloud.secure_control_channel"
+        ],
+        "summary": "Pollek Cloud POST /v1/tenants/{tenant_id}/lcp/change-batches",
+        "operationId": "postV1TenantsTenantIdLcpChangeBatches",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.local_entities",
+          "pollek.cloud.secure_control_channel"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud",
+          "bidirectional"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
       }
     },
     "/v1/tenants/{tenant_id}/registry/sync": {

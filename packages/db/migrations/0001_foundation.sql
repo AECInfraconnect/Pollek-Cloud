@@ -392,6 +392,44 @@ CREATE TABLE IF NOT EXISTS local_entity_sync_runs (
 
 CREATE INDEX IF NOT EXISTS local_entity_sync_runs_tenant_time_idx ON local_entity_sync_runs(tenant_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS local_change_cursors (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  lcp_id text REFERENCES local_control_planes(id) ON DELETE SET NULL,
+  device_id text REFERENCES devices(id) ON DELETE SET NULL,
+  last_sequence bigint NOT NULL DEFAULT 0,
+  last_event_id text,
+  last_batch_id text,
+  last_content_hash text,
+  recent_event_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+  status text NOT NULL DEFAULT 'created',
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS local_change_cursors_scope_idx ON local_change_cursors(tenant_id, lcp_id, device_id);
+
+CREATE TABLE IF NOT EXISTS local_change_batches (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  lcp_id text REFERENCES local_control_planes(id) ON DELETE SET NULL,
+  device_id text REFERENCES devices(id) ON DELETE SET NULL,
+  source text NOT NULL,
+  status text NOT NULL,
+  event_count integer NOT NULL DEFAULT 0,
+  accepted_count integer NOT NULL DEFAULT 0,
+  duplicate_count integer NOT NULL DEFAULT 0,
+  rejected_count integer NOT NULL DEFAULT 0,
+  applied_count integer NOT NULL DEFAULT 0,
+  ack_cursor jsonb NOT NULL DEFAULT '{}'::jsonb,
+  accepted jsonb NOT NULL DEFAULT '[]'::jsonb,
+  duplicate jsonb NOT NULL DEFAULT '[]'::jsonb,
+  rejected jsonb NOT NULL DEFAULT '[]'::jsonb,
+  received_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS local_change_batches_tenant_time_idx ON local_change_batches(tenant_id, received_at DESC);
+CREATE INDEX IF NOT EXISTS local_change_batches_lcp_idx ON local_change_batches(tenant_id, lcp_id, received_at DESC);
+
 CREATE TABLE IF NOT EXISTS policy_sandbox_runs (
   id text PRIMARY KEY,
   tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -478,6 +516,8 @@ ALTER TABLE local_entities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entity_health_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE local_entity_relationships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE local_entity_sync_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE local_change_cursors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE local_change_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_sandbox_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE breakglass_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE compliance_policy_bundles ENABLE ROW LEVEL SECURITY;
@@ -573,6 +613,14 @@ CREATE POLICY tenant_isolation_local_entity_relationships ON local_entity_relati
 
 DROP POLICY IF EXISTS tenant_isolation_local_entity_sync_runs ON local_entity_sync_runs;
 CREATE POLICY tenant_isolation_local_entity_sync_runs ON local_entity_sync_runs
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_local_change_cursors ON local_change_cursors;
+CREATE POLICY tenant_isolation_local_change_cursors ON local_change_cursors
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_local_change_batches ON local_change_batches;
+CREATE POLICY tenant_isolation_local_change_batches ON local_change_batches
   USING (tenant_id = current_setting('app.tenant_id', true));
 
 DROP POLICY IF EXISTS tenant_isolation_policy_sandbox_runs ON policy_sandbox_runs;

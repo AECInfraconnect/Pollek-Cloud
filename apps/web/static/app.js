@@ -1446,14 +1446,21 @@ function renderIntegrations() {
 function renderLiveSyncStatus() {
   if (!refs.liveSyncStatus) return;
   const watch = app.data.lcp_watch || {};
+  const hybrid = app.data.hybrid_sync || {};
   const security = app.data.security_posture || watch.security || {};
   const latestRun = app.data.local_entity_sync_runs?.[0];
   const latestConfig = app.data.local_configuration_snapshots?.[0];
   const latestDispatch = app.data.cloud_to_local_dispatches?.[0];
-  refs.liveSyncStatus.className = `probe-result ${statusClass(watch.status === "watching" ? "connected" : watch.status === "degraded" ? "degraded" : "unknown")}`;
+  const latestCursor = app.data.local_change_cursors?.[0] || hybrid.cursors?.[0];
+  const latestBatch = app.data.local_change_batches?.[0] || hybrid.recent_batches?.[0];
+  const syncOk = ["delta_push_active", "reconciled", "watching"].includes(watch.status);
+  refs.liveSyncStatus.className = `probe-result ${statusClass(syncOk ? "connected" : watch.status === "degraded" ? "degraded" : "unknown")}`;
   refs.liveSyncStatus.innerHTML = `
-    <strong>${escapeHtml(watch.enabled === false ? "Live watch disabled" : `Live watch ${watch.status || "starting"}`)}</strong>
-    <span>${escapeHtml(watch.lcp_url || refs.lcpUrl?.value || "no LCP URL")} | interval ${escapeHtml(Math.round((watch.interval_ms || 0) / 1000))}s | changes ${escapeHtml(watch.change_count || 0)}</span>
+    <strong>${escapeHtml(watch.enabled === false ? "Hybrid sync disabled" : `Hybrid sync ${watch.status || "starting"}`)}</strong>
+    <span>${escapeHtml(hybrid.primary || watch.primary_mode || "lcp_outbox_delta_push")} -> ${escapeHtml(hybrid.fallback || watch.fallback_mode || "snapshot_reconcile")} | reconcile ${escapeHtml(Math.round((watch.interval_ms || 0) / 1000))}s +/- ${escapeHtml(watch.jitter_percent || 0)}%</span>
+    <span>${escapeHtml(watch.lcp_url || refs.lcpUrl?.value || "no LCP URL")} | delta changes ${escapeHtml(watch.change_count || 0)} | next reconcile ${escapeHtml(fmtTime(watch.next_reconcile_at))}</span>
+    <span>${escapeHtml(latestCursor ? `ACK ${latestCursor.lcp_id}/${latestCursor.device_id} seq ${latestCursor.last_sequence || 0} event ${latestCursor.last_event_id || "none"}` : "No LCP delta cursor yet.")}</span>
+    <span>${escapeHtml(latestBatch ? `Last batch ${latestBatch.id}: ${latestBatch.accepted_count} accepted, ${latestBatch.duplicate_count} duplicate, ${latestBatch.rejected_count} rejected` : "No LCP change batch received yet.")}</span>
     <span>${escapeHtml(latestRun ? `${latestRun.mode}: ${latestRun.entity_count} records at ${fmtTime(latestRun.created_at)}` : "No live entity run yet.")}</span>
     <span>${escapeHtml(latestConfig ? `Local config hash ${String(latestConfig.snapshot_hash || "").slice(0, 12)}` : "No local config snapshot yet.")}</span>
     <span>${escapeHtml(latestDispatch ? `Last dispatch ${latestDispatch.action}: ${latestDispatch.status}` : "No Cloud-to-Local dispatch yet.")}</span>
