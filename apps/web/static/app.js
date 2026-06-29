@@ -101,7 +101,11 @@ const app = {
   streamRefreshPending: false,
   navCollapsed: localStorage.getItem("pollek.cloud.nav.collapsed") === "true",
   opsCollapsed: localStorage.getItem("pollek.cloud.ops.collapsed") === "true",
+  collapsedNavNodes: readStoredSet("pollek.cloud.nav.nodes.collapsed"),
+  expandedNavNodes: readStoredSet("pollek.cloud.nav.nodes.expanded"),
   collapsedOpsSections: readStoredSet("pollek.cloud.ops.sections.collapsed"),
+  collapsedEntityGroups: readStoredSet("pollek.cloud.entities.groups.collapsed"),
+  expandedEntityGroups: readStoredSet("pollek.cloud.entities.groups.expanded"),
   statusFilter: "all",
   entityTypeFilter: "all",
   entityDeviceFilter: "all",
@@ -154,6 +158,7 @@ const kindLabels = {
   compliance: "Compliance",
   sandbox: "Sandbox",
   breakglass: "Breakglass",
+  entity_group: "Entity group",
   object: "Object"
 };
 
@@ -161,12 +166,50 @@ function normalizeKind(kind) {
   return String(kind || "object").replaceAll("_", "-").replace(/[^a-z0-9-]/gi, "").toLowerCase() || "object";
 }
 
+const iconSvgs = {
+  tenant: '<path d="M4 21V5l8-3 8 3v16"/><path d="M9 21v-6h6v6"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M16 12h.01"/>',
+  site: '<path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/>',
+  device_group: '<path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M16 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M3 21v-2a5 5 0 0 1 5-5h0a5 5 0 0 1 5 5v2"/><path d="M13 14h3a5 5 0 0 1 5 5v2"/>',
+  device: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  lcp: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01M12 10v4"/>',
+  agent: '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M8.5 13h.01M15.5 13h.01M9 18l-2 3M15 18l2 3"/>',
+  registered_agent: '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M9 13h.01M15 13h.01M9.5 16.2l1.7 1.6 3.6-3.9"/>',
+  found_agent: '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M9 13h.01M15 13h.01"/><circle cx="17.5" cy="6.5" r="2.5"/><path d="m19.4 8.4 1.8 1.8"/>',
+  policy: '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-5"/>',
+  policy_bundle: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4"/><path d="m4 17 8 4 8-4"/>',
+  enforcement: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="m9.5 15 2 2 3.5-4"/>',
+  observability: '<path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="3"/>',
+  resource: '<path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  telemetry: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
+  identity: '<circle cx="8" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 5-5h2"/><path d="M14 15l2 2 5-5"/><path d="M16 17v4h4"/>',
+  spiffe: '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="M9 12h6M12 9v6"/>',
+  oidc: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 3"/>',
+  rollout: '<path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 10"/><path d="M4 15a8 8 0 0 0 13.7 3.7L20 14"/>',
+  wasm: '<path d="M5 5h14v14H5V5Z"/><path d="M8 9h8M8 13h8M8 17h4"/>',
+  alarm: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
+  task: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/>',
+  integration: '<path d="M8 8V4M16 8V4"/><path d="M7 8h10v5a5 5 0 0 1-10 0V8Z"/><path d="M12 18v3M9 21h6"/>',
+  otlp: '<path d="M4 16V8l8-4 8 4v8l-8 4-8-4Z"/><path d="M8 10h8M8 14h5"/>',
+  siem: '<path d="M4 5h16v14H4V5Z"/><path d="M8 9h8M8 13h5M8 17h3"/>',
+  compliance: '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m8.5 12 2.5 2.5 5-5"/>',
+  sandbox: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="M12 12 4.4 7.7M12 12l7.6-4.3M12 12v8.5"/>',
+  breakglass: '<path d="M7 11V8a5 5 0 0 1 9.5-2.2"/><rect x="5" y="11" width="14" height="10" rx="2"/><path d="m9 17 6-3M9 14l6 3"/>',
+  entity_group: '<path d="M4 5h6l2 2h8v12H4V5Z"/><path d="M8 11h8M8 15h5"/>',
+  object: '<path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="M4 7l8 4 8-4M12 11v10"/>'
+};
+
 function kindLabel(kind) {
   return kindLabels[kind] || kindLabels[String(kind || "").replaceAll("-", "_")] || String(kind || "Object").replaceAll("_", " ");
 }
 
+function iconSvg(kind) {
+  const key = String(kind || "object").replaceAll("-", "_").replace(/[^a-z0-9_]/gi, "").toLowerCase() || "object";
+  const normalizedKey = normalizeKind(kind).replaceAll("-", "_");
+  return iconSvgs[key] || iconSvgs[normalizedKey] || iconSvgs.object;
+}
+
 function iconHtml(kind, status = "neutral", extraClass = "") {
-  return `<span class="object-icon icon-${normalizeKind(kind)} ${statusClass(status)} ${escapeHtml(extraClass)}" aria-hidden="true"></span>`;
+  return `<span class="object-icon icon-${normalizeKind(kind)} ${statusClass(status)} ${escapeHtml(extraClass)}" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false">${iconSvg(kind)}</svg></span>`;
 }
 
 function chipHtml(label, status = "neutral", title = "") {
@@ -481,45 +524,215 @@ function renderOperationsFocus() {
   });
 }
 
-function childrenOf(parentId) {
-  return app.data.tree.filter((item) => item.parent_id === parentId);
+const entityNavigationGroups = [
+  { kind: "registered_agent", label: "Registered Agents" },
+  { kind: "found_agent", label: "Found Agents" },
+  { kind: "policy", label: "Policies" },
+  { kind: "enforcement", label: "Enforcement" },
+  { kind: "observability", label: "Observability" }
+];
+
+function navigationEntityGroup(entity) {
+  const kind = entity.entity_type || entity.class || "object";
+  if (kind === "resource" || kind === "telemetry") return "observability";
+  return entityNavigationGroups.some((group) => group.kind === kind) ? kind : "observability";
+}
+
+function lcpForEntity(entity) {
+  const lcps = app.data.local_control_planes || [];
+  return lcps.find((lcp) => entity.lcp_id === lcp.id)
+    || lcps.find((lcp) => entity.device_id === lcp.device_id || entity.device_name === lcp.device_name)
+    || lcps[0]
+    || null;
+}
+
+function aggregateStatus(items) {
+  const statuses = items.map((item) => statusClass(item.status || item.risk));
+  if (statuses.includes("bad")) return "offline";
+  if (statuses.includes("warn")) return "degraded";
+  if (statuses.includes("ok")) return "connected";
+  return "unknown";
+}
+
+function buildNavigationTree() {
+  const items = [];
+  const baseItems = app.data.tree || [];
+  const localEntities = app.data.local_entities || [];
+  const seedAgentIds = new Set(baseItems.filter((item) => item.type === "agent").map((item) => item.id));
+  const groupOrder = new Map(entityNavigationGroups.map((group, index) => [group.kind, index]));
+  const lcpOrder = new Map((app.data.local_control_planes || []).map((lcp, index) => [lcp.id, index]));
+
+  for (const item of baseItems) {
+    if (seedAgentIds.has(item.id)) continue;
+    items.push({ ...item, object_id: item.id });
+  }
+
+  const grouped = new Map();
+  for (const entity of localEntities) {
+    const lcp = lcpForEntity(entity);
+    if (!lcp) continue;
+    const groupKind = navigationEntityGroup(entity);
+    const groupId = `entity_group_${lcp.id}_${groupKind}`;
+    if (!grouped.has(groupId)) {
+      grouped.set(groupId, {
+        id: groupId,
+        parent_id: lcp.id,
+        type: "entity_group",
+        entity_kind: groupKind,
+        name: entityNavigationGroups.find((group) => group.kind === groupKind)?.label || kindLabel(groupKind),
+        status: "unknown",
+        risk: "medium",
+        nav_only: true,
+        count: 0,
+        entities: []
+      });
+    }
+    grouped.get(groupId).entities.push(entity);
+  }
+
+  const sortedGroups = [...grouped.values()].sort((a, b) => {
+    const leftLcp = lcpOrder.get(a.parent_id) ?? 999;
+    const rightLcp = lcpOrder.get(b.parent_id) ?? 999;
+    if (leftLcp !== rightLcp) return leftLcp - rightLcp;
+    return (groupOrder.get(a.entity_kind) ?? 999) - (groupOrder.get(b.entity_kind) ?? 999);
+  });
+
+  for (const group of sortedGroups) {
+    group.count = group.entities.length;
+    group.status = aggregateStatus(group.entities);
+    items.push(group);
+    const sortedEntities = [...group.entities].sort((a, b) => {
+      const leftStatus = statusClass(a.status || a.risk);
+      const rightStatus = statusClass(b.status || b.risk);
+      const statusWeight = { bad: 0, warn: 1, neutral: 2, ok: 3 };
+      const statusDelta = (statusWeight[leftStatus] ?? 2) - (statusWeight[rightStatus] ?? 2);
+      if (statusDelta) return statusDelta;
+      return String(a.name || a.local_object_id || a.id).localeCompare(String(b.name || b.local_object_id || b.id));
+    });
+    for (const entity of sortedEntities) {
+      items.push({
+        id: entity.id,
+        parent_id: group.id,
+        object_id: entity.id,
+        type: entity.entity_type || entity.class || "object",
+        name: entity.name || entity.local_object_id || entity.id,
+        status: entity.status,
+        risk: entity.risk,
+        detail: [
+          entity.device_name || entity.device_id,
+          entity.user_subject,
+          entity.source
+        ].filter(Boolean).join(" | ")
+      });
+    }
+  }
+
+  return items;
+}
+
+function navChildMap(items) {
+  const childMap = new Map();
+  for (const item of items) {
+    const key = item.parent_id || "__root__";
+    if (!childMap.has(key)) childMap.set(key, []);
+    childMap.get(key).push(item);
+  }
+  return childMap;
+}
+
+function navPathIds(id, items) {
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  const path = [];
+  let current = itemMap.get(id);
+  while (current) {
+    path.unshift(current.id);
+    current = current.parent_id ? itemMap.get(current.parent_id) : null;
+  }
+  return new Set(path);
+}
+
+function persistNavNodeState() {
+  localStorage.setItem("pollek.cloud.nav.nodes.collapsed", JSON.stringify([...app.collapsedNavNodes]));
+  localStorage.setItem("pollek.cloud.nav.nodes.expanded", JSON.stringify([...app.expandedNavNodes]));
+}
+
+function toggleNavNode(nodeId, defaultCollapsed = false) {
+  const targetSet = defaultCollapsed ? app.expandedNavNodes : app.collapsedNavNodes;
+  if (targetSet.has(nodeId)) {
+    targetSet.delete(nodeId);
+  } else {
+    targetSet.add(nodeId);
+  }
+  persistNavNodeState();
+  renderTree();
 }
 
 function renderTree() {
   refs.inventoryTree.innerHTML = "";
+  const navItems = buildNavigationTree();
+  app.navItems = navItems;
+  const childMap = navChildMap(navItems);
+  const selectedPath = navPathIds(app.selectedObjectId, navItems);
   const query = app.query.trim().toLowerCase();
+  const itemText = (item) => [
+    item.name,
+    item.type,
+    item.entity_kind,
+    item.detail,
+    kindLabel(item.entity_kind || item.type)
+  ].filter(Boolean).join(" ").toLowerCase();
   const shouldShow = (item) => {
     if (!query) return true;
-    if (item.name.toLowerCase().includes(query) || item.type.toLowerCase().includes(query)) return true;
-    return app.data.tree.some((child) => child.parent_id === item.id && shouldShow(child));
+    if (itemText(item).includes(query)) return true;
+    return (childMap.get(item.id) || []).some((child) => shouldShow(child));
   };
 
   const renderNode = (item, depth) => {
     if (!shouldShow(item)) return;
+    const children = childMap.get(item.id) || [];
+    const hasChildren = children.some((child) => shouldShow(child));
+    const lockedOpen = query || selectedPath.has(item.id);
+    const defaultCollapsed = item.nav_only && Number(item.count || 0) > 20;
+    const collapsed = hasChildren && !lockedOpen && (defaultCollapsed ? !app.expandedNavNodes.has(item.id) : app.collapsedNavNodes.has(item.id));
     const button = document.createElement("button");
-    button.className = `tree-row ${app.selectedObjectId === item.id ? "active" : ""}`;
+    const isActive = app.selectedObjectId === (item.object_id || item.id);
+    button.className = `tree-row ${isActive ? "active" : ""} ${hasChildren ? "has-children" : "leaf"} ${collapsed ? "collapsed" : "expanded"}`;
     button.dataset.depth = String(depth);
     button.title = `${"  ".repeat(depth)}${item.name}`;
-    button.setAttribute("aria-label", `${item.name} ${item.type}`);
+    button.setAttribute("aria-label", `${item.name} ${kindLabel(item.entity_kind || item.type)}`);
+    if (hasChildren) button.setAttribute("aria-expanded", String(!collapsed));
     button.style.setProperty("--depth", depth);
-    button.style.paddingLeft = `${7 + depth * 16}px`;
+    button.style.paddingLeft = `${7 + depth * 14}px`;
+    const iconKind = item.entity_kind || item.type;
+    const detail = item.detail || (item.count ? `${item.count} ${kindLabel(item.entity_kind)} entities` : kindLabel(item.type));
     button.innerHTML = `
-      ${iconHtml(item.type, item.status, "node-icon")}
+      <span class="tree-expander" aria-hidden="true">${hasChildren ? ">" : ""}</span>
+      ${iconHtml(iconKind, item.status, "node-icon")}
       <span class="node-name">
         <strong>${escapeHtml(item.name)}</strong>
-        <small>${escapeHtml(kindLabel(item.type))}</small>
+        <small>${escapeHtml(detail)}</small>
       </span>
-      <span class="node-state ${statusClass(item.status)}"></span>
+      ${item.count ? `<span class="node-badge">${escapeHtml(item.count)}</span>` : `<span class="node-state ${statusClass(item.status)}"></span>`}
     `;
-    button.addEventListener("click", () => {
-      app.selectedObjectId = item.id;
+    button.addEventListener("click", (event) => {
+      if (event.target.closest(".tree-expander")) {
+        toggleNavNode(item.id, defaultCollapsed);
+        return;
+      }
+      if (item.nav_only) {
+        if (hasChildren) toggleNavNode(item.id, defaultCollapsed);
+        return;
+      }
+      app.selectedObjectId = item.object_id || item.id;
       render();
     });
     refs.inventoryTree.append(button);
-    for (const child of childrenOf(item.id)) renderNode(child, depth + 1);
+    if (!collapsed) {
+      for (const child of children) renderNode(child, depth + 1);
+    }
   };
 
-  for (const root of childrenOf(null)) renderNode(root, 0);
+  for (const root of childMap.get("__root__") || []) renderNode(root, 0);
 }
 
 function selectedObject() {
@@ -527,7 +740,8 @@ function selectedObject() {
 }
 
 function pathToObject(id) {
-  const map = new Map(app.data.tree.map((item) => [item.id, item]));
+  const navItems = app.navItems || buildNavigationTree();
+  const map = new Map(navItems.map((item) => [item.id, item]));
   const path = [];
   let current = map.get(id);
   while (current) {
@@ -802,6 +1016,102 @@ function selectedLocalEntity(entities) {
   return entities[0] || null;
 }
 
+function entityGroupStatus(entities) {
+  return aggregateStatus(entities);
+}
+
+function entityScopeKey(entity) {
+  return [
+    entity.tenant_id || "local",
+    entity.lcp_id || "unknown-lcp",
+    entity.device_id || entity.device_name || "unknown-device",
+    entity.user_id || entity.user_subject || "unknown-user"
+  ].join("::");
+}
+
+function scopeGroupForEntity(entity) {
+  const lcp = lcpForEntity(entity);
+  const deviceName = entity.device_name || entity.device_id || lcp?.device_name || "Unknown device";
+  const userName = entity.user_subject || entity.user_id || "unknown user";
+  const lcpName = lcp?.name || entity.lcp_id || "Unknown LCP";
+  return {
+    key: entityScopeKey(entity),
+    title: `${deviceName}`,
+    subtitle: `${userName} | ${lcpName}`,
+    tenant_id: entity.tenant_id || "local",
+    lcp_id: entity.lcp_id || lcp?.id || "unknown-lcp",
+    device_name: deviceName,
+    user_subject: userName,
+    entities: []
+  };
+}
+
+function groupedEntitiesByScope(entities) {
+  const groups = new Map();
+  for (const entity of entities) {
+    const key = entityScopeKey(entity);
+    if (!groups.has(key)) groups.set(key, scopeGroupForEntity(entity));
+    groups.get(key).entities.push(entity);
+  }
+  return [...groups.values()].sort((a, b) => {
+    const riskRank = { offline: 0, degraded: 1, unknown: 2, connected: 3 };
+    const aRank = riskRank[entityGroupStatus(a.entities)] ?? 2;
+    const bRank = riskRank[entityGroupStatus(b.entities)] ?? 2;
+    if (aRank !== bRank) return aRank - bRank;
+    return `${a.device_name} ${a.user_subject}`.localeCompare(`${b.device_name} ${b.user_subject}`);
+  });
+}
+
+function persistEntityGroupState() {
+  localStorage.setItem("pollek.cloud.entities.groups.collapsed", JSON.stringify([...app.collapsedEntityGroups]));
+  localStorage.setItem("pollek.cloud.entities.groups.expanded", JSON.stringify([...app.expandedEntityGroups]));
+}
+
+function entityGroupCollapsed(key, defaultCollapsed, hasActiveEntity) {
+  if (hasActiveEntity) return false;
+  return defaultCollapsed ? !app.expandedEntityGroups.has(key) : app.collapsedEntityGroups.has(key);
+}
+
+function toggleEntityGroup(key, defaultCollapsed = false) {
+  const targetSet = defaultCollapsed ? app.expandedEntityGroups : app.collapsedEntityGroups;
+  if (targetSet.has(key)) {
+    targetSet.delete(key);
+  } else {
+    targetSet.add(key);
+  }
+  persistEntityGroupState();
+  renderEntities();
+}
+
+function categoryGroupsForScope(scopeGroup) {
+  const groups = new Map(entityNavigationGroups.map((group) => [
+    group.kind,
+    {
+      key: group.kind,
+      label: group.label,
+      kind: group.kind,
+      entities: []
+    }
+  ]));
+  for (const entity of scopeGroup.entities) {
+    const key = navigationEntityGroup(entity);
+    if (!groups.has(key)) {
+      groups.set(key, { key, label: kindLabel(key), kind: key, entities: [] });
+    }
+    groups.get(key).entities.push(entity);
+  }
+  return [...groups.values()].filter((group) => group.entities.length);
+}
+
+function entitySummaryChips(entities) {
+  const counts = categoryGroupsForScope({ entities }).map((group) => ({
+    label: group.label.replace(" Agents", ""),
+    count: group.entities.length,
+    status: entityGroupStatus(group.entities)
+  }));
+  return counts.map((item) => chipHtml(`${item.count} ${item.label}`, item.status)).join("");
+}
+
 function renderEntities() {
   if (!refs.entityList) return;
   const entities = sortedEntitiesForDisplay(filteredEntities());
@@ -814,33 +1124,90 @@ function renderEntities() {
     return;
   }
 
-  for (const entity of entities.slice(0, 80)) {
-    const row = document.createElement("button");
-    const health = entityHealthStatus(entity);
-    row.className = `detail-row entity-row ${health} ${activeEntity?.id === entity.id ? "selected" : ""}`;
-    const streams = entity.observability?.telemetry_streams || [];
-    const subtitle = [
-      kindLabel(entity.entity_type || entity.class),
-      entity.status,
-      entity.device_name || entity.device_id,
-      entity.user_subject || "unknown user"
-    ].filter(Boolean).join(" | ");
-    row.innerHTML = `
-      <div class="entity-main">
-        ${iconHtml(entity.entity_type || entity.class, entity.status)}
-        <span>
-          <strong>${escapeHtml(entity.name || entity.local_object_id || entity.id)}</strong>
-          <small>${escapeHtml(subtitle)}</small>
+  const scopeGroups = groupedEntitiesByScope(entities);
+  for (const scopeGroup of scopeGroups) {
+    const scopeHasActive = scopeGroup.entities.some((entity) => entity.id === activeEntity?.id);
+    const scopeDefaultCollapsed = scopeGroup.entities.length > 80;
+    const scopeCollapsed = entityGroupCollapsed(scopeGroup.key, scopeDefaultCollapsed, scopeHasActive);
+    const scopeStatus = entityGroupStatus(scopeGroup.entities);
+    const section = document.createElement("section");
+    section.className = `entity-scope-group ${statusClass(scopeStatus)} ${scopeCollapsed ? "collapsed" : "expanded"}`;
+    section.innerHTML = `
+      <button class="entity-scope-toggle" type="button" aria-expanded="${escapeHtml(!scopeCollapsed)}">
+        <span class="entity-group-chevron" aria-hidden="true">&gt;</span>
+        ${iconHtml("device", scopeStatus)}
+        <span class="entity-group-title">
+          <strong>${escapeHtml(scopeGroup.title)}</strong>
+          <small>${escapeHtml(scopeGroup.subtitle)}</small>
         </span>
-      </div>
-      <div class="chip-row">${entityChips(entity)}</div>
-      <code>${escapeHtml(entity.trace?.spiffe_id || entity.identity?.spiffe_id || entity.source || "trace pending")} | ${escapeHtml(streams.join(", ") || "no telemetry stream")}</code>
+        <span class="entity-group-count">${escapeHtml(scopeGroup.entities.length)}</span>
+      </button>
+      <div class="chip-row entity-scope-chips">${entitySummaryChips(scopeGroup.entities)}</div>
+      <div class="entity-scope-body"></div>
     `;
-    row.addEventListener("click", () => {
-      app.selectedObjectId = entity.id;
-      render();
+    section.querySelector(".entity-scope-toggle").addEventListener("click", () => {
+      toggleEntityGroup(scopeGroup.key, scopeDefaultCollapsed);
     });
-    refs.entityList.append(row);
+    refs.entityList.append(section);
+    if (scopeCollapsed) continue;
+
+    const body = section.querySelector(".entity-scope-body");
+    for (const category of categoryGroupsForScope(scopeGroup)) {
+      const categoryKey = `${scopeGroup.key}::${category.kind}`;
+      const categoryHasActive = category.entities.some((entity) => entity.id === activeEntity?.id);
+      const categoryDefaultCollapsed = category.entities.length > 12 || category.kind === "observability";
+      const categoryCollapsed = entityGroupCollapsed(categoryKey, categoryDefaultCollapsed, categoryHasActive);
+      const categoryStatus = entityGroupStatus(category.entities);
+      const categorySection = document.createElement("section");
+      categorySection.className = `entity-kind-group ${statusClass(categoryStatus)} ${categoryCollapsed ? "collapsed" : "expanded"}`;
+      categorySection.innerHTML = `
+        <button class="entity-kind-toggle" type="button" aria-expanded="${escapeHtml(!categoryCollapsed)}">
+          <span class="entity-group-chevron" aria-hidden="true">&gt;</span>
+          ${iconHtml(category.kind, categoryStatus, "node-icon")}
+          <span class="entity-group-title">
+            <strong>${escapeHtml(category.label)}</strong>
+            <small>${escapeHtml(scopeGroup.device_name)} | ${escapeHtml(scopeGroup.user_subject)}</small>
+          </span>
+          <span class="entity-group-count">${escapeHtml(category.entities.length)}</span>
+        </button>
+        <div class="entity-kind-body ${category.entities.length > 20 ? "large" : ""}"></div>
+      `;
+      categorySection.querySelector(".entity-kind-toggle").addEventListener("click", () => {
+        toggleEntityGroup(categoryKey, categoryDefaultCollapsed);
+      });
+      body.append(categorySection);
+      if (categoryCollapsed) continue;
+
+      const categoryBody = categorySection.querySelector(".entity-kind-body");
+      for (const entity of sortedEntitiesForDisplay(category.entities)) {
+        const row = document.createElement("button");
+        const health = entityHealthStatus(entity);
+        row.className = `detail-row entity-row ${health} ${activeEntity?.id === entity.id ? "selected" : ""}`;
+        const streams = entity.observability?.telemetry_streams || [];
+        const subtitle = [
+          kindLabel(entity.entity_type || entity.class),
+          entity.status,
+          entity.device_name || entity.device_id,
+          entity.user_subject || "unknown user"
+        ].filter(Boolean).join(" | ");
+        row.innerHTML = `
+          <div class="entity-main">
+            ${iconHtml(entity.entity_type || entity.class, entity.status)}
+            <span>
+              <strong>${escapeHtml(entity.name || entity.local_object_id || entity.id)}</strong>
+              <small>${escapeHtml(subtitle)}</small>
+            </span>
+          </div>
+          <div class="chip-row">${entityChips(entity)}</div>
+          <code>${escapeHtml(entity.trace?.spiffe_id || entity.identity?.spiffe_id || entity.source || "trace pending")} | ${escapeHtml(streams.join(", ") || "no telemetry stream")}</code>
+        `;
+        row.addEventListener("click", () => {
+          app.selectedObjectId = entity.id;
+          render();
+        });
+        categoryBody.append(row);
+      }
+    }
   }
   renderEntityTrace(activeEntity);
 }

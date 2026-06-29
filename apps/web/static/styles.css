@@ -8,8 +8,8 @@
   --muted: #66727f;
   --line: #d6dee6;
   --line-strong: #b8c5d0;
-  --nav: rgba(255, 255, 255, 0.95);
-  --nav-2: #f2efff;
+  --nav: #0b0c16;
+  --nav-2: #1c1730;
   --blue: #2457a6;
   --primary: #6d4aff;
   --teal: #0f766e;
@@ -20,7 +20,7 @@
   --cyan: #0b7285;
   --steel: #405469;
   --shadow: 0 10px 28px rgba(24, 33, 43, 0.08);
-  --nav-width: 264px;
+  --nav-width: 286px;
   --ops-width: 318px;
 }
 
@@ -57,7 +57,7 @@ button {
 }
 
 .app-shell.nav-collapsed {
-  --nav-width: 80px;
+  --nav-width: 76px;
 }
 
 .app-shell.ops-collapsed {
@@ -183,9 +183,9 @@ button {
   position: relative;
   min-width: 0;
   background: var(--nav);
-  color: var(--ink);
-  border-right: 1px solid var(--line);
-  padding: 14px 10px;
+  color: #d7d6df;
+  border-right: 1px solid #2b2d42;
+  padding: 18px 12px;
   overflow-y: auto;
   overflow-x: hidden;
   backdrop-filter: blur(18px);
@@ -197,7 +197,9 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 6px 10px;
+  padding: 0 8px 18px;
+  border-bottom: 1px solid #2b2d42;
+  margin-bottom: 14px;
 }
 
 .sidebar-collapse-button {
@@ -209,17 +211,17 @@ button {
   width: 26px;
   height: 26px;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid #383b56;
   border-radius: 999px;
-  background: #ffffff;
-  color: var(--muted);
-  box-shadow: 0 4px 14px rgba(24, 33, 43, 0.12);
+  background: #111321;
+  color: #c6c5d0;
+  box-shadow: 0 4px 14px rgba(8, 10, 18, 0.36);
   font-size: 12px;
   font-weight: 900;
 }
 
 .sidebar-collapse-button:hover {
-  color: var(--ink);
+  color: #ffffff;
   border-color: var(--primary);
 }
 
@@ -270,27 +272,37 @@ h3 {
 }
 
 .navigator .eyebrow {
-  color: var(--muted);
+  color: #a7a8b7;
+  font-size: 13px;
+}
+
+.navigator h2 {
+  color: #f3f1ff;
+  font-size: 17px;
+  line-height: 1.25;
 }
 
 .inventory-tree {
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .tree-row {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) 10px;
+  grid-template-columns: 12px 22px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
-  min-height: 30px;
+  min-height: 38px;
   border: 0;
-  border-radius: 5px;
-  padding: 5px 7px;
+  border-left: 3px solid transparent;
+  border-radius: 14px;
+  padding: 7px 9px;
   background: transparent;
-  color: #344150;
+  color: #c9c9d2;
   text-align: left;
+  font-size: 15px;
+  line-height: 1.2;
 }
 
 .tree-row:hover,
@@ -299,8 +311,29 @@ h3 {
 }
 
 .tree-row.active {
-  color: var(--primary);
+  border-left-color: var(--primary);
+  color: #9d75ff;
   font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(109, 74, 255, 0.08);
+}
+
+.tree-row.has-children .tree-expander {
+  color: #9d75ff;
+}
+
+.tree-row.expanded .tree-expander {
+  transform: rotate(90deg);
+}
+
+.tree-expander {
+  display: inline-grid;
+  width: 12px;
+  height: 20px;
+  place-items: center;
+  color: #6d7188;
+  font-size: 11px;
+  font-weight: 900;
+  transition: transform 140ms ease, color 140ms ease;
 }
 
 .node-name {
@@ -319,31 +352,40 @@ h3 {
 }
 
 .node-name small {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
+  color: #9193a4;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
 }
 
 .object-icon {
   --icon-color: var(--steel);
   position: relative;
   display: inline-grid;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--icon-color) 36%, #ffffff);
-  border-radius: 8px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--icon-color) 10%, #ffffff);
   color: var(--icon-color);
-  font-size: 9px;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0;
 }
 
 .object-icon::before {
-  content: "?";
+  content: "";
+  display: none;
+}
+
+.object-icon svg {
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .object-icon::after {
@@ -362,10 +404,34 @@ h3 {
 .object-icon.bad::after { background: var(--red); }
 
 .node-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
-  font-size: 7px;
+}
+
+.node-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.navigator .object-icon {
+  border-color: color-mix(in srgb, var(--icon-color) 35%, #2b2d42);
+  background: color-mix(in srgb, var(--icon-color) 17%, #111321);
+}
+
+.node-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  border: 1px solid #383b56;
+  border-radius: 999px;
+  padding: 0 6px;
+  background: #111321;
+  color: #c6c5d0;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .icon-tenant { --icon-color: var(--teal); }
@@ -428,8 +494,8 @@ h3 {
 .icon-breakglass::before { content: "BG"; }
 
 .app-shell.nav-collapsed .navigator {
-  width: 80px;
-  padding: 14px 8px;
+  width: 76px;
+  padding: 18px 8px;
   overflow-x: visible;
 }
 
@@ -456,9 +522,13 @@ h3 {
   grid-template-columns: 22px;
   justify-content: center;
   width: 44px;
-  min-height: 38px;
+  min-height: 40px;
   padding: 6px 0;
   padding-left: 0 !important;
+}
+
+.app-shell.nav-collapsed .tree-expander {
+  display: none;
 }
 
 .app-shell.nav-collapsed .tree-row[data-depth="1"],
@@ -489,6 +559,16 @@ h3 {
   bottom: 7px;
   width: 7px;
   height: 7px;
+}
+
+.app-shell.nav-collapsed .node-badge {
+  position: absolute;
+  right: -5px;
+  top: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  font-size: 9px;
 }
 
 .node-state,
@@ -1249,6 +1329,127 @@ h3 {
 .detail-row.entity-row {
   display: grid;
   gap: 7px;
+}
+
+.entity-scope-group {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.entity-scope-group.ok { border-left-color: var(--green); }
+.entity-scope-group.warn { border-left-color: var(--amber); }
+.entity-scope-group.bad { border-left-color: var(--red); }
+
+.entity-scope-toggle,
+.entity-kind-toggle {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.entity-scope-toggle {
+  grid-template-columns: 14px auto minmax(0, 1fr) auto;
+  gap: 9px;
+  min-height: 38px;
+  padding: 0;
+}
+
+.entity-kind-toggle {
+  grid-template-columns: 14px auto minmax(0, 1fr) auto;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  padding: 6px 8px;
+}
+
+.entity-scope-toggle:hover .entity-group-title strong,
+.entity-kind-toggle:hover .entity-group-title strong {
+  color: var(--blue);
+}
+
+.entity-scope-group.expanded > .entity-scope-toggle .entity-group-chevron,
+.entity-kind-group.expanded > .entity-kind-toggle .entity-group-chevron {
+  transform: rotate(90deg);
+}
+
+.entity-group-chevron {
+  display: inline-grid;
+  width: 14px;
+  place-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  transition: transform 140ms ease;
+}
+
+.entity-group-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.entity-group-title strong,
+.entity-group-title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-group-count {
+  display: inline-grid;
+  min-width: 28px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.entity-scope-chips {
+  padding-left: 43px;
+}
+
+.entity-scope-group.collapsed .entity-scope-body,
+.entity-kind-group.collapsed .entity-kind-body {
+  display: none;
+}
+
+.entity-scope-body {
+  display: grid;
+  gap: 8px;
+  padding-left: 22px;
+}
+
+.entity-kind-group {
+  display: grid;
+  gap: 7px;
+}
+
+.entity-kind-body {
+  display: grid;
+  gap: 7px;
+  padding-left: 22px;
+}
+
+.entity-kind-body.large {
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
 }
 
 .detail-row.warn {

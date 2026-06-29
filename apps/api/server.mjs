@@ -3939,7 +3939,10 @@ function serveStatic(req, res) {
     ".svg": "image/svg+xml",
     ".json": "application/json; charset=utf-8"
   };
-  res.writeHead(200, { "content-type": types[ext] || "application/octet-stream" });
+  res.writeHead(200, {
+    "content-type": types[ext] || "application/octet-stream",
+    "cache-control": "no-store"
+  });
   createReadStream(filePath).pipe(res);
 }
 
