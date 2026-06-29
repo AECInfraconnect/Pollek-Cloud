@@ -99,6 +99,7 @@ const app = {
   query: "",
   streamConnected: false,
   streamRefreshPending: false,
+  streamLastEventId: localStorage.getItem("pollek.cloud.event_stream.last_event_id") || "",
   navCollapsed: localStorage.getItem("pollek.cloud.nav.collapsed") === "true",
   opsCollapsed: localStorage.getItem("pollek.cloud.ops.collapsed") === "true",
   collapsedNavNodes: readStoredSet("pollek.cloud.nav.nodes.collapsed"),
@@ -385,18 +386,34 @@ function scheduleStreamRefresh() {
   }, 250);
 }
 
+function rememberStreamCursor(event) {
+  if (!event?.lastEventId) return;
+  app.streamLastEventId = event.lastEventId;
+  localStorage.setItem("pollek.cloud.event_stream.last_event_id", event.lastEventId);
+}
+
+function handleStreamRefresh(event) {
+  rememberStreamCursor(event);
+  scheduleStreamRefresh();
+}
+
 function connectEventStream() {
   if (!("EventSource" in window)) return;
-  const stream = new EventSource("/api/events");
-  stream.addEventListener("connected", () => {
+  const streamUrl = app.streamLastEventId
+    ? `/api/events?since=${encodeURIComponent(app.streamLastEventId)}`
+    : "/api/events";
+  const stream = new EventSource(streamUrl);
+  stream.addEventListener("connected", (event) => {
+    rememberStreamCursor(event);
     app.streamConnected = true;
     setCloudStatus(true, "Cloud API streaming");
   });
-  stream.addEventListener("task.updated", scheduleStreamRefresh);
-  stream.addEventListener("telemetry.event", scheduleStreamRefresh);
-  stream.addEventListener("hot_reload.event", scheduleStreamRefresh);
-  stream.addEventListener("local_entities.updated", scheduleStreamRefresh);
-  stream.addEventListener("cloud_to_local.dispatched", scheduleStreamRefresh);
+  stream.addEventListener("stream.replay", rememberStreamCursor);
+  stream.addEventListener("task.updated", handleStreamRefresh);
+  stream.addEventListener("telemetry.event", handleStreamRefresh);
+  stream.addEventListener("hot_reload.event", handleStreamRefresh);
+  stream.addEventListener("local_entities.updated", handleStreamRefresh);
+  stream.addEventListener("cloud_to_local.dispatched", handleStreamRefresh);
   stream.onerror = () => {
     app.streamConnected = false;
     setCloudStatus(Boolean(app.data), app.data ? "Cloud API polling" : "Cloud API reconnecting");
@@ -2043,11 +2060,13 @@ async function requestBreakglass() {
   refs.breakglassButton.textContent = "Requesting";
   try {
     const payload = await postJson("/api/breakglass", {
+      tenant_id: "local",
       target_id: selectedObject().type === "lcp" ? selectedObject().id : "lcp_local",
       reason: "Local enterprise breakglass drill for audited emergency policy operations.",
       duration_minutes: 60
     });
     const approved = await postJson(`/api/breakglass/${encodeURIComponent(payload.request.id)}/approve`, {
+      tenant_id: "local",
       approver: "local-dev-security-admin"
     });
     refs.probeResult.innerHTML = `

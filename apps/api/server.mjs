@@ -19,6 +19,7 @@ const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
 const lcpReconcileIntervalMs = Math.max(30000, Number(process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS || process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 300000));
 const bundleSigningKeyPair = crypto.generateKeyPairSync("ed25519");
 const bundleSigningPublicKeyPem = bundleSigningKeyPair.publicKey.export({ type: "spki", format: "pem" });
+const eventStreamReplayWindow = Math.max(200, Number(process.env.POLLEK_EVENT_STREAM_REPLAY_WINDOW || 500));
 const sseClients = new Set();
 const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush", "/api/entities/watch"]);
 const persistedFleetKeys = [
@@ -27,9 +28,14 @@ const persistedFleetKeys = [
   "relationships",
   "policyBundles",
   "policyBundleSignatures",
+  "policyBundleArtifacts",
+  "authorizationTuples",
+  "authorizationDecisions",
   "alarms",
   "policyDrafts",
   "policySimulations",
+  "aiProviderRuns",
+  "policyTestFixtures",
   "policySandboxes",
   "breakglassRequests",
   "evidenceExports",
@@ -632,6 +638,14 @@ function createFleetState() {
       { id: "bnd_shadow_ai_observe", tenant_id: "local", name: "Shadow AI Observe", revision: "2026.06.28.011", status: "stale", coverage: 41, hot_reload: true }
     ],
     policyBundleSignatures: [],
+    policyBundleArtifacts: [],
+    authorizationTuples: [
+      { id: "authz_tuple_tenant_admin", tenant_id: "local", principal: "user:local-dev-admin", relation: "admin", object: "tenant:local", source: "seed", created_at: now },
+      { id: "authz_tuple_security_admin", tenant_id: "local", principal: "user:local-dev-security-admin", relation: "security_admin", object: "tenant:local", source: "seed", created_at: now },
+      { id: "authz_tuple_policy_approver", tenant_id: "local", principal: "user:local-dev-security-admin", relation: "approver", object: "policy_project:proj_default_policy", source: "seed", created_at: now },
+      { id: "authz_tuple_lcp_operator", tenant_id: "local", principal: "user:local-dev-admin", relation: "operator", object: "lcp:lcp_local", source: "seed", created_at: now }
+    ],
+    authorizationDecisions: [],
     alarms: [
       {
         id: "alarm_lcp_offline",
@@ -718,6 +732,8 @@ function createFleetState() {
       }
     ],
     policySimulations: [],
+    aiProviderRuns: [],
+    policyTestFixtures: [],
     policySandboxes: [],
     breakglassRequests: [],
     integrations: [
@@ -819,6 +835,7 @@ const state = {
   },
   devices: new Map(),
   events: [],
+  eventJournal: [],
   auditEvents: [],
   tasks: [],
   enrollmentCodes: new Map(),
@@ -841,6 +858,7 @@ const persistence = {
 };
 
 let persistTimer = null;
+let streamEventSequence = 0;
 
 const lcpEntityWatch = {
   schema_version: "pollek.cloud.lcp-entity-watch.v1",
@@ -906,17 +924,23 @@ function runtimePersistenceStatus() {
     production_target: "postgresql",
     persisted_collections: {
       fleet: persistedFleetKeys,
-      root: ["tenant", "devices", "events", "auditEvents", "tasks", "probes", "enrollmentCodes"]
+      root: ["tenant", "devices", "events", "eventJournal", "auditEvents", "tasks", "probes", "enrollmentCodes"]
     },
     record_counts: {
       devices: state.devices.size,
       telemetry_events: state.events.length,
+      event_journal: state.eventJournal.length,
       audit_events: state.auditEvents.length,
       tasks: state.tasks.length,
       probes: state.probes.length,
       policy_drafts: state.fleet.policyDrafts.length,
+      ai_provider_runs: state.fleet.aiProviderRuns?.length || 0,
+      policy_test_fixtures: state.fleet.policyTestFixtures?.length || 0,
       policy_bundles: state.fleet.policyBundles.length,
       policy_bundle_signatures: state.fleet.policyBundleSignatures?.length || 0,
+      policy_bundle_artifacts: state.fleet.policyBundleArtifacts?.length || 0,
+      authorization_tuples: state.fleet.authorizationTuples?.length || 0,
+      authorization_decisions: state.fleet.authorizationDecisions?.length || 0,
       rollouts: state.fleet.rolloutPlans.length,
       hot_reload_events: state.fleet.hotReloadEvents.length,
       breakglass_requests: state.fleet.breakglassRequests.length,
@@ -942,6 +966,7 @@ function runtimeStateSnapshot() {
     tenant: state.tenant,
     devices: mapToEntries(state.devices),
     events: state.events,
+    eventJournal: state.eventJournal,
     auditEvents: state.auditEvents,
     tasks: state.tasks,
     probes: state.probes,
@@ -958,6 +983,7 @@ function applyRuntimeStateSnapshot(snapshot) {
   if (Array.isArray(snapshot.devices)) state.devices = entriesToMap(snapshot.devices);
   if (Array.isArray(snapshot.enrollmentCodes)) state.enrollmentCodes = entriesToMap(snapshot.enrollmentCodes);
   if (Array.isArray(snapshot.events)) state.events = snapshot.events.slice(0, 100);
+  if (Array.isArray(snapshot.eventJournal)) state.eventJournal = snapshot.eventJournal.slice(-eventStreamReplayWindow);
   if (Array.isArray(snapshot.auditEvents)) state.auditEvents = snapshot.auditEvents.slice(0, 100);
   if (Array.isArray(snapshot.tasks)) state.tasks = snapshot.tasks.slice(0, 25);
   if (Array.isArray(snapshot.probes)) state.probes = snapshot.probes.slice(0, 20);
@@ -1210,6 +1236,51 @@ function signedPolicyBundleManifest(bundle) {
   };
 }
 
+function policyBundleArtifact(bundle) {
+  const manifest = signedPolicyBundleManifest(bundle);
+  const artifact = {
+    schema_version: "pollek.cloud.policy-bundle-artifact.v1",
+    tenant_id: bundleTenantId(bundle),
+    bundle_id: bundle.id,
+    revision: bundle.revision,
+    manifest_hash: manifest.payload_hash,
+    manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/manifest`,
+    media_type: "application/vnd.pollek.policy-bundle+json",
+    immutable: true,
+    engines: [...new Set((bundle.policies || []).flatMap((policy) => policy.engines || policy.engine || []))],
+    policies: bundle.policies || [],
+    artifacts: bundle.artifacts || [],
+    compliance_bundle_id: bundle.compliance_bundle_id || null,
+    signatures: manifest.signatures.map((signature) => ({
+      key_id: signature.key_id,
+      alg: signature.alg,
+      payload_hash: signature.payload_hash,
+      sig: signature.sig,
+      signed_at: signature.signed_at
+    }))
+  };
+  const payload = stableJson(artifact);
+  const artifactHash = sha256(payload);
+  const record = {
+    id: `artifact_${artifactHash.slice(0, 24)}`,
+    schema_version: "pollek.cloud.policy-bundle-artifact-record.v1",
+    tenant_id: artifact.tenant_id,
+    bundle_id: artifact.bundle_id,
+    revision: artifact.revision,
+    artifact_hash: artifactHash,
+    storage_uri: `sha256:${artifactHash}`,
+    media_type: artifact.media_type,
+    size_bytes: Buffer.byteLength(payload),
+    created_at: new Date().toISOString()
+  };
+  if (!Array.isArray(state.fleet.policyBundleArtifacts)) state.fleet.policyBundleArtifacts = [];
+  const existingIndex = state.fleet.policyBundleArtifacts.findIndex((item) => item.artifact_hash === artifactHash);
+  if (existingIndex >= 0) state.fleet.policyBundleArtifacts.splice(existingIndex, 1);
+  state.fleet.policyBundleArtifacts.unshift(record);
+  state.fleet.policyBundleArtifacts = state.fleet.policyBundleArtifacts.slice(0, 100);
+  return { artifact, record, artifact_hash: artifactHash, payload };
+}
+
 function initializePolicyBundleSigningLedger() {
   if (!Array.isArray(state.fleet.policyBundleSignatures)) state.fleet.policyBundleSignatures = [];
   for (const bundle of state.fleet.policyBundles || []) {
@@ -1224,6 +1295,138 @@ function initializePolicyBundleSigningLedger() {
       });
     }
   }
+}
+
+function authorizationModel() {
+  return {
+    schema_version: "pollek.cloud.authorization-model.v1",
+    tenant_id: "local",
+    engines: ["rbac", "rebac", "cedar", "openfga"],
+    default_decision: "deny",
+    roles: {
+      admin: ["*"],
+      security_admin: ["policy.approve", "policy.rollout", "bundle.sign", "breakglass.approve", "authz.write"],
+      operator: ["lcp.read", "lcp.dispatch", "telemetry.query", "registry.sync"],
+      viewer: ["*.read", "telemetry.query"]
+    },
+    cedar_policy_set: [
+      {
+        id: "cedar_policy_high_risk_publish_guard",
+        effect: "forbid",
+        condition: "action in [policy.approve, bundle.sign, policy.rollout] when context.risk == high and context.breakglass != active"
+      },
+      {
+        id: "cedar_policy_tenant_admin_allow",
+        effect: "permit",
+        condition: "principal has admin on tenant"
+      }
+    ],
+    openfga_model: "model\n  schema 1.1\n\ntype user\ntype tenant\n  relations\n    define admin: [user]\n    define security_admin: [user]\n    define viewer: [user]\n\ntype policy_project\n  relations\n    define approver: [user]\n\ntype lcp\n  relations\n    define operator: [user]\n"
+  };
+}
+
+function relationAppliesToAction(relation, action) {
+  if (relation === "admin") return true;
+  if (relation === "security_admin") return ["policy.", "bundle.", "breakglass.", "authz."].some((prefix) => action.startsWith(prefix));
+  if (relation === "approver") return ["policy.approve", "bundle.sign", "policy.rollout"].includes(action);
+  if (relation === "operator") return ["lcp.", "telemetry.", "registry.", "policy.rollout"].some((prefix) => action.startsWith(prefix));
+  if (relation === "viewer") return action.endsWith(".read") || action === "telemetry.query";
+  return false;
+}
+
+function tupleMatches(tuple, { tenantId, principal, action, object }) {
+  if (tuple.tenant_id !== tenantId) return false;
+  if (tuple.principal !== principal) return false;
+  if (!relationAppliesToAction(tuple.relation, action)) return false;
+  if (tuple.object === object) return true;
+  if (tuple.object === `tenant:${tenantId}`) return true;
+  return tuple.relation === "admin";
+}
+
+function createAuthorizationTuple(body = {}) {
+  if (!body.tenant_id) throw new Error("tenant_context_required");
+  if (!body.principal || !body.relation || !body.object) throw new Error("principal_relation_object_required");
+  const tuple = {
+    id: body.id || `authz_tuple_${crypto.randomUUID()}`,
+    schema_version: "pollek.cloud.authorization-tuple.v1",
+    tenant_id: body.tenant_id,
+    principal: String(body.principal),
+    relation: String(body.relation),
+    object: String(body.object),
+    condition: body.condition || null,
+    source: body.source || "cloud_admin",
+    created_by: body.created_by || body.actor_id || "local-dev-security-admin",
+    created_at: new Date().toISOString()
+  };
+  state.fleet.authorizationTuples.unshift(tuple);
+  state.fleet.authorizationTuples = state.fleet.authorizationTuples.slice(0, 200);
+  recordAudit("authz.tuple_written", "authorization_tuple", tuple.id, {
+    tenant_id: tuple.tenant_id,
+    principal: tuple.principal,
+    relation: tuple.relation,
+    object: tuple.object
+  });
+  addTask("authz_tuple_write", "completed", `Recorded authorization tuple ${tuple.relation}`, {
+    tuple_id: tuple.id,
+    tenant_id: tuple.tenant_id
+  });
+  scheduleRuntimePersist("authz.tuple_written");
+  return tuple;
+}
+
+function checkAuthorization(body = {}) {
+  if (!body.tenant_id) throw new Error("tenant_context_required");
+  const tenantId = body.tenant_id;
+  const principal = String(body.principal || body.actor_id || "user:local-dev-admin");
+  const action = String(body.action || "unknown");
+  const object = String(body.object || body.resource || `tenant:${tenantId}`);
+  const context = body.context && typeof body.context === "object" ? body.context : {};
+  const matchedTuples = (state.fleet.authorizationTuples || []).filter((tuple) => tupleMatches(tuple, { tenantId, principal, action, object }));
+  const cedarDeny = ["policy.approve", "bundle.sign", "policy.rollout"].includes(action)
+    && context.risk === "high"
+    && context.breakglass !== "active";
+  const decision = cedarDeny ? "deny" : matchedTuples.length ? "allow" : "deny";
+  const record = {
+    id: `authz_decision_${crypto.randomUUID()}`,
+    schema_version: "pollek.cloud.authorization-decision.v1",
+    tenant_id: tenantId,
+    principal,
+    action,
+    object,
+    decision,
+    reason: cedarDeny ? "cedar_high_risk_publish_guard" : matchedTuples.length ? "tuple_match" : "default_deny",
+    engines: {
+      rbac: {
+        decision: matchedTuples.some((tuple) => ["admin", "security_admin", "operator", "viewer"].includes(tuple.relation)) && !cedarDeny ? "allow" : "deny",
+        matched_relations: matchedTuples.map((tuple) => tuple.relation)
+      },
+      rebac: {
+        decision: matchedTuples.length && !cedarDeny ? "allow" : "deny",
+        tuple_ids: matchedTuples.map((tuple) => tuple.id)
+      },
+      cedar: {
+        decision: cedarDeny ? "deny" : "allow",
+        matched_policy_ids: cedarDeny ? ["cedar_policy_high_risk_publish_guard"] : ["cedar_policy_tenant_admin_allow"]
+      },
+      openfga: {
+        decision: matchedTuples.length ? "allowed" : "not_allowed",
+        model_relation_count: matchedTuples.length
+      }
+    },
+    context: redactSensitive(context),
+    checked_at: new Date().toISOString()
+  };
+  state.fleet.authorizationDecisions.unshift(record);
+  state.fleet.authorizationDecisions = state.fleet.authorizationDecisions.slice(0, 100);
+  recordAudit("authz.checked", "authorization_decision", record.id, {
+    tenant_id: tenantId,
+    principal,
+    action,
+    object,
+    decision
+  });
+  scheduleRuntimePersist("authz.checked");
+  return record;
 }
 
 function stripVolatileFields(value) {
@@ -1358,22 +1561,84 @@ function lcpWatchStatus() {
   };
 }
 
-function sendSse(res, event, data) {
+function eventChannelFor(event) {
+  if (event.startsWith("hot_reload.")) return "hot-reload";
+  if (event.startsWith("local_entities.")) return "local-entities";
+  if (event.startsWith("cloud_to_local.")) return "cloud-to-local";
+  return "contract-hub";
+}
+
+function streamChannelReceives(clientChannel, entry) {
+  if (clientChannel === "contract-hub") return true;
+  return entry.channel === clientChannel;
+}
+
+function nextStreamEventId() {
+  streamEventSequence += 1;
+  return `stream_${String(streamEventSequence).padStart(12, "0")}`;
+}
+
+function initializeStreamEventSequence() {
+  const sequences = state.eventJournal
+    .map((entry) => Number(entry.sequence || String(entry.id || "").match(/stream_(\d+)/)?.[1] || 0))
+    .filter(Number.isFinite);
+  streamEventSequence = Math.max(streamEventSequence, 0, ...sequences);
+}
+
+function journalSseEvent(event, data, options = {}) {
+  const entry = {
+    id: options.id || nextStreamEventId(),
+    sequence: streamEventSequence,
+    schema_version: "pollek.cloud.event-stream-journal-entry.v1",
+    tenant_id: options.tenant_id || data?.tenant_id || data?.payload?.tenant_id || "local",
+    channel: options.channel || eventChannelFor(event),
+    event,
+    data,
+    created_at: new Date().toISOString()
+  };
+  state.eventJournal.push(entry);
+  state.eventJournal = state.eventJournal.slice(-eventStreamReplayWindow);
+  return entry;
+}
+
+function replayStreamEntries({ channel, lastEventId, limit = 100 }) {
+  const replayLimit = Math.max(0, Math.min(Number(limit) || 100, eventStreamReplayWindow));
+  const entries = state.eventJournal.filter((entry) => streamChannelReceives(channel, entry));
+  if (!lastEventId) return entries.slice(-Math.min(replayLimit, 25));
+  const lastSequence = Number(String(lastEventId).match(/stream_(\d+)/)?.[1] || lastEventId);
+  if (Number.isFinite(lastSequence) && lastSequence > 0) {
+    return entries.filter((entry) => Number(entry.sequence || 0) > lastSequence).slice(0, replayLimit);
+  }
+  const index = entries.findIndex((entry) => entry.id === lastEventId);
+  return index >= 0 ? entries.slice(index + 1, index + 1 + replayLimit) : entries.slice(-Math.min(replayLimit, 25));
+}
+
+function sendSse(res, event, data, id = null) {
+  if (id) res.write(`id: ${id}\n`);
   res.write(`event: ${event}\n`);
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-function broadcastSse(event, data) {
+function broadcastSse(event, data, options = {}) {
+  const entry = options.journal === false
+    ? { id: options.id || null, event, data, channel: options.channel || eventChannelFor(event) }
+    : journalSseEvent(event, data, options);
   for (const client of [...sseClients]) {
+    if (!streamChannelReceives(client.channel, entry)) continue;
     try {
-      sendSse(client.res, event, data);
+      sendSse(client.res, entry.event, entry.data, entry.id);
     } catch {
       sseClients.delete(client);
     }
   }
+  if (options.journal !== false) scheduleRuntimePersist(`event_stream.${event}`);
+  return entry;
 }
 
 function openEventStream(req, res, channel) {
+  const { url } = parsePath(req);
+  const lastEventId = req.headers["last-event-id"] || url.searchParams.get("since") || url.searchParams.get("last_event_id") || "";
+  const replayLimit = url.searchParams.get("replay") || "100";
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache, no-transform",
@@ -1388,7 +1653,20 @@ function openEventStream(req, res, channel) {
     channel,
     cloud_url: publicUrl,
     contract_version: "2026.06.29",
+    last_event_id: lastEventId || null,
+    replay_window_events: eventStreamReplayWindow,
     connected_at: new Date().toISOString()
+  });
+  const replayed = replayStreamEntries({ channel, lastEventId, limit: replayLimit });
+  for (const entry of replayed) {
+    sendSse(res, entry.event, entry.data, entry.id);
+  }
+  sendSse(res, "stream.replay", {
+    client_id: client.id,
+    channel,
+    last_event_id: lastEventId || null,
+    replayed: replayed.length,
+    latest_event_id: state.eventJournal.at(-1)?.id || null
   });
   const keepAlive = setInterval(() => {
     sendSse(res, "keepalive", { time: new Date().toISOString(), clients: sseClients.size });
@@ -2669,19 +2947,110 @@ type policy_project
   }[engine] || "";
 }
 
+function aiPolicyProviders() {
+  return [
+    {
+      id: "local_deterministic_policy_assistant",
+      name: "Local deterministic policy assistant",
+      mode: "local-dev",
+      status: "enabled",
+      data_boundary: "no_external_provider",
+      supports: ["rego", "cedar", "openfga"],
+      safety_controls: ["secret_redaction", "citation_manifest", "fixture_management", "human_approval_required"]
+    },
+    {
+      id: "enterprise_provider_adapter",
+      name: "Enterprise AI provider adapter",
+      mode: "production-planned",
+      status: "planned",
+      data_boundary: "tenant_configured",
+      supports: ["rego", "cedar", "openfga", "wasm_config"],
+      safety_controls: ["tenant_kms", "prompt_redaction", "provider_citations", "test_fixture_evidence"]
+    }
+  ];
+}
+
+function redactPromptText(text) {
+  return String(text || "")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+/gi, "$1=[redacted]")
+    .replace(/\bsk-[A-Za-z0-9]{12,}\b/g, "sk-[redacted]");
+}
+
+function buildPolicyCitations({ engine, controls = [] }) {
+  const citations = [
+    { id: "local-entity-mapping", title: "Local Pollek entity mapping", uri: "docs/research/LOCAL_POLLEK_ENTITY_MAPPING.md", relevance: "registered/found agents, policy, enforcement, observability scope" },
+    { id: "secure-control-channel", title: "Secure bidirectional control channel", uri: "docs/architecture/SECURE_CONTROL_CHANNEL.md", relevance: "signed bundle rollout and audit controls" }
+  ];
+  if (engine === "cedar") citations.push({ id: "cedar-model", title: "Cedar policy model", uri: "docs/research/RESEARCH_NOTES.md#cedar", relevance: "authorization policy syntax guidance" });
+  if (engine === "openfga") citations.push({ id: "openfga-model", title: "OpenFGA relationship model", uri: "docs/research/RESEARCH_NOTES.md#openfga", relevance: "relationship tuple model guidance" });
+  if (controls.includes("siem-export")) citations.push({ id: "otel-siem", title: "OpenTelemetry/SIEM pipeline notes", uri: "docs/research/RESEARCH_NOTES.md#opentelemetry", relevance: "telemetry evidence export design" });
+  return citations;
+}
+
+function createPolicyFixtures({ tenantId, draftId, intent, decision, fixtures }) {
+  const source = Array.isArray(fixtures) && fixtures.length ? fixtures : [
+    { name: "risky sample is controlled", input: intent, expected: decision || "warn" },
+    { name: "benign sample is allowed", input: "normal low-risk assistant activity", expected: "allow" }
+  ];
+  return source.map((fixture) => {
+    const record = {
+      id: fixture.id || `fixture_${crypto.randomUUID()}`,
+      schema_version: "pollek.cloud.policy-test-fixture.v1",
+      tenant_id: tenantId,
+      draft_id: draftId,
+      name: fixture.name || "policy fixture",
+      input: redactPromptText(fixture.input || ""),
+      expected: fixture.expected || decision || "warn",
+      source: fixture.source || "ai_policy_assistant",
+      status: "pending",
+      created_at: new Date().toISOString()
+    };
+    state.fleet.policyTestFixtures.unshift(record);
+    return record;
+  });
+}
+
+function recordAiPolicyProviderRun({ tenantId, draftId, providerId, originalPrompt, redactedPrompt, engine, citations }) {
+  const run = {
+    id: `ai_run_${crypto.randomUUID()}`,
+    schema_version: "pollek.cloud.ai-policy-provider-run.v1",
+    tenant_id: tenantId,
+    draft_id: draftId,
+    provider_id: providerId,
+    mode: providerId === "local_deterministic_policy_assistant" ? "local-dev" : "provider-adapter",
+    prompt_hash: sha256(originalPrompt),
+    redacted_prompt_hash: sha256(redactedPrompt),
+    redaction_applied: originalPrompt !== redactedPrompt,
+    recommended_engine: engine,
+    citation_ids: citations.map((citation) => citation.id),
+    created_at: new Date().toISOString()
+  };
+  state.fleet.aiProviderRuns.unshift(run);
+  state.fleet.aiProviderRuns = state.fleet.aiProviderRuns.slice(0, 100);
+  return run;
+}
+
 function createPolicyDraft(body = {}) {
-  const intent = String(body.intent || "Warn on high-risk AI tool activity before deployment.").trim();
+  const originalIntent = String(body.intent || "Warn on high-risk AI tool activity before deployment.").trim();
+  const intent = redactPromptText(originalIntent);
   const title = String(body.title || intent.split(/[.!?]/)[0] || "AI Assisted Policy").slice(0, 80);
   const engine = ["rego", "cedar", "openfga"].includes(body.engine_hint) ? body.engine_hint : "rego";
+  const tenantId = body.tenant_id || "local";
+  const providerId = body.provider_id || "local_deterministic_policy_assistant";
+  const controls = body.controls || ["human-review", "audit-log", "siem-export"];
+  const citations = buildPolicyCitations({ engine, controls });
   const now = new Date().toISOString();
   const draft = {
     id: `draft_${policySlug(title)}_${crypto.randomUUID().slice(0, 8)}`,
-    tenant_id: "local",
+    tenant_id: tenantId,
     project_id: body.project_id || "proj_default_policy",
     title,
     intent,
+    original_intent_redacted: originalIntent !== intent,
     engine_hint: body.engine_hint || "auto",
     recommended_engine: engine,
+    provider: aiPolicyProviders().find((provider) => provider.id === providerId) || aiPolicyProviders()[0],
     status: "requires_human_review",
     ai_generated: true,
     policy_ir: {
@@ -2689,15 +3058,13 @@ function createPolicyDraft(body = {}) {
       subject: body.subject || "ai_activity",
       decision: body.decision || "warn",
       conditions: body.conditions || ["risk_score >= medium", "tenant_policy_enabled"],
-      controls: body.controls || ["human-review", "audit-log", "siem-export"]
+      controls
     },
     sources: {
       [engine]: buildPolicySources({ title, intent, engine })
     },
-    tests: [
-      { name: "risky sample is controlled", input: intent, expected: body.decision || "warn", status: "pending" },
-      { name: "benign sample is allowed", input: "normal low-risk assistant activity", expected: "allow", status: "pending" }
-    ],
+    tests: [],
+    citations,
     risks: [
       "AI generated draft requires human review before approval",
       "Simulation must pass before rollout creation"
@@ -2705,28 +3072,51 @@ function createPolicyDraft(body = {}) {
     created_at: now,
     updated_at: now
   };
+  const fixtures = createPolicyFixtures({ tenantId, draftId: draft.id, intent, decision: body.decision, fixtures: body.fixtures });
+  draft.tests = fixtures.map((fixture) => ({
+    id: fixture.id,
+    name: fixture.name,
+    input: fixture.input,
+    expected: fixture.expected,
+    status: fixture.status
+  }));
+  const providerRun = recordAiPolicyProviderRun({
+    tenantId,
+    draftId: draft.id,
+    providerId: draft.provider.id,
+    originalPrompt: originalIntent,
+    redactedPrompt: intent,
+    engine,
+    citations
+  });
+  draft.provider_run_id = providerRun.id;
   state.fleet.policyDrafts.unshift(draft);
-  recordAudit("policy_draft.generated", "policy_draft", draft.id, { title: draft.title, engine });
+  state.fleet.policyTestFixtures = state.fleet.policyTestFixtures.slice(0, 200);
+  recordAudit("policy_draft.generated", "policy_draft", draft.id, { title: draft.title, engine, provider_id: draft.provider.id, redaction_applied: providerRun.redaction_applied });
   recordEvent({
     event_id: `evt_${crypto.randomUUID()}`,
-    tenant_id: "local",
+    tenant_id: tenantId,
     event_type: "policy.draft.generated.v1",
     severity: "info",
-    payload: { draft_id: draft.id, title: draft.title, engine }
+    payload: { draft_id: draft.id, title: draft.title, engine, provider_id: draft.provider.id, redaction_applied: providerRun.redaction_applied }
   });
-  addTask("policy_ai_assist", "completed", `Generated policy draft: ${draft.title}`, { draft_id: draft.id });
+  addTask("policy_ai_assist", "completed", `Generated policy draft: ${draft.title}`, { draft_id: draft.id, provider_run_id: providerRun.id, fixture_count: fixtures.length });
   return draft;
 }
 
 function simulatePolicyDraft(draft) {
   const now = new Date().toISOString();
+  const fixtures = (state.fleet.policyTestFixtures || []).filter((fixture) => fixture.draft_id === draft.id);
+  const testCases = fixtures.length ? fixtures : draft.tests;
   const simulation = {
     id: `sim_${crypto.randomUUID()}`,
-    tenant_id: "local",
+    tenant_id: draft.tenant_id || "local",
     draft_id: draft.id,
     status: "passed",
-    summary: "2 fixtures passed, 0 failed. Reviewer approval is still required.",
-    decisions: draft.tests.map((test) => ({ ...test, status: "passed", actual: test.expected })),
+    summary: `${testCases.length} fixtures passed, 0 failed. Reviewer approval is still required.`,
+    decisions: testCases.map((test) => ({ ...test, status: "passed", actual: test.expected, fixture_id: test.id || null })),
+    provider_run_id: draft.provider_run_id || null,
+    citation_ids: (draft.citations || []).map((citation) => citation.id),
     created_at: now
   };
   draft.status = "simulation_passed";
@@ -2795,7 +3185,7 @@ function createBreakglassRequest(body = {}) {
   const durationMinutes = Math.max(5, Math.min(Number(body.duration_minutes || 60), 240));
   const request = {
     id: `breakglass_${crypto.randomUUID()}`,
-    tenant_id: "local",
+    tenant_id: body.tenant_id || "local",
     requester: body.requester || "local-dev-admin",
     target_type: body.target_type || "lcp",
     target_id: body.target_id || "lcp_local",
@@ -3188,6 +3578,7 @@ function connectionUpdatePayload({ lcp, action, bundle, body = {} }) {
     runtime_configuration: {
       poll_seconds: Math.round(lcpWatchIntervalMs / 1000),
       event_stream: `${publicUrl}/api/events`,
+      event_replay: `${publicUrl}/api/events/replay`,
       entity_sync: `${publicUrl}/api/entities/ingest`,
       telemetry_batches: `${publicUrl}/v1/telemetry/batches`
     },
@@ -3335,6 +3726,7 @@ async function contractDiscovery() {
       telemetry_batches: "/v1/telemetry/batches",
       telemetry_query: "/api/telemetry/query",
       event_stream: "/api/events",
+      event_replay: "/api/events/replay",
       registry_sync: "/v1/tenants/{tenant_id}/registry/sync",
       local_entities: "/api/entities",
       local_entity_health: "/api/entities/health",
@@ -3348,6 +3740,7 @@ async function contractDiscovery() {
       staged_rollout_advance: "/api/rollouts/{rollout_id}/advance",
       suggested_pdp_routes: "/v1/tenants/{tenant_id}/pdp/routes/suggested",
       policy_assist: "/api/policy/assist",
+      policy_providers: "/api/policy/providers",
       policy_drafts: "/api/policy/drafts",
       policy_sandbox: "/api/policy/sandbox",
       breakglass: "/api/breakglass",
@@ -3357,6 +3750,10 @@ async function contractDiscovery() {
       evidence_exports: "/api/evidence/exports",
       trust_scopes: "/api/trust/scopes",
       service_endpoints: "/api/services/endpoints",
+      authorization_model: "/api/authz/model",
+      authorization_tuples: "/api/authz/tuples",
+      authorization_check: "/api/authz/check",
+      authorization_decisions: "/api/authz/decisions",
       connection_updates: "/api/contract-hub/connection-updates",
       contract_drift: "/api/contract-hub/drift",
       openapi: "/contracts/openapi.json",
@@ -3385,6 +3782,26 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && (pathname === "/api/events" || pathname === "/api/hot-reload/stream")) {
     openEventStream(req, res, pathname === "/api/hot-reload/stream" ? "hot-reload" : "contract-hub");
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/events/replay") {
+    const channel = url.searchParams.get("channel") || "contract-hub";
+    const lastEventId = url.searchParams.get("since") || url.searchParams.get("last_event_id") || req.headers["last-event-id"] || "";
+    const entries = replayStreamEntries({
+      channel,
+      lastEventId,
+      limit: url.searchParams.get("limit") || url.searchParams.get("replay") || "100"
+    });
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.event-stream-replay.v1",
+      channel,
+      last_event_id: lastEventId || null,
+      latest_event_id: state.eventJournal.at(-1)?.id || null,
+      replay_window_events: eventStreamReplayWindow,
+      count: entries.length,
+      events: entries
+    });
     return true;
   }
 
@@ -3695,11 +4112,15 @@ async function handleApi(req, res) {
       local_control_planes: state.fleet.localControlPlanes,
       relationships: state.fleet.relationships,
       policy_bundles: state.fleet.policyBundles,
+      policy_bundle_artifacts: state.fleet.policyBundleArtifacts || [],
       policy_packs: state.fleet.policyPacks,
       compliance_policy_bundles: state.fleet.compliancePolicyBundles,
       compliance_score: complianceScorePage(),
       policy_drafts: state.fleet.policyDrafts,
       policy_simulations: state.fleet.policySimulations,
+      ai_policy_providers: aiPolicyProviders(),
+      ai_provider_runs: state.fleet.aiProviderRuns || [],
+      policy_test_fixtures: state.fleet.policyTestFixtures || [],
       policy_sandboxes: state.fleet.policySandboxes,
       breakglass_requests: state.fleet.breakglassRequests,
       integrations: state.fleet.integrations,
@@ -3707,6 +4128,9 @@ async function handleApi(req, res) {
       tenant_trust_scopes: state.fleet.tenantTrustScopes,
       service_endpoints: state.fleet.serviceEndpoints,
       connection_profiles: state.fleet.connectionProfiles,
+      authorization_model: authorizationModel(),
+      authorization_tuples: state.fleet.authorizationTuples || [],
+      authorization_decisions: state.fleet.authorizationDecisions || [],
       device_users: state.fleet.deviceUsers,
       local_entities: state.fleet.localEntities,
       local_entity_relationships: state.fleet.localEntityRelationships,
@@ -3890,6 +4314,57 @@ async function handleApi(req, res) {
     return true;
   }
 
+  if (req.method === "GET" && pathname === "/api/authz/model") {
+    sendJson(res, 200, authorizationModel());
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/authz/tuples") {
+    const tenantId = url.searchParams.get("tenant_id") || "local";
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.authorization-tuples-page.v1",
+      tenant_id: tenantId,
+      tuples: (state.fleet.authorizationTuples || []).filter((tuple) => tuple.tenant_id === tenantId)
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/authz/tuples") {
+    const body = await readBody(req);
+    try {
+      const tuple = createAuthorizationTuple(body);
+      sendJson(res, 201, { tuple });
+    } catch (error) {
+      sendJson(res, error?.message === "tenant_context_required" ? 400 : 422, {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/authz/check") {
+    const body = await readBody(req);
+    try {
+      const decision = checkAuthorization(body);
+      sendJson(res, 200, { decision });
+    } catch (error) {
+      sendJson(res, error?.message === "tenant_context_required" ? 400 : 422, {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/authz/decisions") {
+    const tenantId = url.searchParams.get("tenant_id") || "local";
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.authorization-decisions-page.v1",
+      tenant_id: tenantId,
+      decisions: (state.fleet.authorizationDecisions || []).filter((decision) => decision.tenant_id === tenantId)
+    });
+    return true;
+  }
+
   if (req.method === "GET" && pathname === "/api/contract-hub/connection-updates") {
     const tenantId = url.searchParams.get("tenant_id") || "local";
     const lcpId = url.searchParams.get("lcp_id") || "";
@@ -3937,7 +4412,8 @@ async function handleApi(req, res) {
         cloud_bundle_manifest: "/v1/policy-bundles/{bundle_id}/manifest",
         hot_reload_events: "/api/hot-reload/events",
         hot_reload_stream: "/api/hot-reload/stream",
-        event_stream: "/api/events"
+        event_stream: "/api/events",
+        event_replay: "/api/events/replay"
       },
       hybrid_sync: {
         primary: "lcp_outbox_delta_push",
@@ -3953,6 +4429,9 @@ async function handleApi(req, res) {
       event_streams: {
         contract_hub: "/api/events",
         hot_reload: "/api/hot-reload/stream",
+        replay: "/api/events/replay",
+        resume_parameters: ["since", "last_event_id", "replay"],
+        replay_window_events: eventStreamReplayWindow,
         event_types: ["connected", "keepalive", "task.updated", "telemetry.event", "hot_reload.event", "local_entities.updated"]
       }
     });
@@ -3963,6 +4442,16 @@ async function handleApi(req, res) {
     sendJson(res, 200, {
       drafts: state.fleet.policyDrafts,
       simulations: state.fleet.policySimulations
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/policy/providers") {
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.ai-policy-provider-page.v1",
+      providers: aiPolicyProviders(),
+      runs: state.fleet.aiProviderRuns || [],
+      fixtures: state.fleet.policyTestFixtures || []
     });
     return true;
   }
@@ -4018,6 +4507,17 @@ async function handleApi(req, res) {
       sendJson(res, 403, { error: "tenant_mismatch", bundle_tenant_id: bundle.tenant_id, tenant_id: body.tenant_id });
       return true;
     }
+    const authorization = checkAuthorization({
+      tenant_id: body.tenant_id,
+      principal: body.principal || `user:${body.approved_by || "local-dev-security-admin"}`,
+      action: "bundle.sign",
+      object: `policy_bundle:${bundle.id}`,
+      context: { risk: body.risk || "medium", breakglass: body.breakglass || "inactive" }
+    });
+    if (authorization.decision !== "allow") {
+      sendJson(res, 403, { error: "authorization_denied", authorization });
+      return true;
+    }
     const approvalRecord = body.approval_record || defaultApprovalRecordForBundle(bundle, {
       id: body.approval_id || `approval_${bundle.id}_${crypto.randomUUID().slice(0, 8)}`,
       tenant_id: body.tenant_id,
@@ -4044,7 +4544,7 @@ async function handleApi(req, res) {
       payload_hash: signature.payload_hash,
       verification_status: verification.status
     });
-    sendJson(res, 201, { bundle, signature, verification, task });
+    sendJson(res, 201, { bundle, signature, verification, authorization, task });
     return true;
   }
 
@@ -4095,6 +4595,17 @@ async function handleApi(req, res) {
       sendJson(res, 403, { error: "enterprise_entitlement_required", entitlement: "enterprise.compliance_policy_bundles" });
       return true;
     }
+    const authorization = checkAuthorization({
+      tenant_id: body.tenant_id || "local",
+      principal: body.principal || `user:${body.approved_by || "local-dev-security-admin"}`,
+      action: "policy.rollout",
+      object: `compliance_bundle:${source.id}`,
+      context: { risk: body.risk || "medium", breakglass: body.breakglass || "inactive" }
+    });
+    if (authorization.decision !== "allow") {
+      sendJson(res, 403, { error: "authorization_denied", authorization });
+      return true;
+    }
     const policyBundle = {
       id: `bnd_${source.id}_${crypto.randomUUID().slice(0, 8)}`,
       tenant_id: body.tenant_id || "local",
@@ -4134,7 +4645,7 @@ async function handleApi(req, res) {
       signature_id: signature.id,
       payload_hash: signature.payload_hash
     });
-    sendJson(res, 201, { compliance_bundle: source, policy_bundle: policyBundle, rollout, task });
+    sendJson(res, 201, { compliance_bundle: source, policy_bundle: policyBundle, authorization, rollout, task });
     return true;
   }
 
@@ -4162,6 +4673,17 @@ async function handleApi(req, res) {
     }
     if (draft.status !== "simulation_passed" && draft.status !== "approved") {
       sendJson(res, 409, { error: "simulation_required", detail: "Run simulation before approval.", draft });
+      return true;
+    }
+    const authorization = checkAuthorization({
+      tenant_id: body.tenant_id || draft.tenant_id || "local",
+      principal: body.principal || `user:${body.approved_by || "local-dev-security-admin"}`,
+      action: "policy.approve",
+      object: `policy_project:${draft.project_id || "proj_default_policy"}`,
+      context: { risk: body.risk || "medium", breakglass: body.breakglass || "inactive" }
+    });
+    if (authorization.decision !== "allow") {
+      sendJson(res, 403, { error: "authorization_denied", authorization });
       return true;
     }
     draft.status = "approved";
@@ -4192,7 +4714,7 @@ async function handleApi(req, res) {
     state.fleet.relationships.push({ from: draft.id, to: bundle.id, label: "publishes" });
     recordAudit("policy_draft.approved", "policy_draft", draft.id, { bundle_id: bundle.id, signature_id: signature.id });
     const task = addTask("policy_approval", "completed", `Approved policy draft: ${draft.title}`, { draft_id: draft.id, bundle_id: bundle.id, signature_id: signature.id });
-    sendJson(res, 200, { draft, bundle, task, rollout_required: true });
+    sendJson(res, 200, { draft, bundle, authorization, task, rollout_required: true });
     return true;
   }
 
@@ -4230,6 +4752,20 @@ async function handleApi(req, res) {
     const id = decodeURIComponent(breakglassActionMatch[1]);
     const action = breakglassActionMatch[2];
     const body = await readBody(req);
+    const existing = state.fleet.breakglassRequests.find((item) => item.id === id);
+    if (action === "approve") {
+      const authorization = checkAuthorization({
+        tenant_id: body.tenant_id || existing?.tenant_id || "local",
+        principal: body.principal || `user:${body.approver || "local-dev-security-admin"}`,
+        action: "breakglass.approve",
+        object: `breakglass:${id}`,
+        context: { risk: body.risk || "medium", breakglass: "active" }
+      });
+      if (authorization.decision !== "allow") {
+        sendJson(res, 403, { error: "authorization_denied", authorization });
+        return true;
+      }
+    }
     const request = transitionBreakglass(id, action, body);
     if (!request) {
       sendJson(res, 404, { error: "breakglass_not_found", id });
@@ -4594,6 +5130,27 @@ async function handleApi(req, res) {
     return true;
   }
 
+  const bundleArtifactMatch = pathname.match(/^\/v1\/policy-bundles\/([^/]+)\/artifact$/);
+  if (req.method === "GET" && bundleArtifactMatch) {
+    const bundleId = decodeURIComponent(bundleArtifactMatch[1]);
+    const bundle = state.fleet.policyBundles.find((item) => item.id === bundleId);
+    if (!bundle) {
+      sendJson(res, 404, { error: "policy_bundle_not_found", bundle_id: bundleId });
+      return true;
+    }
+    const { artifact, artifact_hash: artifactHash } = policyBundleArtifact(bundle);
+    recordAudit("policy_bundle.artifact_served", "policy_bundle", bundle.id, {
+      tenant_id: bundleTenantId(bundle),
+      artifact_hash: artifactHash
+    });
+    sendJson(res, 200, { ...artifact, artifact_hash: artifactHash }, {
+      etag: `"sha256:${artifactHash}"`,
+      "x-pollek-artifact-sha256": artifactHash,
+      "cache-control": "public, immutable, max-age=31536000"
+    });
+    return true;
+  }
+
   const suggestedRoutesMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/pdp\/routes\/suggested$/);
   if (req.method === "GET" && suggestedRoutesMatch) {
     sendJson(res, 200, {
@@ -4651,6 +5208,7 @@ const server = createServer(async (req, res) => {
 });
 
 await loadRuntimeState();
+initializeStreamEventSequence();
 initializePolicyBundleSigningLedger();
 startLcpEntityWatch();
 

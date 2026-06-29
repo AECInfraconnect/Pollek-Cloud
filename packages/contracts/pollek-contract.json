@@ -52,7 +52,8 @@
       "hot_reload": true,
       "requires_oauth": true,
       "requires_spiffe": true,
-      "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+      "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest", "/v1/policy-bundles/{bundle_id}/artifact"],
+      "controls": ["signed_manifest", "content_addressed_artifact", "immutable_cache", "artifact_hash"]
     },
     "pollek.cloud.policy_bundle_signing": {
       "direction": "cloud_admin",
@@ -68,7 +69,8 @@
       "requires_oauth": true,
       "requires_spiffe": false,
       "human_approval_required": true,
-      "paths": ["/api/policy/assist", "/api/policy/drafts", "/api/policy/drafts/{draft_id}/simulate", "/api/policy/drafts/{draft_id}/approve", "/api/policy/sandbox"]
+      "paths": ["/api/policy/providers", "/api/policy/assist", "/api/policy/drafts", "/api/policy/drafts/{draft_id}/simulate", "/api/policy/drafts/{draft_id}/approve", "/api/policy/sandbox"],
+      "controls": ["secret_redaction", "citation_manifest", "policy_test_fixtures", "human_approval_required"]
     },
     "pollek.cloud.enterprise_compliance": {
       "direction": "cloud_admin_to_local_bundle",
@@ -108,12 +110,21 @@
       "paths": ["/api/trust/scopes", "/api/services/endpoints", "/api/contract-hub/connection-updates"],
       "service_types": ["spire", "spiffe", "opa", "cedar", "openfga", "ner", "wasm"]
     },
+    "pollek.cloud.authorization": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "tenant_scoped": true,
+      "paths": ["/api/authz/model", "/api/authz/tuples", "/api/authz/check", "/api/authz/decisions"],
+      "engines": ["rbac", "rebac", "cedar", "openfga"],
+      "controls": ["explicit_tenant_context", "default_deny", "tuple_storage", "cedar_policy_guard", "audit_event"]
+    },
     "pollek.cloud.connection_update": {
       "direction": "cloud_to_local",
       "requires_oauth": true,
       "requires_spiffe": true,
       "tenant_scoped": true,
-      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates", "/api/lcp/config/dispatch", "/api/lcp/hot-reload/dispatch", "/api/hot-reload/events", "/api/events", "/api/hot-reload/stream"],
+      "paths": ["/.well-known/pollek-contract", "/api/contract-hub/connection-updates", "/api/lcp/config/dispatch", "/api/lcp/hot-reload/dispatch", "/api/hot-reload/events", "/api/events", "/api/events/replay", "/api/hot-reload/stream"],
       "purpose": "Contract Hub mediates endpoint, trust scope, registry sync, telemetry, bundle, enterprise entitlement, and hot reload connection updates for many Local Pollek instances."
     },
     "pollek.cloud.secure_control_channel": {
@@ -129,12 +140,15 @@
     "hot_reload": true,
     "signed_bundles": true,
     "policy_bundle_signing_verification": true,
+    "content_addressed_bundle_artifacts": true,
     "spiffe_mtls": true,
     "oauth_device_flow": true,
     "telemetry_otlp": true,
     "ai_policy_editor": true,
+    "ai_policy_provider_redaction_citations": true,
     "local_entity_inventory": true,
     "tenant_trust_scopes": true,
+    "authorization_rbac_rebac_cedar_openfga": true,
     "spire_server_scope": true,
     "contract_hub_connection_updates": true,
     "wasm_hot_reload_registry": true,
@@ -148,6 +162,7 @@
     "openapi_artifact": true,
     "contract_drift_guard": true,
     "sse_event_stream": true,
+    "durable_event_stream_replay": true,
     "near_real_time_lcp_watch": true,
     "hybrid_lcp_delta_push": true,
     "lcp_change_batch_ack_cursor": true,

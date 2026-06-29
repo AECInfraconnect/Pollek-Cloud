@@ -20,6 +20,7 @@ const PATH_METHODS = {
   "/.well-known/pollek-contract": ["get"],
   "/contracts/openapi.json": ["get"],
   "/api/events": ["get"],
+  "/api/events/replay": ["get"],
   "/api/hot-reload/stream": ["get"],
   "/oauth/device_authorization": ["post"],
   "/oauth/token": ["post"],
@@ -38,8 +39,10 @@ const PATH_METHODS = {
   "/v1/tenants/{tenant_id}/registry/sync": ["post"],
   "/v1/tenants/{tenant_id}/bundles/latest": ["get"],
   "/v1/policy-bundles/{bundle_id}/manifest": ["get"],
+  "/v1/policy-bundles/{bundle_id}/artifact": ["get"],
   "/api/policy-bundles/{bundle_id}/sign": ["post"],
   "/api/policy-bundles/{bundle_id}/verify": ["get"],
+  "/api/policy/providers": ["get"],
   "/api/policy/assist": ["post"],
   "/api/policy/drafts": ["get"],
   "/api/policy/drafts/{draft_id}/simulate": ["post"],
@@ -59,6 +62,10 @@ const PATH_METHODS = {
   "/api/evidence/exports": ["post"],
   "/api/trust/scopes": ["get"],
   "/api/services/endpoints": ["get"],
+  "/api/authz/model": ["get"],
+  "/api/authz/tuples": ["get", "post"],
+  "/api/authz/check": ["post"],
+  "/api/authz/decisions": ["get"],
   "/api/hot-reload/events": ["get"]
 };
 

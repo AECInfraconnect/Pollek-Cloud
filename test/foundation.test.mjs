@@ -8,12 +8,15 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.schema_version, "pollek-cloud-contract-discovery.v1");
   assert.equal(contract.features.hot_reload, true);
   assert.equal(contract.features.signed_bundles, true);
+  assert.equal(contract.features.content_addressed_bundle_artifacts, true);
   assert.equal(contract.features.oauth_device_flow, true);
   assert.equal(contract.features.ai_policy_editor, true);
+  assert.equal(contract.features.ai_policy_provider_redaction_citations, true);
   assert.ok(contract.supported_transports.includes("mtls"));
   assert.ok(contract.interfaces["pollek.cloud.telemetry"]);
   assert.ok(contract.interfaces["pollek.cloud.local_entities"]);
   assert.ok(contract.interfaces["pollek.cloud.trust_scope"]);
+  assert.ok(contract.interfaces["pollek.cloud.authorization"]);
   assert.ok(contract.interfaces["pollek.cloud.connection_update"]);
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"]);
   assert.ok(contract.interfaces["pollek.cloud.policy_authoring"]);
@@ -23,10 +26,14 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.breakglass"]);
   assert.ok(contract.interfaces["pollek.cloud.adapter_catalog"]);
   assert.equal(contract.interfaces["pollek.cloud.policy_authoring"].human_approval_required, true);
+  assert.ok(contract.interfaces["pollek.cloud.policy_authoring"].paths.includes("/api/policy/providers"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_authoring"].controls.includes("secret_redaction"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_authoring"].controls.includes("policy_test_fixtures"));
   assert.equal(contract.interfaces["pollek.cloud.enterprise_compliance"].enterprise_only, true);
   assert.equal(contract.interfaces["pollek.cloud.enterprise_compliance"].local_catalog_visible, false);
   assert.equal(contract.features.local_entity_inventory, true);
   assert.equal(contract.features.tenant_trust_scopes, true);
+  assert.equal(contract.features.authorization_rbac_rebac_cedar_openfga, true);
   assert.equal(contract.features.contract_hub_connection_updates, true);
   assert.equal(contract.features.wasm_hot_reload_registry, true);
   assert.equal(contract.features.enterprise_compliance_policy_bundles, true);
@@ -40,6 +47,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.openapi_artifact, true);
   assert.equal(contract.features.contract_drift_guard, true);
   assert.equal(contract.features.sse_event_stream, true);
+  assert.equal(contract.features.durable_event_stream_replay, true);
   assert.equal(contract.features.near_real_time_lcp_watch, true);
   assert.equal(contract.features.hybrid_lcp_delta_push, true);
   assert.equal(contract.features.lcp_change_batch_ack_cursor, true);
@@ -48,6 +56,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/api/lcp/change-batches"));
   assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/lcp/change-batches"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events"));
+  assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events/replay"));
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/hot-reload/stream"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/entities/watch"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/change-batches"));
@@ -60,11 +69,19 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].paths.includes("/api/policy-bundles/{bundle_id}/verify"));
   assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("approval_record_required"));
   assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("ed25519_signature"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].paths.includes("/v1/policy-bundles/{bundle_id}/artifact"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].controls.includes("content_addressed_artifact"));
+  assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/model"));
+  assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/tuples"));
+  assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/check"));
+  assert.ok(contract.interfaces["pollek.cloud.authorization"].controls.includes("default_deny"));
+  assert.ok(contract.interfaces["pollek.cloud.authorization"].engines.includes("openfga"));
 });
 
 test("openapi artifact covers every contract discovery path", async () => {
   const contract = JSON.parse(await readFile("packages/contracts/pollek-contract.json", "utf8"));
   const openapi = JSON.parse(await readFile("packages/contracts/openapi.json", "utf8"));
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
   const declaredPaths = new Set(
     Object.values(contract.interfaces).flatMap((spec) => spec.paths || [])
   );
@@ -87,12 +104,43 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/lcp/change-batches"].post);
   assert.ok(openapi.paths["/api/lcp/config/dispatch"].post);
   assert.ok(openapi.paths["/api/lcp/hot-reload/dispatch"].post);
+  assert.ok(openapi.paths["/v1/policy-bundles/{bundle_id}/artifact"].get);
   assert.ok(openapi.paths["/api/policy-bundles/{bundle_id}/sign"].post);
   assert.ok(openapi.paths["/api/policy-bundles/{bundle_id}/verify"].get);
+  assert.ok(openapi.paths["/api/authz/model"].get);
+  assert.ok(openapi.paths["/api/authz/tuples"].get);
+  assert.ok(openapi.paths["/api/authz/tuples"].post);
+  assert.ok(openapi.paths["/api/authz/check"].post);
+  assert.ok(openapi.paths["/api/authz/decisions"].get);
+  assert.ok(openapi.paths["/api/policy/providers"].get);
   assert.ok(openapi.paths["/api/events"].get);
+  assert.ok(openapi.paths["/api/events/replay"].get);
   assert.ok(openapi.paths["/api/hot-reload/stream"].get);
+  assert.equal(packageJson.scripts["contracts:sdk"], "node scripts/generate-sdk.mjs");
   assert.deepEqual(missing, []);
   assert.deepEqual(extra, []);
+});
+
+test("typespec source and sdk artifact cover core Contract Hub APIs", async () => {
+  const typespec = await readFile("packages/contracts/typespec/main.tsp", "utf8");
+  const sdk = await readFile("packages/sdk/pollek-cloud-client.mjs", "utf8");
+  const generator = await readFile("scripts/generate-sdk.mjs", "utf8");
+  const drift = await readFile("scripts/check-contract-drift.mjs", "utf8");
+
+  assert.match(typespec, /namespace Pollek\.Cloud/);
+  assert.match(typespec, /op getContract/);
+  assert.match(typespec, /op replayEvents/);
+  assert.match(typespec, /op checkAuthorization/);
+  assert.match(typespec, /op signPolicyBundle/);
+  assert.match(typespec, /op getBundleArtifact/);
+  assert.match(sdk, /export class PollekCloudClient/);
+  assert.match(sdk, /POLLEK_CONTRACT_VERSION = "2026\.06\.29"/);
+  assert.match(sdk, /replayEvents/);
+  assert.match(sdk, /checkAuthorization/);
+  assert.match(sdk, /signPolicyBundle/);
+  assert.match(sdk, /getBundleArtifact/);
+  assert.match(generator, /export function sdkSource/);
+  assert.match(drift, /SDK artifact is not generated/);
 });
 
 test("postgres foundation migration includes tenant RLS policies", async () => {
@@ -100,6 +148,8 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
 
   assert.match(migration, /ALTER TABLE devices ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_drafts/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS ai_policy_provider_runs/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_test_fixtures/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS enrollment_sessions/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS integrations/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS tenant_trust_scopes/);
@@ -110,6 +160,7 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS local_entity_sync_runs/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS local_change_cursors/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS local_change_batches/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS event_stream_journal/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS entity_health_snapshots/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS adapter_catalog_entries/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS staged_rollout_results/);
@@ -118,16 +169,25 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS breakglass_requests/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS compliance_policy_bundles/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_bundle_signatures/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_bundle_artifacts/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS authorization_tuples/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS authorization_decisions/);
   assert.match(migration, /CREATE POLICY tenant_isolation_devices/);
   assert.match(migration, /CREATE POLICY tenant_isolation_policy_drafts/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_ai_policy_provider_runs/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_policy_test_fixtures/);
   assert.match(migration, /CREATE POLICY tenant_isolation_enrollment_sessions/);
   assert.match(migration, /CREATE POLICY tenant_isolation_local_entities/);
   assert.match(migration, /CREATE POLICY tenant_isolation_local_change_cursors/);
   assert.match(migration, /CREATE POLICY tenant_isolation_local_change_batches/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_event_stream_journal/);
   assert.match(migration, /CREATE POLICY tenant_isolation_hot_reload_events/);
   assert.match(migration, /CREATE POLICY tenant_isolation_breakglass_requests/);
   assert.match(migration, /CREATE POLICY tenant_isolation_compliance_policy_bundles/);
   assert.match(migration, /CREATE POLICY tenant_isolation_policy_bundle_signatures/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_policy_bundle_artifacts/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_authorization_tuples/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_authorization_decisions/);
   assert.match(migration, /CREATE POLICY tenant_isolation_tenant_trust_scopes/);
   assert.match(migration, /current_setting\('app\.tenant_id'/);
 });
@@ -146,6 +206,7 @@ test("dev server exposes fleet operations endpoints", async () => {
 
   assert.match(server, /pathname === "\/api\/rollouts"/);
   assert.match(server, /pathname === "\/api\/evidence\/exports"/);
+  assert.match(server, /pathname === "\/api\/policy\/providers"/);
   assert.match(server, /pathname === "\/api\/policy\/assist"/);
   assert.match(server, /pathname === "\/api\/enrollments"/);
   assert.match(server, /pathname === "\/api\/telemetry\/query"/);
@@ -164,21 +225,29 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /pathname === "\/api\/adapters\/catalog"/);
   assert.match(server, /pathname === "\/api\/trust\/scopes"/);
   assert.match(server, /pathname === "\/api\/services\/endpoints"/);
+  assert.match(server, /pathname === "\/api\/authz\/model"/);
+  assert.match(server, /pathname === "\/api\/authz\/tuples"/);
+  assert.match(server, /pathname === "\/api\/authz\/check"/);
+  assert.match(server, /pathname === "\/api\/authz\/decisions"/);
   assert.match(server, /pathname === "\/api\/contract-hub\/connection-updates"/);
   assert.match(server, /pathname === "\/api\/contract-hub\/drift"/);
   assert.match(server, /pathname === "\/api\/persistence\/status"/);
   assert.match(server, /pathname === "\/api\/persistence\/flush"/);
   assert.match(server, /pathname === "\/contracts\/openapi\.json"/);
   assert.match(server, /pathname === "\/api\/events"/);
+  assert.match(server, /pathname === "\/api\/events\/replay"/);
   assert.match(server, /pathname === "\/api\/hot-reload\/stream"/);
   assert.match(server, /pathname === "\/api\/policy\/sandbox"/);
   assert.match(server, /pathname === "\/api\/compliance\/policy-bundles"/);
   assert.match(server, /pathname === "\/api\/compliance\/score"/);
   assert.match(server, /\/api\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/sign/);
   assert.match(server, /\/api\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/verify/);
+  assert.match(server, /\/v1\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/artifact/);
   assert.match(server, /pathname === "\/api\/breakglass"/);
   assert.match(server, /pathname === "\/api\/hot-reload\/events"/);
   assert.match(server, /function openEventStream/);
+  assert.match(server, /function replayStreamEntries/);
+  assert.match(server, /last-event-id/);
   assert.match(server, /broadcastSse\("hot_reload\.event"/);
   assert.match(server, /contractDriftReport/);
   assert.match(server, /function runtimeStateSnapshot/);
@@ -188,6 +257,14 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /function createControlEnvelope/);
   assert.match(server, /function signPolicyBundle/);
   assert.match(server, /function verifyPolicyBundle/);
+  assert.match(server, /function policyBundleArtifact/);
+  assert.match(server, /function authorizationModel/);
+  assert.match(server, /function createAuthorizationTuple/);
+  assert.match(server, /function checkAuthorization/);
+  assert.match(server, /function aiPolicyProviders/);
+  assert.match(server, /function redactPromptText/);
+  assert.match(server, /function buildPolicyCitations/);
+  assert.match(server, /function createPolicyFixtures/);
   assert.match(server, /crypto\.sign\(null, Buffer\.from\(payload\), bundleSigningKeyPair\.privateKey\)/);
   assert.match(server, /crypto\.verify\(null, Buffer\.from\(payload\), key/);
   assert.doesNotMatch(server, /dev-placeholder/);
@@ -269,7 +346,8 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /function toggleOpsSection/);
   assert.match(app, /pollek\.cloud\.nav\.collapsed/);
   assert.match(app, /pollek\.cloud\.ops\.collapsed/);
-  assert.match(app, /new EventSource\("\/api\/events"\)/);
+  assert.match(app, /new EventSource\(streamUrl\)/);
+  assert.match(app, /pollek\.cloud\.event_stream\.last_event_id/);
   assert.match(app, /local_entities\.updated/);
   assert.match(app, /cloud_to_local\.dispatched/);
   assert.match(app, /Cloud API streaming/);

@@ -100,6 +100,19 @@ CREATE INDEX IF NOT EXISTS telemetry_events_tenant_time_idx ON telemetry_events(
 CREATE INDEX IF NOT EXISTS telemetry_events_type_idx ON telemetry_events(event_type);
 CREATE INDEX IF NOT EXISTS telemetry_events_device_idx ON telemetry_events(device_id);
 
+CREATE TABLE IF NOT EXISTS event_stream_journal (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  sequence bigint NOT NULL,
+  channel text NOT NULL,
+  event_name text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS event_stream_journal_tenant_sequence_idx ON event_stream_journal(tenant_id, sequence);
+CREATE INDEX IF NOT EXISTS event_stream_journal_tenant_channel_idx ON event_stream_journal(tenant_id, channel, sequence DESC);
+
 CREATE TABLE IF NOT EXISTS tasks (
   id text PRIMARY KEY,
   tenant_id text REFERENCES tenants(id) ON DELETE CASCADE,
@@ -125,6 +138,36 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS audit_events_tenant_time_idx ON audit_events(tenant_id, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS authorization_tuples (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  principal text NOT NULL,
+  relation text NOT NULL,
+  object text NOT NULL,
+  condition jsonb,
+  source text NOT NULL DEFAULT 'cloud_admin',
+  created_by text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS authorization_tuples_tenant_object_idx ON authorization_tuples(tenant_id, object, relation);
+CREATE INDEX IF NOT EXISTS authorization_tuples_tenant_principal_idx ON authorization_tuples(tenant_id, principal);
+
+CREATE TABLE IF NOT EXISTS authorization_decisions (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  principal text NOT NULL,
+  action text NOT NULL,
+  object text NOT NULL,
+  decision text NOT NULL,
+  reason text NOT NULL,
+  engine_results jsonb NOT NULL DEFAULT '{}'::jsonb,
+  context jsonb NOT NULL DEFAULT '{}'::jsonb,
+  checked_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS authorization_decisions_tenant_time_idx ON authorization_decisions(tenant_id, checked_at DESC);
 
 CREATE TABLE IF NOT EXISTS enrollment_sessions (
   id text PRIMARY KEY,
@@ -176,6 +219,36 @@ CREATE TABLE IF NOT EXISTS policy_drafts (
 
 CREATE INDEX IF NOT EXISTS policy_drafts_tenant_status_idx ON policy_drafts(tenant_id, status);
 
+CREATE TABLE IF NOT EXISTS ai_policy_provider_runs (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  draft_id text NOT NULL REFERENCES policy_drafts(id) ON DELETE CASCADE,
+  provider_id text NOT NULL,
+  mode text NOT NULL,
+  prompt_hash text NOT NULL,
+  redacted_prompt_hash text NOT NULL,
+  redaction_applied boolean NOT NULL DEFAULT false,
+  recommended_engine text NOT NULL,
+  citation_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ai_policy_provider_runs_tenant_draft_idx ON ai_policy_provider_runs(tenant_id, draft_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS policy_test_fixtures (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  draft_id text NOT NULL REFERENCES policy_drafts(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  input jsonb NOT NULL DEFAULT '{}'::jsonb,
+  expected text NOT NULL,
+  source text NOT NULL DEFAULT 'ai_policy_assistant',
+  status text NOT NULL DEFAULT 'pending',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS policy_test_fixtures_tenant_draft_idx ON policy_test_fixtures(tenant_id, draft_id);
+
 CREATE TABLE IF NOT EXISTS policy_simulations (
   id text PRIMARY KEY,
   tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -221,6 +294,22 @@ CREATE TABLE IF NOT EXISTS policy_bundle_signatures (
 );
 
 CREATE INDEX IF NOT EXISTS policy_bundle_signatures_tenant_bundle_idx ON policy_bundle_signatures(tenant_id, bundle_id, signed_at DESC);
+
+CREATE TABLE IF NOT EXISTS policy_bundle_artifacts (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  bundle_id text NOT NULL REFERENCES policy_bundles(id) ON DELETE CASCADE,
+  revision text NOT NULL,
+  artifact_hash text NOT NULL,
+  storage_uri text NOT NULL,
+  media_type text NOT NULL,
+  size_bytes integer NOT NULL DEFAULT 0,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS policy_bundle_artifacts_hash_idx ON policy_bundle_artifacts(tenant_id, artifact_hash);
+CREATE INDEX IF NOT EXISTS policy_bundle_artifacts_tenant_bundle_idx ON policy_bundle_artifacts(tenant_id, bundle_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS rollout_plans (
   id text PRIMARY KEY,
@@ -517,14 +606,20 @@ ALTER TABLE device_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE local_control_planes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telemetry_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_stream_journal ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE authorization_tuples ENABLE ROW LEVEL SECURITY;
+ALTER TABLE authorization_decisions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrollment_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_drafts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_policy_provider_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE policy_test_fixtures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_simulations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_bundles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_bundle_signatures ENABLE ROW LEVEL SECURITY;
+ALTER TABLE policy_bundle_artifacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rollout_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staged_rollout_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hot_reload_events ENABLE ROW LEVEL SECURITY;
@@ -563,12 +658,24 @@ DROP POLICY IF EXISTS tenant_isolation_telemetry ON telemetry_events;
 CREATE POLICY tenant_isolation_telemetry ON telemetry_events
   USING (tenant_id = current_setting('app.tenant_id', true));
 
+DROP POLICY IF EXISTS tenant_isolation_event_stream_journal ON event_stream_journal;
+CREATE POLICY tenant_isolation_event_stream_journal ON event_stream_journal
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
 DROP POLICY IF EXISTS tenant_isolation_tasks ON tasks;
 CREATE POLICY tenant_isolation_tasks ON tasks
   USING (tenant_id = current_setting('app.tenant_id', true));
 
 DROP POLICY IF EXISTS tenant_isolation_audit_events ON audit_events;
 CREATE POLICY tenant_isolation_audit_events ON audit_events
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_authorization_tuples ON authorization_tuples;
+CREATE POLICY tenant_isolation_authorization_tuples ON authorization_tuples
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_authorization_decisions ON authorization_decisions;
+CREATE POLICY tenant_isolation_authorization_decisions ON authorization_decisions
   USING (tenant_id = current_setting('app.tenant_id', true));
 
 DROP POLICY IF EXISTS tenant_isolation_enrollment_sessions ON enrollment_sessions;
@@ -583,6 +690,14 @@ DROP POLICY IF EXISTS tenant_isolation_policy_drafts ON policy_drafts;
 CREATE POLICY tenant_isolation_policy_drafts ON policy_drafts
   USING (tenant_id = current_setting('app.tenant_id', true));
 
+DROP POLICY IF EXISTS tenant_isolation_ai_policy_provider_runs ON ai_policy_provider_runs;
+CREATE POLICY tenant_isolation_ai_policy_provider_runs ON ai_policy_provider_runs
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_policy_test_fixtures ON policy_test_fixtures;
+CREATE POLICY tenant_isolation_policy_test_fixtures ON policy_test_fixtures
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
 DROP POLICY IF EXISTS tenant_isolation_policy_simulations ON policy_simulations;
 CREATE POLICY tenant_isolation_policy_simulations ON policy_simulations
   USING (tenant_id = current_setting('app.tenant_id', true));
@@ -593,6 +708,10 @@ CREATE POLICY tenant_isolation_policy_bundles ON policy_bundles
 
 DROP POLICY IF EXISTS tenant_isolation_policy_bundle_signatures ON policy_bundle_signatures;
 CREATE POLICY tenant_isolation_policy_bundle_signatures ON policy_bundle_signatures
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_policy_bundle_artifacts ON policy_bundle_artifacts;
+CREATE POLICY tenant_isolation_policy_bundle_artifacts ON policy_bundle_artifacts
   USING (tenant_id = current_setting('app.tenant_id', true));
 
 DROP POLICY IF EXISTS tenant_isolation_rollout_plans ON rollout_plans;
