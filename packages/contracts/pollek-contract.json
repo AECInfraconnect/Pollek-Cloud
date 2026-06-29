@@ -54,6 +54,15 @@
       "requires_spiffe": true,
       "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
     },
+    "pollek.cloud.policy_bundle_signing": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "tenant_scoped": true,
+      "human_approval_required": true,
+      "paths": ["/api/policy-bundles/{bundle_id}/sign", "/api/policy-bundles/{bundle_id}/verify"],
+      "controls": ["approval_record_required", "ed25519_signature", "payload_hash", "public_key_pinning", "audit_event", "task_record"]
+    },
     "pollek.cloud.policy_authoring": {
       "direction": "cloud_admin",
       "requires_oauth": true,
@@ -119,6 +128,7 @@
   "features": {
     "hot_reload": true,
     "signed_bundles": true,
+    "policy_bundle_signing_verification": true,
     "spiffe_mtls": true,
     "oauth_device_flow": true,
     "telemetry_otlp": true,

@@ -203,6 +203,25 @@ CREATE TABLE IF NOT EXISTS policy_bundles (
 
 CREATE INDEX IF NOT EXISTS policy_bundles_tenant_status_idx ON policy_bundles(tenant_id, status);
 
+CREATE TABLE IF NOT EXISTS policy_bundle_signatures (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  bundle_id text NOT NULL REFERENCES policy_bundles(id) ON DELETE CASCADE,
+  revision text NOT NULL,
+  approval_id text,
+  alg text NOT NULL,
+  key_id text NOT NULL,
+  public_key_pem text NOT NULL,
+  payload_hash text NOT NULL,
+  signature text NOT NULL,
+  signed_by text NOT NULL,
+  signed_at timestamptz NOT NULL DEFAULT now(),
+  verification_status text NOT NULL DEFAULT 'pending',
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS policy_bundle_signatures_tenant_bundle_idx ON policy_bundle_signatures(tenant_id, bundle_id, signed_at DESC);
+
 CREATE TABLE IF NOT EXISTS rollout_plans (
   id text PRIMARY KEY,
   tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -505,6 +524,7 @@ ALTER TABLE policy_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_simulations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_bundles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE policy_bundle_signatures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rollout_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staged_rollout_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hot_reload_events ENABLE ROW LEVEL SECURITY;
@@ -569,6 +589,10 @@ CREATE POLICY tenant_isolation_policy_simulations ON policy_simulations
 
 DROP POLICY IF EXISTS tenant_isolation_policy_bundles ON policy_bundles;
 CREATE POLICY tenant_isolation_policy_bundles ON policy_bundles
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+DROP POLICY IF EXISTS tenant_isolation_policy_bundle_signatures ON policy_bundle_signatures;
+CREATE POLICY tenant_isolation_policy_bundle_signatures ON policy_bundle_signatures
   USING (tenant_id = current_setting('app.tenant_id', true));
 
 DROP POLICY IF EXISTS tenant_isolation_rollout_plans ON rollout_plans;

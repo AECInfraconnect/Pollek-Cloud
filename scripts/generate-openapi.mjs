@@ -38,6 +38,8 @@ const PATH_METHODS = {
   "/v1/tenants/{tenant_id}/registry/sync": ["post"],
   "/v1/tenants/{tenant_id}/bundles/latest": ["get"],
   "/v1/policy-bundles/{bundle_id}/manifest": ["get"],
+  "/api/policy-bundles/{bundle_id}/sign": ["post"],
+  "/api/policy-bundles/{bundle_id}/verify": ["get"],
   "/api/policy/assist": ["post"],
   "/api/policy/drafts": ["get"],
   "/api/policy/drafts/{draft_id}/simulate": ["post"],

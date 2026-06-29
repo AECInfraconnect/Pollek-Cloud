@@ -1851,7 +1851,9 @@ async function approveLatestPolicy() {
   refs.approvePolicyButton.disabled = true;
   refs.approvePolicyButton.textContent = "Approving";
   try {
-    const payload = await postJson(`/api/policy/drafts/${encodeURIComponent(draftId)}/approve`, {});
+    const payload = await postJson(`/api/policy/drafts/${encodeURIComponent(draftId)}/approve`, {
+      tenant_id: "local"
+    });
     refs.policyAssistantResult.innerHTML = `
       <strong>Approved, not deployed</strong>
       <span>${escapeHtml(payload.bundle.id)} is signed and ready for rollout.</span>
@@ -2069,6 +2071,7 @@ async function deployComplianceBundle() {
     const targets = (app.data.local_control_planes || []).filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
     const payload = await postJson("/api/compliance/policy-bundles/deploy", {
       bundle_id: bundleId,
+      tenant_id: "local",
       target_ids: targets
     });
     const advanced = await postJson(`/api/rollouts/${encodeURIComponent(payload.rollout.id)}/advance`, {});

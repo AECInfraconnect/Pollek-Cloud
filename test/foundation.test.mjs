@@ -17,6 +17,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.connection_update"]);
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"]);
   assert.ok(contract.interfaces["pollek.cloud.policy_authoring"]);
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"]);
   assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"]);
   assert.ok(contract.interfaces["pollek.cloud.enterprise_compliance"]);
   assert.ok(contract.interfaces["pollek.cloud.breakglass"]);
@@ -29,6 +30,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.contract_hub_connection_updates, true);
   assert.equal(contract.features.wasm_hot_reload_registry, true);
   assert.equal(contract.features.enterprise_compliance_policy_bundles, true);
+  assert.equal(contract.features.policy_bundle_signing_verification, true);
   assert.equal(contract.features.policy_sandbox, true);
   assert.equal(contract.features.breakglass, true);
   assert.equal(contract.features.staged_rollouts, true);
@@ -53,6 +55,11 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/hot-reload/dispatch"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("signed-control-envelope"));
   assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("ack_cursor"));
+  assert.equal(contract.interfaces["pollek.cloud.policy_bundle_signing"].human_approval_required, true);
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].paths.includes("/api/policy-bundles/{bundle_id}/sign"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].paths.includes("/api/policy-bundles/{bundle_id}/verify"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("approval_record_required"));
+  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("ed25519_signature"));
 });
 
 test("openapi artifact covers every contract discovery path", async () => {
@@ -80,6 +87,8 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/lcp/change-batches"].post);
   assert.ok(openapi.paths["/api/lcp/config/dispatch"].post);
   assert.ok(openapi.paths["/api/lcp/hot-reload/dispatch"].post);
+  assert.ok(openapi.paths["/api/policy-bundles/{bundle_id}/sign"].post);
+  assert.ok(openapi.paths["/api/policy-bundles/{bundle_id}/verify"].get);
   assert.ok(openapi.paths["/api/events"].get);
   assert.ok(openapi.paths["/api/hot-reload/stream"].get);
   assert.deepEqual(missing, []);
@@ -108,6 +117,7 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_sandbox_runs/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS breakglass_requests/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS compliance_policy_bundles/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS policy_bundle_signatures/);
   assert.match(migration, /CREATE POLICY tenant_isolation_devices/);
   assert.match(migration, /CREATE POLICY tenant_isolation_policy_drafts/);
   assert.match(migration, /CREATE POLICY tenant_isolation_enrollment_sessions/);
@@ -117,6 +127,7 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE POLICY tenant_isolation_hot_reload_events/);
   assert.match(migration, /CREATE POLICY tenant_isolation_breakglass_requests/);
   assert.match(migration, /CREATE POLICY tenant_isolation_compliance_policy_bundles/);
+  assert.match(migration, /CREATE POLICY tenant_isolation_policy_bundle_signatures/);
   assert.match(migration, /CREATE POLICY tenant_isolation_tenant_trust_scopes/);
   assert.match(migration, /current_setting\('app\.tenant_id'/);
 });
@@ -163,6 +174,8 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /pathname === "\/api\/policy\/sandbox"/);
   assert.match(server, /pathname === "\/api\/compliance\/policy-bundles"/);
   assert.match(server, /pathname === "\/api\/compliance\/score"/);
+  assert.match(server, /\/api\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/sign/);
+  assert.match(server, /\/api\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/verify/);
   assert.match(server, /pathname === "\/api\/breakglass"/);
   assert.match(server, /pathname === "\/api\/hot-reload\/events"/);
   assert.match(server, /function openEventStream/);
@@ -173,6 +186,11 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /async function persistRuntimeState/);
   assert.match(server, /function securityPostureStatus/);
   assert.match(server, /function createControlEnvelope/);
+  assert.match(server, /function signPolicyBundle/);
+  assert.match(server, /function verifyPolicyBundle/);
+  assert.match(server, /crypto\.sign\(null, Buffer\.from\(payload\), bundleSigningKeyPair\.privateKey\)/);
+  assert.match(server, /crypto\.verify\(null, Buffer\.from\(payload\), key/);
+  assert.doesNotMatch(server, /dev-placeholder/);
   assert.match(server, /async function pollLcpEntityWatch/);
   assert.match(server, /function ingestLcpChangeBatch/);
   assert.match(server, /function changeCursorFor/);

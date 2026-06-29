@@ -17,6 +17,8 @@ const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
 const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
 const lcpReconcileIntervalMs = Math.max(30000, Number(process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS || process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 300000));
+const bundleSigningKeyPair = crypto.generateKeyPairSync("ed25519");
+const bundleSigningPublicKeyPem = bundleSigningKeyPair.publicKey.export({ type: "spki", format: "pem" });
 const sseClients = new Set();
 const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush", "/api/entities/watch"]);
 const persistedFleetKeys = [
@@ -24,6 +26,7 @@ const persistedFleetKeys = [
   "localControlPlanes",
   "relationships",
   "policyBundles",
+  "policyBundleSignatures",
   "alarms",
   "policyDrafts",
   "policySimulations",
@@ -624,10 +627,11 @@ function createFleetState() {
       { from: "lcp_sgx_07", to: "alarm_lcp_offline", label: "raises" }
     ],
     policyBundles: [
-      { id: "bnd_local_dev_baseline", name: "Local Dev Baseline", revision: "2026.06.29.001", status: "available", coverage: 62 },
-      { id: "bnd_ai_data_protection", name: "AI Data Protection", revision: "2026.06.29.004", status: "active", coverage: 88 },
-      { id: "bnd_shadow_ai_observe", name: "Shadow AI Observe", revision: "2026.06.28.011", status: "stale", coverage: 41 }
+      { id: "bnd_local_dev_baseline", tenant_id: "local", name: "Local Dev Baseline", revision: "2026.06.29.001", status: "available", coverage: 62, hot_reload: true },
+      { id: "bnd_ai_data_protection", tenant_id: "local", name: "AI Data Protection", revision: "2026.06.29.004", status: "active", coverage: 88, hot_reload: true },
+      { id: "bnd_shadow_ai_observe", tenant_id: "local", name: "Shadow AI Observe", revision: "2026.06.28.011", status: "stale", coverage: 41, hot_reload: true }
     ],
+    policyBundleSignatures: [],
     alarms: [
       {
         id: "alarm_lcp_offline",
@@ -912,6 +916,7 @@ function runtimePersistenceStatus() {
       probes: state.probes.length,
       policy_drafts: state.fleet.policyDrafts.length,
       policy_bundles: state.fleet.policyBundles.length,
+      policy_bundle_signatures: state.fleet.policyBundleSignatures?.length || 0,
       rollouts: state.fleet.rolloutPlans.length,
       hot_reload_events: state.fleet.hotReloadEvents.length,
       breakglass_requests: state.fleet.breakglassRequests.length,
@@ -1023,6 +1028,202 @@ function stableJson(value) {
 
 function sha256(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function bundleTenantId(bundle, fallback = "local") {
+  return bundle?.tenant_id || bundle?.approval_record?.tenant_id || fallback;
+}
+
+function defaultApprovalRecordForBundle(bundle, patch = {}) {
+  const approvedAt = patch.approved_at || bundle?.approved_at || bundle?.created_at || "2026-06-29T00:00:00.000Z";
+  return {
+    id: patch.id || bundle?.approval_record?.id || bundle?.approval_id || `approval_${bundle?.id || "bundle"}_local_dev`,
+    tenant_id: patch.tenant_id || bundleTenantId(bundle),
+    status: patch.status || bundle?.approval_record?.status || "approved",
+    approved_by: patch.approved_by || bundle?.approval_record?.approved_by || "local-dev-security-admin",
+    approved_at: approvedAt,
+    source: patch.source || bundle?.approval_record?.source || (bundle?.compliance_bundle_id ? "enterprise_compliance_bundle" : bundle?.draft_id ? "policy_draft_approval" : "seed_policy_bundle"),
+    reason: patch.reason || bundle?.approval_record?.reason || "Approved for local-dev signed bundle protocol compatibility testing."
+  };
+}
+
+function unsignedPolicyBundleManifest(bundle) {
+  const tenantId = bundleTenantId(bundle);
+  const approval = defaultApprovalRecordForBundle(bundle);
+  return {
+    manifest_version: "1.0",
+    schema_version: "bundle-manifest.v2",
+    bundle_id: bundle?.id || "bnd_local_dev_baseline",
+    tenant_id: tenantId,
+    revision: bundle?.revision || "2026.06.29.001",
+    created_at: bundle?.created_at || "2026-06-29T00:00:00.000Z",
+    target: {
+      control_level: bundle?.control_level || "Observe",
+      pep_capabilities: ["mcp-stdio", "http-proxy"],
+      agent_selectors: [{ kind: "label", value: "managed=true" }]
+    },
+    policies: bundle?.policies || [],
+    artifacts: bundle?.artifacts || [],
+    compliance_bundle_id: bundle?.compliance_bundle_id || null,
+    hot_reload: Boolean(bundle?.hot_reload ?? true),
+    approval: {
+      approval_id: approval.id,
+      status: approval.status,
+      approved_by: approval.approved_by,
+      approved_at: approval.approved_at,
+      source: approval.source
+    },
+    source_hashes: {
+      policies_sha256: sha256(stableJson(bundle?.policies || [])),
+      artifacts_sha256: sha256(stableJson(bundle?.artifacts || []))
+    }
+  };
+}
+
+function normalizePolicyBundleSignatures(bundle) {
+  const signatures = Array.isArray(bundle?.signatures) ? bundle.signatures : [];
+  if (bundle?.signature?.sig || bundle?.signature?.signature) signatures.push(bundle.signature);
+  const deduped = new Map();
+  for (const signature of signatures) {
+    if (!signature) continue;
+    const key = signature.id || `${signature.key_id || "unknown"}:${signature.payload_hash || "no-hash"}:${signature.sig || signature.signature || ""}`;
+    deduped.set(key, signature);
+  }
+  return [...deduped.values()];
+}
+
+function verifyPolicyBundle(bundle, manifest = unsignedPolicyBundleManifest(bundle)) {
+  const payload = stableJson(manifest);
+  const payloadHash = sha256(payload);
+  const signatures = normalizePolicyBundleSignatures(bundle);
+  const results = signatures.map((signature) => {
+    const sig = signature.sig || signature.signature;
+    const payloadHashMatches = signature.payload_hash === payloadHash;
+    try {
+      const key = signature.public_key_pem || bundleSigningKeyPair.publicKey;
+      const verified = Boolean(sig) && crypto.verify(null, Buffer.from(payload), key, Buffer.from(sig || "", "base64url"));
+      return {
+        id: signature.id || null,
+        key_id: signature.key_id || null,
+        alg: signature.alg || null,
+        payload_hash: signature.payload_hash || null,
+        payload_hash_matches: payloadHashMatches,
+        signature_valid: verified,
+        status: payloadHashMatches && verified ? "valid" : "invalid"
+      };
+    } catch (error) {
+      return {
+        id: signature.id || null,
+        key_id: signature.key_id || null,
+        alg: signature.alg || null,
+        payload_hash: signature.payload_hash || null,
+        payload_hash_matches: payloadHashMatches,
+        signature_valid: false,
+        status: "invalid",
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+  return {
+    schema_version: "pollek.cloud.policy-bundle-verification.v1",
+    tenant_id: bundleTenantId(bundle),
+    bundle_id: bundle?.id || null,
+    revision: bundle?.revision || null,
+    payload_hash: payloadHash,
+    signature_count: results.length,
+    status: results.length && results.every((item) => item.status === "valid") ? "valid" : results.length ? "invalid" : "unsigned",
+    results
+  };
+}
+
+function upsertPolicyBundleSignature(record) {
+  if (!Array.isArray(state.fleet.policyBundleSignatures)) state.fleet.policyBundleSignatures = [];
+  const existingIndex = state.fleet.policyBundleSignatures.findIndex((item) => item.id === record.id || (
+    item.bundle_id === record.bundle_id
+    && item.payload_hash === record.payload_hash
+    && item.key_id === record.key_id
+  ));
+  if (existingIndex >= 0) state.fleet.policyBundleSignatures.splice(existingIndex, 1);
+  state.fleet.policyBundleSignatures.unshift(record);
+  state.fleet.policyBundleSignatures = state.fleet.policyBundleSignatures.slice(0, 100);
+  return record;
+}
+
+function signPolicyBundle(bundle, approvalRecord = defaultApprovalRecordForBundle(bundle), options = {}) {
+  if (!bundle) throw new Error("policy_bundle_required");
+  if (!approvalRecord || approvalRecord.status !== "approved") throw new Error("approved_record_required");
+  const tenantId = approvalRecord.tenant_id || bundleTenantId(bundle);
+  bundle.tenant_id = tenantId;
+  bundle.approval_record = approvalRecord;
+  const manifest = unsignedPolicyBundleManifest(bundle);
+  const payload = stableJson(manifest);
+  const payloadHash = sha256(payload);
+  const sig = crypto.sign(null, Buffer.from(payload), bundleSigningKeyPair.privateKey).toString("base64url");
+  const signedAt = options.signed_at || new Date().toISOString();
+  const record = {
+    id: options.id || `sig_${crypto.randomUUID()}`,
+    schema_version: "pollek.cloud.policy-bundle-signature.v1",
+    tenant_id: tenantId,
+    bundle_id: bundle.id,
+    revision: bundle.revision,
+    alg: "Ed25519",
+    key_id: "local-dev-ed25519",
+    sig,
+    payload_hash: payloadHash,
+    public_key_pem: bundleSigningPublicKeyPem,
+    signed_by: approvalRecord.approved_by || "local-dev-security-admin",
+    signed_at: signedAt,
+    approval_id: approvalRecord.id,
+    approval_source: approvalRecord.source,
+    verification_status: "valid"
+  };
+  bundle.signed = true;
+  bundle.signature_status = "signed";
+  bundle.manifest_hash = payloadHash;
+  bundle.signature = record;
+  bundle.signatures = [record];
+  upsertPolicyBundleSignature(record);
+  return record;
+}
+
+function ensurePolicyBundleSignature(bundle) {
+  const verification = verifyPolicyBundle(bundle);
+  if (verification.status === "valid") {
+    for (const signature of normalizePolicyBundleSignatures(bundle)) upsertPolicyBundleSignature(signature);
+    return { signed: false, verification };
+  }
+  const approval = defaultApprovalRecordForBundle(bundle);
+  const signature = signPolicyBundle(bundle, approval);
+  return { signed: true, signature, verification: verifyPolicyBundle(bundle) };
+}
+
+function signedPolicyBundleManifest(bundle) {
+  const signResult = ensurePolicyBundleSignature(bundle);
+  const manifest = unsignedPolicyBundleManifest(bundle);
+  const verification = verifyPolicyBundle(bundle, manifest);
+  return {
+    ...manifest,
+    payload_hash: verification.payload_hash,
+    signatures: normalizePolicyBundleSignatures(bundle),
+    verification,
+    signing_action: signResult.signed ? "signed" : "reused_valid_signature"
+  };
+}
+
+function initializePolicyBundleSigningLedger() {
+  if (!Array.isArray(state.fleet.policyBundleSignatures)) state.fleet.policyBundleSignatures = [];
+  for (const bundle of state.fleet.policyBundles || []) {
+    if (!bundle.tenant_id) bundle.tenant_id = "local";
+    if (!bundle.approval_record) bundle.approval_record = defaultApprovalRecordForBundle(bundle);
+    const result = ensurePolicyBundleSignature(bundle);
+    if (result.signed) {
+      recordAudit("policy_bundle.seed_signed", "policy_bundle", bundle.id, {
+        tenant_id: bundle.tenant_id,
+        signature_id: result.signature.id,
+        payload_hash: result.signature.payload_hash
+      });
+    }
+  }
 }
 
 function stripVolatileFields(value) {
@@ -3800,6 +4001,74 @@ async function handleApi(req, res) {
     return true;
   }
 
+  const policyBundleSignMatch = pathname.match(/^\/api\/policy-bundles\/([^/]+)\/sign$/);
+  if (req.method === "POST" && policyBundleSignMatch) {
+    const bundleId = decodeURIComponent(policyBundleSignMatch[1]);
+    const body = await readBody(req);
+    const bundle = state.fleet.policyBundles.find((item) => item.id === bundleId);
+    if (!bundle) {
+      sendJson(res, 404, { error: "policy_bundle_not_found", bundle_id: bundleId });
+      return true;
+    }
+    if (!body.tenant_id) {
+      sendJson(res, 400, { error: "tenant_context_required", detail: "Signing writes tenant-owned bundle evidence and requires body.tenant_id." });
+      return true;
+    }
+    if (bundle.tenant_id && bundle.tenant_id !== body.tenant_id) {
+      sendJson(res, 403, { error: "tenant_mismatch", bundle_tenant_id: bundle.tenant_id, tenant_id: body.tenant_id });
+      return true;
+    }
+    const approvalRecord = body.approval_record || defaultApprovalRecordForBundle(bundle, {
+      id: body.approval_id || `approval_${bundle.id}_${crypto.randomUUID().slice(0, 8)}`,
+      tenant_id: body.tenant_id,
+      approved_by: body.approved_by || "local-dev-security-admin",
+      approved_at: new Date().toISOString(),
+      source: body.approval_source || "manual_bundle_sign",
+      reason: body.reason || "Manual policy bundle signing approval."
+    });
+    if (approvalRecord.status !== "approved") {
+      sendJson(res, 409, { error: "approved_record_required", approval: approvalRecord });
+      return true;
+    }
+    const signature = signPolicyBundle(bundle, approvalRecord);
+    const verification = verifyPolicyBundle(bundle);
+    recordAudit("policy_bundle.signed", "policy_bundle", bundle.id, {
+      tenant_id: body.tenant_id,
+      signature_id: signature.id,
+      payload_hash: signature.payload_hash,
+      approval_id: signature.approval_id
+    });
+    const task = addTask("policy_bundle_sign", "completed", `Signed policy bundle ${bundle.name}`, {
+      bundle_id: bundle.id,
+      signature_id: signature.id,
+      payload_hash: signature.payload_hash,
+      verification_status: verification.status
+    });
+    sendJson(res, 201, { bundle, signature, verification, task });
+    return true;
+  }
+
+  const policyBundleVerifyMatch = pathname.match(/^\/api\/policy-bundles\/([^/]+)\/verify$/);
+  if (req.method === "GET" && policyBundleVerifyMatch) {
+    const bundleId = decodeURIComponent(policyBundleVerifyMatch[1]);
+    const bundle = state.fleet.policyBundles.find((item) => item.id === bundleId);
+    if (!bundle) {
+      sendJson(res, 404, { error: "policy_bundle_not_found", bundle_id: bundleId });
+      return true;
+    }
+    const manifest = unsignedPolicyBundleManifest(bundle);
+    const verification = verifyPolicyBundle(bundle, manifest);
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.policy-bundle-verification-response.v1",
+      bundle_id: bundle.id,
+      tenant_id: bundleTenantId(bundle),
+      manifest,
+      signatures: normalizePolicyBundleSignatures(bundle),
+      verification
+    });
+    return true;
+  }
+
   if (req.method === "POST" && pathname === "/api/compliance/policy-bundles/simulate") {
     const body = await readBody(req);
     const bundle = state.fleet.compliancePolicyBundles.find((item) => item.id === body.bundle_id) || state.fleet.compliancePolicyBundles[0];
@@ -3828,18 +4097,28 @@ async function handleApi(req, res) {
     }
     const policyBundle = {
       id: `bnd_${source.id}_${crypto.randomUUID().slice(0, 8)}`,
+      tenant_id: body.tenant_id || "local",
       name: source.name,
       revision: new Date().toISOString().slice(0, 10).replaceAll("-", "."),
       status: "available",
       coverage: 82,
-      signed: true,
+      signed: false,
       hot_reload: true,
       compliance_bundle_id: source.id,
       frameworks: source.frameworks,
       control_level: source.default_mode === "enforce" ? "Enforce" : source.default_mode === "approval" ? "Approval" : "Warn",
       policies: source.controls.map((control) => ({ control, engines: source.target_engines })),
+      approval_record: defaultApprovalRecordForBundle({ id: `bnd_${source.id}`, tenant_id: body.tenant_id || "local", compliance_bundle_id: source.id }, {
+        id: `approval_${source.id}_${crypto.randomUUID().slice(0, 8)}`,
+        tenant_id: body.tenant_id || "local",
+        approved_by: body.approved_by || "local-dev-compliance-admin",
+        approved_at: new Date().toISOString(),
+        source: "enterprise_compliance_bundle",
+        reason: body.reason || `Deploy enterprise compliance bundle ${source.name}`
+      }),
       created_at: new Date().toISOString()
     };
+    const signature = signPolicyBundle(policyBundle, policyBundle.approval_record);
     state.fleet.policyBundles.unshift(policyBundle);
     const rollout = createRolloutPlan({
       bundle_id: policyBundle.id,
@@ -3847,11 +4126,13 @@ async function handleApi(req, res) {
       wave_strategy: body.wave_strategy || "enterprise-compliance-canary"
     });
     state.fleet.rolloutPlans.unshift(rollout);
-    recordAudit("compliance_bundle.deployed", "compliance_bundle", source.id, { bundle_id: policyBundle.id, rollout_id: rollout.id });
+    recordAudit("compliance_bundle.deployed", "compliance_bundle", source.id, { bundle_id: policyBundle.id, rollout_id: rollout.id, signature_id: signature.id });
     const task = addTask("compliance_bundle_deploy", "queued", `Prepared enterprise compliance bundle ${source.name}`, {
       compliance_bundle_id: source.id,
       bundle_id: policyBundle.id,
-      rollout_id: rollout.id
+      rollout_id: rollout.id,
+      signature_id: signature.id,
+      payload_hash: signature.payload_hash
     });
     sendJson(res, 201, { compliance_bundle: source, policy_bundle: policyBundle, rollout, task });
     return true;
@@ -3873,6 +4154,7 @@ async function handleApi(req, res) {
   const policyApproveMatch = pathname.match(/^\/api\/policy\/drafts\/([^/]+)\/approve$/);
   if (req.method === "POST" && policyApproveMatch) {
     const draftId = decodeURIComponent(policyApproveMatch[1]);
+    const body = await readBody(req);
     const draft = state.fleet.policyDrafts.find((item) => item.id === draftId);
     if (!draft) {
       sendJson(res, 404, { error: "policy_draft_not_found", draft_id: draftId });
@@ -3887,18 +4169,29 @@ async function handleApi(req, res) {
     draft.updated_at = draft.approved_at;
     const bundle = {
       id: `bnd_${policySlug(draft.title)}_${crypto.randomUUID().slice(0, 8)}`,
+      tenant_id: body.tenant_id || draft.tenant_id || "local",
       name: draft.title,
       revision: new Date().toISOString().slice(0, 10).replaceAll("-", "."),
       status: "available",
       coverage: 70,
       draft_id: draft.id,
-      signed: true,
-      hot_reload: true
+      signed: false,
+      hot_reload: true,
+      policies: [{ draft_id: draft.id, title: draft.title, engine: draft.recommended_engine, policy_ir: draft.policy_ir }],
+      approval_record: defaultApprovalRecordForBundle({ id: `bnd_${draft.id}`, tenant_id: body.tenant_id || draft.tenant_id || "local", draft_id: draft.id }, {
+        id: `approval_${draft.id}_${crypto.randomUUID().slice(0, 8)}`,
+        tenant_id: body.tenant_id || draft.tenant_id || "local",
+        approved_by: body.approved_by || "local-dev-security-admin",
+        approved_at: draft.approved_at,
+        source: "policy_draft_approval",
+        reason: body.reason || "AI-assisted policy draft approved after simulation."
+      })
     };
+    const signature = signPolicyBundle(bundle, bundle.approval_record);
     state.fleet.policyBundles.unshift(bundle);
     state.fleet.relationships.push({ from: draft.id, to: bundle.id, label: "publishes" });
-    recordAudit("policy_draft.approved", "policy_draft", draft.id, { bundle_id: bundle.id });
-    const task = addTask("policy_approval", "completed", `Approved policy draft: ${draft.title}`, { draft_id: draft.id, bundle_id: bundle.id });
+    recordAudit("policy_draft.approved", "policy_draft", draft.id, { bundle_id: bundle.id, signature_id: signature.id });
+    const task = addTask("policy_approval", "completed", `Approved policy draft: ${draft.title}`, { draft_id: draft.id, bundle_id: bundle.id, signature_id: signature.id });
     sendJson(res, 200, { draft, bundle, task, rollout_required: true });
     return true;
   }
@@ -4262,16 +4555,29 @@ async function handleApi(req, res) {
     const bundle = state.fleet.policyBundles.find((item) => item.status === "active")
       || state.fleet.policyBundles.find((item) => item.status === "available")
       || state.fleet.policyBundles[0];
+    if (!bundle) {
+      sendJson(res, 404, { error: "policy_bundle_not_found", tenant_id: tenantId });
+      return true;
+    }
+    const manifest = signedPolicyBundleManifest(bundle);
     sendJson(res, 200, {
       schema_version: "bundle-envelope.v1",
       tenant_id: tenantId,
-      bundle_id: bundle?.id || "bnd_local_dev_baseline",
-      revision: bundle?.revision || "2026.06.29.001",
+      bundle_id: bundle.id,
+      revision: bundle.revision || "2026.06.29.001",
       status: "available",
-      manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle?.id || "bnd_local_dev_baseline")}/manifest`,
-      artifact_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle?.id || "bnd_local_dev_baseline")}/artifact`,
-      hot_reload: Boolean(bundle?.hot_reload ?? true),
-      enterprise_compliance: Boolean(bundle?.compliance_bundle_id)
+      manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/manifest`,
+      artifact_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/artifact`,
+      hot_reload: Boolean(bundle.hot_reload ?? true),
+      enterprise_compliance: Boolean(bundle.compliance_bundle_id),
+      signature_status: manifest.verification.status,
+      payload_hash: manifest.payload_hash,
+      signatures: manifest.signatures.map((signature) => ({
+        key_id: signature.key_id,
+        alg: signature.alg,
+        payload_hash: signature.payload_hash,
+        signed_at: signature.signed_at
+      }))
     });
     return true;
   }
@@ -4279,23 +4585,12 @@ async function handleApi(req, res) {
   const bundleManifestMatch = pathname.match(/^\/v1\/policy-bundles\/([^/]+)\/manifest$/);
   if (req.method === "GET" && bundleManifestMatch) {
     const bundleId = decodeURIComponent(bundleManifestMatch[1]);
-    const bundle = state.fleet.policyBundles.find((item) => item.id === bundleId) || state.fleet.policyBundles[0];
-    sendJson(res, 200, {
-      manifest_version: "1.0",
-      schema_version: "bundle-manifest.v2",
-      bundle_id: bundleId,
-      tenant_id: "local",
-      revision: bundle?.revision || "2026.06.29.001",
-      created_at: bundle?.created_at || "2026-06-29T00:00:00Z",
-      target: {
-        control_level: bundle?.control_level || "Observe",
-        pep_capabilities: ["mcp-stdio", "http-proxy"],
-        agent_selectors: [{ kind: "label", value: "managed=true" }]
-      },
-      policies: bundle?.policies || [],
-      compliance_bundle_id: bundle?.compliance_bundle_id || null,
-      signatures: [{ key_id: "local-dev", alg: "Ed25519", sig: "dev-placeholder" }]
-    });
+    const bundle = state.fleet.policyBundles.find((item) => item.id === bundleId);
+    if (!bundle) {
+      sendJson(res, 404, { error: "policy_bundle_not_found", bundle_id: bundleId });
+      return true;
+    }
+    sendJson(res, 200, signedPolicyBundleManifest(bundle));
     return true;
   }
 
@@ -4356,6 +4651,7 @@ const server = createServer(async (req, res) => {
 });
 
 await loadRuntimeState();
+initializePolicyBundleSigningLedger();
 startLcpEntityWatch();
 
 process.on("SIGINT", () => {
