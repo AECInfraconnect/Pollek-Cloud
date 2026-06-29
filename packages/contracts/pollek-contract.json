@@ -1,0 +1,46 @@
+{
+  "schema_version": "pollek-cloud-contract-discovery.v1",
+  "contract_version": "2026.06.29",
+  "cloud_version": "0.1.0-dev",
+  "minimum_local_enforcement_kit": "1.0.0-beta.1",
+  "source_compatibility_target": "1.0.0-beta.10",
+  "supported": ["1.0"],
+  "preferred": "1.0",
+  "supported_transports": ["https", "mtls", "sse", "otlp", "http-loopback-dev"],
+  "schemas": {
+    "openapi": "/contracts/openapi.json",
+    "events": "/contracts/events.schema.json",
+    "bundle_manifest": "/contracts/bundle-manifest.schema.json",
+    "telemetry_envelope": "/contracts/telemetry-envelope.schema.json"
+  },
+  "interfaces": {
+    "pollek.cloud.enrollment": {
+      "direction": "local_to_cloud",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "paths": ["/oauth/device_authorization", "/oauth/token", "/enroll"]
+    },
+    "pollek.cloud.telemetry": {
+      "direction": "local_to_cloud",
+      "requires_oauth": true,
+      "requires_spiffe": true,
+      "paths": ["/v1/telemetry/batches", "/v1/telemetry/envelopes"]
+    },
+    "pollek.cloud.policy_bundle": {
+      "direction": "cloud_to_local",
+      "hot_reload": true,
+      "requires_oauth": true,
+      "requires_spiffe": true,
+      "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest"]
+    }
+  },
+  "features": {
+    "hot_reload": true,
+    "signed_bundles": true,
+    "spiffe_mtls": true,
+    "oauth_device_flow": true,
+    "telemetry_otlp": true,
+    "ai_policy_editor": false,
+    "dev_loopback_protocol_test": true
+  }
+}

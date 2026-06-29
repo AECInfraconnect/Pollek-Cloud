@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check API syntax
+        run: node --check apps/api/server.mjs
+      - name: Check web script syntax
+        run: node --check apps/web/static/app.js
+      - name: Validate contract JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('packages/contracts/pollek-contract.json','utf8')); console.log('contract json ok')"
+      - name: Run unit tests
+        run: npm test

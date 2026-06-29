@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pollek Cloud Dev Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">PC</div>
+          <div>
+            <strong>Pollek Cloud</strong>
+            <span>Private Cloud Dev</span>
+          </div>
+        </div>
+        <nav class="tree" aria-label="Inventory">
+          <button class="tree-row active"><span class="dot tenant"></span>Local Lab Tenant</button>
+          <button class="tree-row indent-1"><span class="dot site"></span>Bangkok HQ</button>
+          <button class="tree-row indent-2"><span class="dot group"></span>Developers</button>
+          <button class="tree-row indent-3"><span class="dot device"></span>Local Device</button>
+          <button class="tree-row indent-4"><span class="dot lcp"></span>Local Control Plane</button>
+          <button class="tree-row indent-4"><span class="dot agent"></span>AI Agents</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Enterprise AI Enforcement Control Plane</p>
+            <h1>Local Protocol Test Console</h1>
+          </div>
+          <div class="top-actions">
+            <span id="cloudStatus" class="status-pill neutral">Loading</span>
+            <a class="icon-button" href="/.well-known/pollek-contract" title="Open Contract Hub" aria-label="Open Contract Hub">⌘</a>
+          </div>
+        </header>
+
+        <section class="object-header">
+          <div>
+            <p class="eyebrow">Object</p>
+            <h2>Local Lab Tenant</h2>
+            <p class="summary">Multi-tenant SaaS/private cloud control-plane shell with Contract Hub, enrollment, telemetry ingest, and Local Control Plane probe.</p>
+          </div>
+          <div class="metrics">
+            <div><span id="deviceCount">0</span><small>Devices</small></div>
+            <div><span id="eventCount">0</span><small>Events</small></div>
+            <div><span id="probeCount">0</span><small>Probes</small></div>
+          </div>
+        </section>
+
+        <section class="tabs" aria-label="Object detail tabs">
+          <button class="tab active">Summary</button>
+          <button class="tab">Relationships</button>
+          <button class="tab">Policies</button>
+          <button class="tab">Telemetry</button>
+          <button class="tab">Timeline</button>
+          <button class="tab">Audit</button>
+        </section>
+
+        <div class="content-grid">
+          <section class="panel wide">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Secure Channel</p>
+                <h3>Local Control Plane Connection</h3>
+              </div>
+              <button id="probeButton" class="primary-button">Run Probe</button>
+            </div>
+            <div class="form-row">
+              <label for="lcpUrl">LCP URL</label>
+              <input id="lcpUrl" value="http://127.0.0.1:43891" />
+            </div>
+            <div class="form-row">
+              <label for="lcpToken">Bearer token</label>
+              <input id="lcpToken" placeholder="Optional when DEK_LCP_AUTH_DISABLE=1" />
+            </div>
+            <div id="probeResult" class="probe-result">
+              Waiting for probe.
+            </div>
+          </section>
+
+          <section class="panel">
+            <p class="eyebrow">Contract Hub</p>
+            <h3>Cloud Discovery</h3>
+            <dl class="kv">
+              <dt>Cloud URL</dt>
+              <dd id="cloudUrl">-</dd>
+              <dt>Contract</dt>
+              <dd id="contractVersion">-</dd>
+              <dt>Transports</dt>
+              <dd id="transports">-</dd>
+            </dl>
+          </section>
+
+          <section class="panel">
+            <p class="eyebrow">Task Center</p>
+            <h3>Recent Tasks</h3>
+            <ul id="taskList" class="list"></ul>
+          </section>
+
+          <section class="panel wide">
+            <p class="eyebrow">Observe Center</p>
+            <h3>Recent Protocol Events</h3>
+            <div id="eventTable" class="event-table"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

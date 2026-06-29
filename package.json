@@ -1,0 +1,16 @@
+{
+  "name": "pollek-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pollek Cloud commercial control-plane foundation for SaaS and private cloud deployments.",
+  "type": "module",
+  "scripts": {
+    "dev": "node apps/api/server.mjs",
+    "start": "node apps/api/server.mjs",
+    "test:lcp": "node scripts/test-lcp-connection.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: pollek-cloud-postgres
+    environment:
+      POSTGRES_DB: pollek_cloud
+      POSTGRES_USER: pollek
+      POSTGRES_PASSWORD: pollek
+    ports:
+      - "5432:5432"
+    volumes:
+      - pollek_cloud_postgres:/var/lib/postgresql/data
+      - ../../packages/db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pollek -d pollek_cloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: pollek-cloud-redis
+    ports:
+      - "6379:6379"
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: pollek-cloud-nats
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: pollek-cloud-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - pollek_cloud_clickhouse:/var/lib/clickhouse
+
+  minio:
+    image: minio/minio:latest
+    container_name: pollek-cloud-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: pollek
+      MINIO_ROOT_PASSWORD: pollek-local-dev
+    ports:
+      - "9001:9001"
+      - "9002:9000"
+    volumes:
+      - pollek_cloud_minio:/data
+
+volumes:
+  pollek_cloud_postgres:
+  pollek_cloud_clickhouse:
+  pollek_cloud_minio:
