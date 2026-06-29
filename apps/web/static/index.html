@@ -7,11 +7,11 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <div id="appShell" class="app-shell">
       <header class="global-bar">
         <div class="brand-block">
           <div class="brand-mark">PC</div>
-          <div>
+          <div class="brand-copy">
             <strong>Pollek Cloud</strong>
             <span>Commercial / Private Cloud Control Plane</span>
           </div>
@@ -31,8 +31,12 @@
       </header>
 
       <aside class="navigator">
+        <button id="navCollapseButton" class="sidebar-collapse-button" title="Toggle navigator" aria-label="Toggle navigator" aria-expanded="true">
+          <span class="collapse-expanded">&lt;</span>
+          <span class="collapse-collapsed">&gt;</span>
+        </button>
         <div class="navigator-heading">
-          <div>
+          <div class="navigator-heading-text">
             <p class="eyebrow">Navigator</p>
             <h2>Tenants and Sites</h2>
           </div>
@@ -422,63 +426,107 @@
             </div>
           </section>
 
-          <aside class="ops-rail">
-            <section class="ops-panel">
-              <div class="pane-header compact">
-                <div>
-                  <p class="eyebrow">Policy Packs</p>
-                  <h3>Compliance Ready</h3>
+          <aside id="opsRail" class="ops-rail" aria-label="Operations control rail">
+            <div class="ops-rail-shell">
+              <div class="ops-rail-header">
+                <div class="ops-rail-title">
+                  <p class="eyebrow">Operations</p>
+                  <h3>Control Rail</h3>
                 </div>
-                <span id="policyPackCount" class="count-badge">0</span>
+                <button id="opsCollapseButton" class="square-button rail-toggle" title="Toggle operations rail" aria-label="Toggle operations rail" aria-expanded="true">
+                  <span class="rail-expanded">&gt;</span>
+                  <span class="rail-collapsed">&lt;</span>
+                </button>
               </div>
-              <div id="policyPackList" class="compact-list"></div>
-            </section>
 
-            <section class="ops-panel">
-              <div class="pane-header compact">
-                <div>
-                  <p class="eyebrow">Secure Channel</p>
-                  <h3>LCP Probe</h3>
-                </div>
-                <button id="probeButton" class="primary-button">Run</button>
-              </div>
-              <label for="lcpUrl">Endpoint</label>
-              <input id="lcpUrl" value="http://127.0.0.1:43891" />
-              <label for="lcpToken">Bearer token</label>
-              <input id="lcpToken" placeholder="Optional in local auth-disabled mode" />
-              <div id="probeResult" class="probe-result">No probe in this session.</div>
-            </section>
+              <div class="ops-rail-content">
+                <section class="ops-panel" data-ops-section="policy-packs">
+                  <div class="ops-panel-head">
+                    <button class="ops-panel-toggle" data-ops-section-toggle="policy-packs" aria-expanded="true" aria-controls="opsPolicyPacks">
+                      <span>
+                        <span class="eyebrow">Policy Packs</span>
+                        <strong>Compliance Ready</strong>
+                      </span>
+                      <span class="ops-panel-meta">
+                        <span id="policyPackCount" class="count-badge">0</span>
+                        <span class="ops-toggle-glyph">-</span>
+                      </span>
+                    </button>
+                  </div>
+                  <div id="opsPolicyPacks" class="ops-panel-body">
+                    <div id="policyPackList" class="compact-list"></div>
+                  </div>
+                </section>
 
-            <section class="ops-panel">
-              <div class="pane-header compact">
-                <div>
-                  <p class="eyebrow">Alarms</p>
-                  <h3>Open Alarms</h3>
-                </div>
-                <span id="alarmCount" class="count-badge">0</span>
-              </div>
-              <div id="alarmList" class="alarm-list"></div>
-            </section>
+                <section class="ops-panel" data-ops-section="secure-channel">
+                  <div class="ops-panel-head with-action">
+                    <button class="ops-panel-toggle" data-ops-section-toggle="secure-channel" aria-expanded="true" aria-controls="opsSecureChannel">
+                      <span>
+                        <span class="eyebrow">Secure Channel</span>
+                        <strong>LCP Probe</strong>
+                      </span>
+                      <span class="ops-toggle-glyph">-</span>
+                    </button>
+                    <button id="probeButton" class="primary-button">Run</button>
+                  </div>
+                  <div id="opsSecureChannel" class="ops-panel-body">
+                    <label for="lcpUrl">Endpoint</label>
+                    <input id="lcpUrl" value="http://127.0.0.1:43891" />
+                    <label for="lcpToken">Bearer token</label>
+                    <input id="lcpToken" placeholder="Optional in local auth-disabled mode" />
+                    <div id="probeResult" class="probe-result">No probe in this session.</div>
+                  </div>
+                </section>
 
-            <section class="ops-panel">
-              <div class="pane-header compact">
-                <div>
-                  <p class="eyebrow">Tasks</p>
-                  <h3>Recent Tasks</h3>
-                </div>
-              </div>
-              <div id="taskList" class="task-list"></div>
-            </section>
+                <section class="ops-panel" data-ops-section="alarms">
+                  <div class="ops-panel-head">
+                    <button class="ops-panel-toggle" data-ops-section-toggle="alarms" aria-expanded="true" aria-controls="opsAlarms">
+                      <span>
+                        <span class="eyebrow">Alarms</span>
+                        <strong>Open Alarms</strong>
+                      </span>
+                      <span class="ops-panel-meta">
+                        <span id="alarmCount" class="count-badge">0</span>
+                        <span class="ops-toggle-glyph">-</span>
+                      </span>
+                    </button>
+                  </div>
+                  <div id="opsAlarms" class="ops-panel-body">
+                    <div id="alarmList" class="alarm-list"></div>
+                  </div>
+                </section>
 
-            <section class="ops-panel">
-              <div class="pane-header compact">
-                <div>
-                  <p class="eyebrow">Integrations</p>
-                  <h3>SIEM / Identity</h3>
-                </div>
+                <section class="ops-panel" data-ops-section="tasks">
+                  <div class="ops-panel-head">
+                    <button class="ops-panel-toggle" data-ops-section-toggle="tasks" aria-expanded="true" aria-controls="opsTasks">
+                      <span>
+                        <span class="eyebrow">Tasks</span>
+                        <strong>Recent Tasks</strong>
+                      </span>
+                      <span class="ops-toggle-glyph">-</span>
+                    </button>
+                  </div>
+                  <div id="opsTasks" class="ops-panel-body">
+                    <div id="taskList" class="task-list"></div>
+                  </div>
+                </section>
+
+                <section class="ops-panel" data-ops-section="integrations">
+                  <div class="ops-panel-head">
+                    <button class="ops-panel-toggle" data-ops-section-toggle="integrations" aria-expanded="true" aria-controls="opsIntegrations">
+                      <span>
+                        <span class="eyebrow">Integrations</span>
+                        <strong>SIEM / Identity</strong>
+                      </span>
+                      <span class="ops-toggle-glyph">-</span>
+                    </button>
+                  </div>
+                  <div id="opsIntegrations" class="ops-panel-body">
+                    <div id="integrationList" class="compact-list"></div>
+                  </div>
+                </section>
               </div>
-              <div id="integrationList" class="compact-list"></div>
-            </section>
+            </div>
           </aside>
         </div>
       </main>

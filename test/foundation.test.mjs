@@ -151,7 +151,15 @@ test("console wires fleet operations controls", async () => {
 
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
+  assert.match(html, /id="appShell"/);
+  assert.match(html, /id="navCollapseButton"/);
+  assert.match(html, /id="opsCollapseButton"/);
   assert.match(html, /id="policyPackList"/);
+  assert.match(html, /data-ops-section="policy-packs"/);
+  assert.match(html, /data-ops-section="secure-channel"/);
+  assert.match(html, /data-ops-section="alarms"/);
+  assert.match(html, /data-ops-section="tasks"/);
+  assert.match(html, /data-ops-section="integrations"/);
   assert.match(html, /data-tab-panel="policies"/);
   assert.match(html, /data-tab-panel="telemetry"/);
   assert.match(html, /data-tab-panel="entities"/);
@@ -185,6 +193,10 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /async function queryTelemetry/);
   assert.match(app, /async function createEnrollment/);
   assert.match(app, /function connectEventStream/);
+  assert.match(app, /function applyShellState/);
+  assert.match(app, /function toggleOpsSection/);
+  assert.match(app, /pollek\.cloud\.nav\.collapsed/);
+  assert.match(app, /pollek\.cloud\.ops\.collapsed/);
   assert.match(app, /new EventSource\("\/api\/events"\)/);
   assert.match(app, /Cloud API streaming/);
 });

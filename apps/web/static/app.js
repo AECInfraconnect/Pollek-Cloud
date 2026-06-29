@@ -1,6 +1,10 @@
 const refs = {
+  appShell: document.querySelector("#appShell"),
   cloudStatus: document.querySelector("#cloudStatus"),
   globalSearch: document.querySelector("#globalSearch"),
+  navCollapseButton: document.querySelector("#navCollapseButton"),
+  opsRail: document.querySelector("#opsRail"),
+  opsCollapseButton: document.querySelector("#opsCollapseButton"),
   refreshButton: document.querySelector("#refreshButton"),
   inventoryTree: document.querySelector("#inventoryTree"),
   breadcrumb: document.querySelector("#breadcrumb"),
@@ -72,6 +76,15 @@ const refs = {
   integrationHealthList: document.querySelector("#integrationHealthList")
 };
 
+function readStoredSet(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return new Set(Array.isArray(value) ? value : []);
+  } catch {
+    return new Set();
+  }
+}
+
 const app = {
   data: null,
   selectedObjectId: "tenant_local_lab",
@@ -79,6 +92,9 @@ const app = {
   query: "",
   streamConnected: false,
   streamRefreshPending: false,
+  navCollapsed: localStorage.getItem("pollek.cloud.nav.collapsed") === "true",
+  opsCollapsed: localStorage.getItem("pollek.cloud.ops.collapsed") === "true",
+  collapsedOpsSections: readStoredSet("pollek.cloud.ops.sections.collapsed"),
   statusFilter: "all",
   entityTypeFilter: "all",
   entityDeviceFilter: "all",
@@ -111,6 +127,51 @@ function statusClass(status) {
 function setCloudStatus(ok, text) {
   refs.cloudStatus.className = `status-pill ${ok ? "ok" : "bad"}`;
   refs.cloudStatus.textContent = text;
+}
+
+function applyShellState() {
+  refs.appShell.classList.toggle("nav-collapsed", app.navCollapsed);
+  refs.appShell.classList.toggle("ops-collapsed", app.opsCollapsed);
+  refs.navCollapseButton?.setAttribute("aria-expanded", String(!app.navCollapsed));
+  refs.opsCollapseButton?.setAttribute("aria-expanded", String(!app.opsCollapsed));
+}
+
+function setNavCollapsed(collapsed) {
+  app.navCollapsed = collapsed;
+  localStorage.setItem("pollek.cloud.nav.collapsed", String(collapsed));
+  applyShellState();
+}
+
+function setOpsCollapsed(collapsed) {
+  app.opsCollapsed = collapsed;
+  localStorage.setItem("pollek.cloud.ops.collapsed", String(collapsed));
+  applyShellState();
+}
+
+function persistOpsSectionState() {
+  localStorage.setItem("pollek.cloud.ops.sections.collapsed", JSON.stringify([...app.collapsedOpsSections]));
+}
+
+function applyOpsSectionState() {
+  document.querySelectorAll("[data-ops-section]").forEach((panel) => {
+    const section = panel.dataset.opsSection;
+    const collapsed = app.collapsedOpsSections.has(section);
+    panel.classList.toggle("collapsed", collapsed);
+    const button = panel.querySelector("[data-ops-section-toggle]");
+    const glyph = panel.querySelector(".ops-toggle-glyph");
+    button?.setAttribute("aria-expanded", String(!collapsed));
+    if (glyph) glyph.textContent = collapsed ? "+" : "-";
+  });
+}
+
+function toggleOpsSection(section) {
+  if (app.collapsedOpsSections.has(section)) {
+    app.collapsedOpsSections.delete(section);
+  } else {
+    app.collapsedOpsSections.add(section);
+  }
+  persistOpsSectionState();
+  applyOpsSectionState();
 }
 
 function tabFromHash() {
@@ -236,7 +297,11 @@ function renderTree() {
     if (!shouldShow(item)) return;
     const button = document.createElement("button");
     button.className = `tree-row ${app.selectedObjectId === item.id ? "active" : ""}`;
+    button.dataset.depth = String(depth);
+    button.title = `${"  ".repeat(depth)}${item.name}`;
+    button.setAttribute("aria-label", `${item.name} ${item.type}`);
     button.style.setProperty("--depth", depth);
+    button.style.paddingLeft = `${7 + depth * 16}px`;
     button.innerHTML = `
       <span class="node-icon ${escapeHtml(item.type)}"></span>
       <span class="node-name">${escapeHtml(item.name)}</span>
@@ -1225,6 +1290,12 @@ refs.entitySearch.addEventListener("input", (event) => {
   renderEntities();
 });
 
+refs.navCollapseButton?.addEventListener("click", () => setNavCollapsed(!app.navCollapsed));
+refs.opsCollapseButton?.addEventListener("click", () => setOpsCollapsed(!app.opsCollapsed));
+document.querySelectorAll("[data-ops-section-toggle]").forEach((button) => {
+  button.addEventListener("click", () => toggleOpsSection(button.dataset.opsSectionToggle));
+});
+
 refs.refreshButton.addEventListener("click", refresh);
 refs.probeButton.addEventListener("click", () => runProbe(refs.lcpUrl.value));
 refs.rolloutButton.addEventListener("click", createRollout);
@@ -1272,6 +1343,8 @@ window.addEventListener("hashchange", () => {
 });
 
 setActiveTab(tabFromHash(), { updateHash: false });
+applyShellState();
+applyOpsSectionState();
 connectEventStream();
 await refresh();
 setInterval(refresh, 5000);
