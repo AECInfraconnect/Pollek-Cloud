@@ -636,8 +636,8 @@ test("console wires fleet operations controls", async () => {
   const html = await readFile("apps/web/static/index.html", "utf8");
   const css = await readFile("apps/web/static/styles.css", "utf8");
 
-  assert.match(html, /styles\.css\?v=20260629-layout-polish/);
-  assert.match(html, /app\.js\?v=20260629-entity-collapse-fix/);
+  assert.match(html, /styles\.css\?v=20260629-agent-nav-polish/);
+  assert.match(html, /app\.js\?v=20260629-agent-nav-focus/);
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="appShell"/);
@@ -704,6 +704,15 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /async function acknowledgeAlarm/);
   assert.match(app, /function setActiveTab/);
   assert.match(app, /function renderEntities/);
+  assert.ok(app.includes('const sideNavAgentKinds = new Set(["agent", "registered_agent", "found_agent"]);'));
+  assert.match(app, /const sideNavEntityGroups = \[/);
+  assert.match(app, /function navigationAgentGroup/);
+  assert.match(app, /if \(!groupKind\) continue/);
+  assert.match(app, /function isSideNavAgentItem/);
+  assert.match(app, /function revealEntityInList/);
+  assert.match(app, /app\.collapsedEntityGroups\.delete\(categoryKey\)/);
+  assert.match(app, /app\.activeTab = "entities"/);
+  assert.ok(app.includes("button.style.paddingLeft = `${6 + depth * 10}px`;"));
   assert.match(app, /function entityGroupCollapsed\(key, defaultCollapsed, hasActiveEntity\)/);
   assert.match(app, /if \(app\.collapsedEntityGroups\.has\(key\)\) return true/);
   assert.match(app, /function toggleEntityGroup\(key, defaultCollapsed = false, hasActiveEntity = false\)/);
@@ -769,6 +778,9 @@ test("console wires fleet operations controls", async () => {
   assert.match(css, /grid-template-columns: minmax\(760px, 1fr\) var\(--ops-width\)/);
   assert.match(css, /\.app-shell\.ops-collapsed \.ops-rail-content/);
   assert.match(css, /overflow-x: hidden/);
+  assert.match(css, /\.tree-row \{[\s\S]*font-size: 13px;[\s\S]*font-weight: 400;/);
+  assert.match(css, /\.node-name strong \{[\s\S]*font-weight: 400;/);
+  assert.match(css, /\.node-icon \{[\s\S]*width: 18px;/);
 });
 
 test("static console assets stay ascii-only", async () => {

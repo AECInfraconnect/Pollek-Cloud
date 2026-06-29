@@ -706,10 +706,27 @@ const entityNavigationGroups = [
   { kind: "observability", label: "Observability" }
 ];
 
+const sideNavAgentKinds = new Set(["agent", "registered_agent", "found_agent"]);
+const sideNavEntityGroups = [
+  { kind: "registered_agent", label: "Registered Agents" },
+  { kind: "found_agent", label: "Found Agents" }
+];
+
 function navigationEntityGroup(entity) {
   const kind = entity.entity_type || entity.class || "object";
   if (kind === "resource" || kind === "telemetry") return "observability";
   return entityNavigationGroups.some((group) => group.kind === kind) ? kind : "observability";
+}
+
+function navigationAgentGroup(entity) {
+  const kind = entity.entity_type || entity.class || "object";
+  if (kind === "found_agent") return "found_agent";
+  if (sideNavAgentKinds.has(kind)) return "registered_agent";
+  return "";
+}
+
+function isSideNavAgentItem(item) {
+  return !item.nav_only && sideNavAgentKinds.has(item.type || item.entity_kind || "object");
 }
 
 function lcpForEntity(entity) {
@@ -733,7 +750,7 @@ function buildNavigationTree() {
   const baseItems = app.data.tree || [];
   const localEntities = app.data.local_entities || [];
   const seedAgentIds = new Set(baseItems.filter((item) => item.type === "agent").map((item) => item.id));
-  const groupOrder = new Map(entityNavigationGroups.map((group, index) => [group.kind, index]));
+  const groupOrder = new Map(sideNavEntityGroups.map((group, index) => [group.kind, index]));
   const lcpOrder = new Map((app.data.local_control_planes || []).map((lcp, index) => [lcp.id, index]));
 
   for (const item of baseItems) {
@@ -743,9 +760,10 @@ function buildNavigationTree() {
 
   const grouped = new Map();
   for (const entity of localEntities) {
+    const groupKind = navigationAgentGroup(entity);
+    if (!groupKind) continue;
     const lcp = lcpForEntity(entity);
     if (!lcp) continue;
-    const groupKind = navigationEntityGroup(entity);
     const groupId = `entity_group_${lcp.id}_${groupKind}`;
     if (!grouped.has(groupId)) {
       grouped.set(groupId, {
@@ -753,7 +771,7 @@ function buildNavigationTree() {
         parent_id: lcp.id,
         type: "entity_group",
         entity_kind: groupKind,
-        name: entityNavigationGroups.find((group) => group.kind === groupKind)?.label || kindLabel(groupKind),
+        name: sideNavEntityGroups.find((group) => group.kind === groupKind)?.label || kindLabel(groupKind),
         status: "unknown",
         risk: "medium",
         nav_only: true,
@@ -841,6 +859,17 @@ function toggleNavNode(nodeId, defaultCollapsed = false) {
   renderTree();
 }
 
+function revealEntityInList(entity) {
+  if (!entity) return;
+  const scopeKey = entityScopeKey(entity);
+  const categoryKey = `${scopeKey}::${navigationEntityGroup(entity)}`;
+  app.collapsedEntityGroups.delete(scopeKey);
+  app.collapsedEntityGroups.delete(categoryKey);
+  app.expandedEntityGroups.add(scopeKey);
+  app.expandedEntityGroups.add(categoryKey);
+  persistEntityGroupState();
+}
+
 function renderTree() {
   refs.inventoryTree.innerHTML = "";
   const navItems = buildNavigationTree();
@@ -876,7 +905,7 @@ function renderTree() {
     button.setAttribute("aria-label", `${item.name} ${kindLabel(item.entity_kind || item.type)}`);
     if (hasChildren) button.setAttribute("aria-expanded", String(!collapsed));
     button.style.setProperty("--depth", depth);
-    button.style.paddingLeft = `${7 + depth * 14}px`;
+    button.style.paddingLeft = `${6 + depth * 10}px`;
     const iconKind = item.entity_kind || item.type;
     const detail = item.detail || (item.count ? `${item.count} ${kindLabel(item.entity_kind)} entities` : kindLabel(item.type));
     button.innerHTML = `
@@ -898,6 +927,19 @@ function renderTree() {
         return;
       }
       app.selectedObjectId = item.object_id || item.id;
+      if (isSideNavAgentItem(item)) {
+        const focusedEntity = (app.data.local_entities || []).find((entity) => entity.id === app.selectedObjectId);
+        app.entityTypeFilter = "all";
+        app.entityDeviceFilter = "all";
+        app.entityUserFilter = "all";
+        app.entityQuery = "";
+        if (refs.entitySearch) refs.entitySearch.value = "";
+        revealEntityInList(focusedEntity);
+        app.activeTab = "entities";
+        render();
+        setActiveTab("entities");
+        return;
+      }
       render();
     });
     refs.inventoryTree.append(button);
@@ -910,7 +952,9 @@ function renderTree() {
 }
 
 function selectedObject() {
-  return app.data.objects[app.selectedObjectId] || app.data.objects.tenant_local_lab;
+  return app.data.objects[app.selectedObjectId]
+    || (app.data.local_entities || []).find((entity) => entity.id === app.selectedObjectId)
+    || app.data.objects.tenant_local_lab;
 }
 
 function pathToObject(id) {
@@ -1185,6 +1229,8 @@ function sortedEntitiesForDisplay(entities) {
 }
 
 function selectedLocalEntity(entities) {
+  const selectedEntity = (app.data.local_entities || []).find((entity) => entity.id === app.selectedObjectId);
+  if (selectedEntity) return selectedEntity;
   const object = selectedObject();
   if (object?.id && (app.data.local_entities || []).some((entity) => entity.id === object.id)) return object;
   return entities[0] || null;

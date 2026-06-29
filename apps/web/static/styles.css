@@ -279,35 +279,38 @@ h3 {
 
 .navigator .eyebrow {
   color: #a7a8b7;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .navigator h2 {
   color: #f3f1ff;
-  font-size: 17px;
+  font-size: 15px;
+  font-weight: 600;
   line-height: 1.25;
 }
 
 .inventory-tree {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .tree-row {
   display: grid;
-  grid-template-columns: 12px 22px minmax(0, 1fr) auto;
+  grid-template-columns: 10px 20px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
   width: 100%;
-  min-height: 38px;
+  min-height: 32px;
   border: 0;
-  border-left: 3px solid transparent;
-  border-radius: 14px;
-  padding: 7px 9px;
+  border-left: 2px solid transparent;
+  border-radius: 10px;
+  padding: 5px 8px;
   background: transparent;
   color: #c9c9d2;
   text-align: left;
-  font-size: 15px;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.2;
 }
 
@@ -319,7 +322,7 @@ h3 {
 .tree-row.active {
   border-left-color: var(--primary);
   color: #9d75ff;
-  font-weight: 700;
+  font-weight: 400;
   box-shadow: inset 0 0 0 1px rgba(109, 74, 255, 0.08);
 }
 
@@ -333,12 +336,12 @@ h3 {
 
 .tree-expander {
   display: inline-grid;
-  width: 12px;
-  height: 20px;
+  width: 10px;
+  height: 18px;
   place-items: center;
   color: #6d7188;
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 10px;
+  font-weight: 650;
   transition: transform 140ms ease, color 140ms ease;
 }
 
@@ -357,10 +360,14 @@ h3 {
   white-space: nowrap;
 }
 
+.node-name strong {
+  font-weight: 400;
+}
+
 .node-name small {
   color: #9193a4;
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 10px;
+  font-weight: 400;
   line-height: 1.25;
 }
 
@@ -410,14 +417,14 @@ h3 {
 .object-icon.bad::after { background: var(--red); }
 
 .node-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
 }
 
 .node-icon svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 
 .navigator .object-icon {
@@ -429,15 +436,15 @@ h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 20px;
+  min-width: 19px;
+  height: 18px;
   border: 1px solid #383b56;
   border-radius: 999px;
   padding: 0 6px;
   background: #111321;
   color: #c6c5d0;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .icon-tenant { --icon-color: var(--teal); }
