@@ -26,6 +26,7 @@ Pollek Cloud should use an inventory-first master-detail model similar to enterp
 
 ## Source Links
 
+- vCenter-style UX mapping: `docs/research/VCENTER_UX_RESEARCH.md`
 - OpenTelemetry Collector configuration: https://opentelemetry.io/docs/collector/configuration/
 - SPIFFE concepts: https://spiffe.io/docs/latest/spiffe-about/overview/
 - SPIRE documentation: https://spiffe.io/docs/latest/spire-about/spire-concepts/

@@ -20,3 +20,25 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE POLICY tenant_isolation_devices/);
   assert.match(migration, /current_setting\('app\.tenant_id'/);
 });
+
+test("dev server exposes fleet inventory endpoints", async () => {
+  const server = await readFile("apps/api/server.mjs", "utf8");
+
+  assert.match(server, /pathname === "\/api\/fleet"/);
+  assert.match(server, /\/api\\\/fleet\\\/objects/);
+  assert.match(server, /localControlPlanes/);
+  assert.match(server, /applyProbeToFleet/);
+});
+
+test("static console assets stay ascii-only", async () => {
+  const files = [
+    "apps/web/static/index.html",
+    "apps/web/static/app.js",
+    "apps/web/static/styles.css"
+  ];
+
+  for (const file of files) {
+    const content = await readFile(file, "utf8");
+    assert.equal([...content].every((char) => char.charCodeAt(0) <= 127), true, `${file} contains non-ascii characters`);
+  }
+});

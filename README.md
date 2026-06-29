@@ -26,7 +26,7 @@ npm run dev
 
 ## Local Control Plane Protocol Test
 
-Start the existing Local Control Plane with auth disabled for local protocol testing and point it at this Cloud URL:
+Pollek Cloud does not build the Local Control Plane during normal Cloud UI testing. Start an already-built Local Control Plane separately, with auth disabled for local protocol testing, and point it at this Cloud URL:
 
 ```powershell
 $env:DEK_LCP_AUTH_DISABLE="1"
@@ -40,6 +40,8 @@ Then test from this repo:
 ```powershell
 npm run test:lcp
 ```
+
+If the LCP is still compiling, the Cloud console remains usable at `http://127.0.0.1:8790`. The inventory view will show the local LCP as `unknown` until the LCP is listening on `http://127.0.0.1:43891` and the `Run` probe succeeds.
 
 The test probes:
 
@@ -69,3 +71,14 @@ The current local protocol server can run without a database to keep the first l
 ## Research Basis
 
 Research notes are tracked in `docs/research/RESEARCH_NOTES.md` and cover OpenTelemetry, SPIFFE/SPIRE, OPA, Cedar, OpenFGA, OAuth/OIDC, NIST Zero Trust, OWASP GenAI risks, and enterprise inventory-console UX patterns.
+
+## vCenter-Style Fleet Console
+
+The first console is now inventory-first:
+
+- Left navigator: tenant, site, device group, device, Local Control Plane, agents.
+- Main fleet datagrid: status, site, version, contract, active bundle, agent count, coverage, heartbeat.
+- Object detail model: summary, relationships, policies, telemetry, alarms, audit.
+- Operations rail: secure-channel probe, open alarms, recent tasks.
+
+Design research and the Pollek mapping are in `docs/research/VCENTER_UX_RESEARCH.md`.

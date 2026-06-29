@@ -14,6 +14,132 @@ const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
 
+function createFleetState() {
+  const now = new Date().toISOString();
+  const localEndpoint = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
+  return {
+    tree: [
+      { id: "tenant_local_lab", parent_id: null, type: "tenant", name: "Local Lab Tenant", status: "connected", risk: "medium" },
+      { id: "site_bkk_hq", parent_id: "tenant_local_lab", type: "site", name: "Bangkok HQ", status: "connected", risk: "medium" },
+      { id: "group_developers", parent_id: "site_bkk_hq", type: "device_group", name: "Developers", status: "connected", risk: "medium" },
+      { id: "device_local_windows", parent_id: "group_developers", type: "device", name: "DELL-WINDOWS", status: "unknown", risk: "medium" },
+      { id: "lcp_local", parent_id: "device_local_windows", type: "lcp", name: "Local Control Plane", status: "unknown", risk: "medium" },
+      { id: "agent_cursor", parent_id: "lcp_local", type: "agent", name: "Cursor Agent", status: "observed", risk: "medium" },
+      { id: "agent_claude", parent_id: "lcp_local", type: "agent", name: "Claude Desktop", status: "observed", risk: "medium" },
+      { id: "site_private_dc", parent_id: "tenant_local_lab", type: "site", name: "Private DC", status: "degraded", risk: "high" },
+      { id: "group_gpu_nodes", parent_id: "site_private_dc", type: "device_group", name: "GPU Nodes", status: "connected", risk: "medium" },
+      { id: "device_dc_gpu_01", parent_id: "group_gpu_nodes", type: "device", name: "DC-GPU-01", status: "connected", risk: "medium" },
+      { id: "lcp_dc_gpu_01", parent_id: "device_dc_gpu_01", type: "lcp", name: "LCP DC GPU 01", status: "connected", risk: "medium" },
+      { id: "site_sgx_lab", parent_id: "tenant_local_lab", type: "site", name: "Singapore Lab", status: "offline", risk: "high" },
+      { id: "group_research", parent_id: "site_sgx_lab", type: "device_group", name: "Research", status: "offline", risk: "high" },
+      { id: "device_sgx_07", parent_id: "group_research", type: "device", name: "SGX-LAB-07", status: "offline", risk: "high" },
+      { id: "lcp_sgx_07", parent_id: "device_sgx_07", type: "lcp", name: "LCP SGX 07", status: "offline", risk: "high" }
+    ],
+    localControlPlanes: [
+      {
+        id: "lcp_local",
+        tenant_id: "local",
+        site: "Bangkok HQ",
+        group: "Developers",
+        device_id: "device_local_windows",
+        device_name: "DELL-WINDOWS",
+        name: "Local Control Plane",
+        endpoint: localEndpoint,
+        status: "unknown",
+        risk: "medium",
+        version: "1.0.0-beta.10",
+        contract_version: "unknown",
+        active_bundle: "bnd_local_dev_baseline",
+        agents: 2,
+        tools: 8,
+        resources: 14,
+        policy_coverage: 62,
+        last_seen_at: null,
+        capability_summary: "Probe pending",
+        spiffe_id: "spiffe://local.pollek.cloud/tenant/local/site/site_bkk_hq/device/device_local_windows/lcp/lcp_local"
+      },
+      {
+        id: "lcp_dc_gpu_01",
+        tenant_id: "local",
+        site: "Private DC",
+        group: "GPU Nodes",
+        device_id: "device_dc_gpu_01",
+        device_name: "DC-GPU-01",
+        name: "LCP DC GPU 01",
+        endpoint: "https://lcp-dc-gpu-01.private.example",
+        status: "connected",
+        risk: "medium",
+        version: "1.0.0-beta.10",
+        contract_version: "2026.06.26",
+        active_bundle: "bnd_ai_data_protection",
+        agents: 18,
+        tools: 47,
+        resources: 122,
+        policy_coverage: 88,
+        last_seen_at: now,
+        capability_summary: "WASM policy, MCP proxy, telemetry batch",
+        spiffe_id: "spiffe://local.pollek.cloud/tenant/local/site/site_private_dc/device/device_dc_gpu_01/lcp/lcp_dc_gpu_01"
+      },
+      {
+        id: "lcp_sgx_07",
+        tenant_id: "local",
+        site: "Singapore Lab",
+        group: "Research",
+        device_id: "device_sgx_07",
+        device_name: "SGX-LAB-07",
+        name: "LCP SGX 07",
+        endpoint: "https://lcp-sgx-07.private.example",
+        status: "offline",
+        risk: "high",
+        version: "1.0.0-beta.6",
+        contract_version: "2026.06.26",
+        active_bundle: "bnd_shadow_ai_observe",
+        agents: 9,
+        tools: 21,
+        resources: 64,
+        policy_coverage: 41,
+        last_seen_at: "2026-06-29T02:14:00.000Z",
+        capability_summary: "Last heartbeat stale",
+        spiffe_id: "spiffe://local.pollek.cloud/tenant/local/site/site_sgx_lab/device/device_sgx_07/lcp/lcp_sgx_07"
+      }
+    ],
+    relationships: [
+      { from: "tenant_local_lab", to: "site_bkk_hq", label: "contains" },
+      { from: "site_bkk_hq", to: "lcp_local", label: "manages" },
+      { from: "lcp_local", to: "agent_cursor", label: "observes" },
+      { from: "lcp_local", to: "agent_claude", label: "observes" },
+      { from: "lcp_local", to: "bnd_local_dev_baseline", label: "desired bundle" },
+      { from: "lcp_dc_gpu_01", to: "bnd_ai_data_protection", label: "active bundle" },
+      { from: "lcp_sgx_07", to: "alarm_lcp_offline", label: "raises" }
+    ],
+    policyBundles: [
+      { id: "bnd_local_dev_baseline", name: "Local Dev Baseline", revision: "2026.06.29.001", status: "available", coverage: 62 },
+      { id: "bnd_ai_data_protection", name: "AI Data Protection", revision: "2026.06.29.004", status: "active", coverage: 88 },
+      { id: "bnd_shadow_ai_observe", name: "Shadow AI Observe", revision: "2026.06.28.011", status: "stale", coverage: 41 }
+    ],
+    alarms: [
+      {
+        id: "alarm_lcp_offline",
+        severity: "critical",
+        object_id: "lcp_sgx_07",
+        object_name: "LCP SGX 07",
+        summary: "Heartbeat stale for more than 3 hours",
+        state: "open",
+        created_at: "2026-06-29T02:20:00.000Z"
+      },
+      {
+        id: "alarm_policy_coverage",
+        severity: "warning",
+        object_id: "lcp_local",
+        object_name: "Local Control Plane",
+        summary: "Policy coverage below tenant target",
+        state: "open",
+        created_at: now
+      }
+    ]
+  };
+}
+
 const state = {
   startedAt: new Date().toISOString(),
   tenant: {
@@ -26,7 +152,8 @@ const state = {
   events: [],
   tasks: [],
   enrollmentCodes: new Map(),
-  probes: []
+  probes: [],
+  fleet: createFleetState()
 };
 
 const jsonHeaders = {
@@ -69,6 +196,72 @@ function recordEvent(event) {
   state.events.unshift(normalized);
   state.events = state.events.slice(0, 100);
   return normalized;
+}
+
+function fleetObjectMap() {
+  const objects = new Map();
+  for (const item of state.fleet.tree) {
+    objects.set(item.id, { ...item });
+  }
+  for (const lcp of state.fleet.localControlPlanes) {
+    objects.set(lcp.id, { ...(objects.get(lcp.id) || {}), ...lcp, type: "lcp" });
+  }
+  for (const bundle of state.fleet.policyBundles) {
+    objects.set(bundle.id, { ...bundle, type: "policy_bundle", status: bundle.status, risk: bundle.coverage < 60 ? "high" : "medium" });
+  }
+  return objects;
+}
+
+function fleetSummary() {
+  const lcps = state.fleet.localControlPlanes;
+  const connected = lcps.filter((item) => item.status === "connected").length;
+  const degraded = lcps.filter((item) => item.status === "degraded" || item.status === "unknown").length;
+  const offline = lcps.filter((item) => item.status === "offline").length;
+  const totalAgents = lcps.reduce((sum, item) => sum + item.agents, 0);
+  const totalTools = lcps.reduce((sum, item) => sum + item.tools, 0);
+  const avgCoverage = lcps.length
+    ? Math.round(lcps.reduce((sum, item) => sum + item.policy_coverage, 0) / lcps.length)
+    : 0;
+  return {
+    tenants: 1,
+    sites: state.fleet.tree.filter((item) => item.type === "site").length,
+    local_control_planes: lcps.length,
+    connected,
+    degraded,
+    offline,
+    agents: totalAgents,
+    tools: totalTools,
+    open_alarms: state.fleet.alarms.filter((alarm) => alarm.state === "open").length,
+    policy_coverage: avgCoverage,
+    telemetry_events: state.events.length,
+    probes: state.probes.length
+  };
+}
+
+function updateTreeObject(id, patch) {
+  const item = state.fleet.tree.find((entry) => entry.id === id);
+  if (item) Object.assign(item, patch);
+}
+
+function applyProbeToFleet(probe, capabilitySnapshot) {
+  const lcp = state.fleet.localControlPlanes.find((item) => item.id === "lcp_local");
+  if (!lcp) return;
+  const contractProbe = probe.results.find((item) => item.name === "lcp_cloud_probe_to_pollek_cloud");
+  const snapshot = capabilitySnapshot?.body;
+  lcp.status = probe.ok ? "connected" : "degraded";
+  lcp.risk = probe.ok ? "medium" : "high";
+  lcp.contract_version = contractProbe?.body?.contract_version || lcp.contract_version;
+  lcp.last_seen_at = probe.checked_at;
+  lcp.capability_snapshot = snapshot || null;
+  if (snapshot?.device_id) lcp.device_runtime_id = snapshot.device_id;
+  if (Array.isArray(snapshot?.control_methods)) {
+    const available = snapshot.control_methods.filter((method) => method.status === "available").length;
+    const needsSetup = snapshot.control_methods.filter((method) => String(method.status).startsWith("needs_")).length;
+    lcp.capability_summary = `${available} available methods, ${needsSetup} setup actions`;
+    lcp.policy_coverage = Math.max(lcp.policy_coverage, probe.ok ? 72 : lcp.policy_coverage);
+  }
+  updateTreeObject("lcp_local", { status: lcp.status, risk: lcp.risk });
+  updateTreeObject("device_local_windows", { status: lcp.status, risk: lcp.risk });
 }
 
 async function readBody(req) {
@@ -340,8 +533,63 @@ async function handleApi(req, res) {
     };
     state.probes.unshift(probe);
     state.probes = state.probes.slice(0, 20);
+    applyProbeToFleet(probe, capabilitySnapshot);
     addTask("lcp_protocol_probe", ok ? "completed" : "failed", ok ? "Local Control Plane cloud protocol probe succeeded" : "Local Control Plane cloud protocol probe needs attention", { lcp_url: lcpUrl });
     sendJson(res, ok ? 200 : 502, probe);
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/fleet") {
+    const objects = Object.fromEntries(fleetObjectMap());
+    sendJson(res, 200, {
+      cloud_url: publicUrl,
+      tenant: state.tenant,
+      summary: fleetSummary(),
+      tree: state.fleet.tree,
+      objects,
+      local_control_planes: state.fleet.localControlPlanes,
+      relationships: state.fleet.relationships,
+      policy_bundles: state.fleet.policyBundles,
+      alarms: state.fleet.alarms,
+      events: state.events.slice(0, 30),
+      tasks: state.tasks.slice(0, 30),
+      probes: state.probes.slice(0, 10),
+      contract: await contractDiscovery()
+    });
+    return true;
+  }
+
+  const fleetObjectMatch = pathname.match(/^\/api\/fleet\/objects\/([^/]+)$/);
+  if (req.method === "GET" && fleetObjectMatch) {
+    const id = decodeURIComponent(fleetObjectMatch[1]);
+    const object = fleetObjectMap().get(id);
+    if (!object) {
+      sendJson(res, 404, { error: "object_not_found", id });
+      return true;
+    }
+    sendJson(res, 200, {
+      object,
+      relationships: state.fleet.relationships.filter((rel) => rel.from === id || rel.to === id),
+      alarms: state.fleet.alarms.filter((alarm) => alarm.object_id === id),
+      tasks: state.tasks.filter((task) => task.details?.object_id === id || task.details?.lcp_url === object.endpoint).slice(0, 20)
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/fleet/probe-visible") {
+    const localLcp = state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+    if (!localLcp) {
+      sendJson(res, 404, { error: "no_loopback_lcp", detail: "No loopback Local Control Plane is configured for dev probing." });
+      return true;
+    }
+    sendJson(res, 200, {
+      target: localLcp,
+      next_action: {
+        method: "POST",
+        path: "/api/lcp/probe",
+        body: { lcpUrl: localLcp.endpoint }
+      }
+    });
     return true;
   }
 
@@ -353,6 +601,11 @@ async function handleApi(req, res) {
       events: state.events.slice(0, 20),
       tasks: state.tasks.slice(0, 20),
       probes: state.probes.slice(0, 10),
+      fleet: {
+        summary: fleetSummary(),
+        local_control_planes: state.fleet.localControlPlanes,
+        alarms: state.fleet.alarms
+      },
       contract: await contractDiscovery()
     });
     return true;

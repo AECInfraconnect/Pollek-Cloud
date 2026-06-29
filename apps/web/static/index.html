@@ -3,109 +3,191 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pollek Cloud Dev Console</title>
+    <title>Pollek Cloud Console</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="shell">
-      <aside class="sidebar">
-        <div class="brand">
+    <div class="app-shell">
+      <header class="global-bar">
+        <div class="brand-block">
           <div class="brand-mark">PC</div>
           <div>
             <strong>Pollek Cloud</strong>
-            <span>Private Cloud Dev</span>
+            <span>Commercial / Private Cloud Control Plane</span>
           </div>
         </div>
-        <nav class="tree" aria-label="Inventory">
-          <button class="tree-row active"><span class="dot tenant"></span>Local Lab Tenant</button>
-          <button class="tree-row indent-1"><span class="dot site"></span>Bangkok HQ</button>
-          <button class="tree-row indent-2"><span class="dot group"></span>Developers</button>
-          <button class="tree-row indent-3"><span class="dot device"></span>Local Device</button>
-          <button class="tree-row indent-4"><span class="dot lcp"></span>Local Control Plane</button>
-          <button class="tree-row indent-4"><span class="dot agent"></span>AI Agents</button>
-        </nav>
+        <div class="view-switcher" aria-label="Inventory views">
+          <button class="view-button active">Inventory</button>
+          <button class="view-button">Policy Center</button>
+          <button class="view-button">Observe Center</button>
+          <button class="view-button">Compliance</button>
+        </div>
+        <div class="global-actions">
+          <input id="globalSearch" class="global-search" aria-label="Global search" placeholder="Search tenants, LCPs, agents, bundles" />
+          <span id="cloudStatus" class="status-pill neutral">Loading</span>
+          <a class="utility-button" href="/.well-known/pollek-contract" title="Open Contract Hub" aria-label="Open Contract Hub">CH</a>
+        </div>
+      </header>
+
+      <aside class="navigator">
+        <div class="navigator-heading">
+          <div>
+            <p class="eyebrow">Navigator</p>
+            <h2>Tenants and Sites</h2>
+          </div>
+          <button id="refreshButton" class="square-button" title="Refresh inventory" aria-label="Refresh inventory">R</button>
+        </div>
+        <div id="inventoryTree" class="inventory-tree" aria-label="Inventory tree"></div>
       </aside>
 
-      <main class="main">
-        <header class="topbar">
+      <main class="workspace">
+        <section class="object-toolbar">
           <div>
-            <p class="eyebrow">Enterprise AI Enforcement Control Plane</p>
-            <h1>Local Protocol Test Console</h1>
+            <p id="breadcrumb" class="breadcrumb">Pollek Cloud</p>
+            <div class="object-title-row">
+              <h1 id="objectTitle">Loading inventory</h1>
+              <span id="objectStatus" class="status-pill neutral">Unknown</span>
+              <span id="objectRisk" class="risk-pill">Risk pending</span>
+            </div>
           </div>
-          <div class="top-actions">
-            <span id="cloudStatus" class="status-pill neutral">Loading</span>
-            <a class="icon-button" href="/.well-known/pollek-contract" title="Open Contract Hub" aria-label="Open Contract Hub">⌘</a>
-          </div>
-        </header>
-
-        <section class="object-header">
-          <div>
-            <p class="eyebrow">Object</p>
-            <h2>Local Lab Tenant</h2>
-            <p class="summary">Multi-tenant SaaS/private cloud control-plane shell with Contract Hub, enrollment, telemetry ingest, and Local Control Plane probe.</p>
-          </div>
-          <div class="metrics">
-            <div><span id="deviceCount">0</span><small>Devices</small></div>
-            <div><span id="eventCount">0</span><small>Events</small></div>
-            <div><span id="probeCount">0</span><small>Probes</small></div>
+          <div class="object-actions">
+            <button id="probeVisibleButton" class="secondary-button">Probe Visible LCP</button>
+            <button id="rolloutButton" class="secondary-button">Create Rollout</button>
+            <button id="evidenceButton" class="primary-button">Export Evidence</button>
           </div>
         </section>
 
-        <section class="tabs" aria-label="Object detail tabs">
-          <button class="tab active">Summary</button>
-          <button class="tab">Relationships</button>
-          <button class="tab">Policies</button>
-          <button class="tab">Telemetry</button>
-          <button class="tab">Timeline</button>
-          <button class="tab">Audit</button>
+        <section class="summary-strip" aria-label="Fleet summary">
+          <div class="summary-cell">
+            <span id="metricLcpTotal">0</span>
+            <small>LCPs</small>
+          </div>
+          <div class="summary-cell ok">
+            <span id="metricConnected">0</span>
+            <small>Connected</small>
+          </div>
+          <div class="summary-cell warn">
+            <span id="metricDegraded">0</span>
+            <small>Degraded</small>
+          </div>
+          <div class="summary-cell bad">
+            <span id="metricOffline">0</span>
+            <small>Offline</small>
+          </div>
+          <div class="summary-cell">
+            <span id="metricAgents">0</span>
+            <small>Agents</small>
+          </div>
+          <div class="summary-cell">
+            <span id="metricCoverage">0%</span>
+            <small>Coverage</small>
+          </div>
         </section>
 
-        <div class="content-grid">
-          <section class="panel wide">
-            <div class="panel-heading">
+        <section class="detail-tabs" aria-label="Object detail tabs">
+          <button class="tab active" data-tab="summary">Summary</button>
+          <button class="tab" data-tab="relationships">Relationships</button>
+          <button class="tab" data-tab="policies">Policies</button>
+          <button class="tab" data-tab="telemetry">Telemetry</button>
+          <button class="tab" data-tab="alarms">Alarms</button>
+          <button class="tab" data-tab="audit">Audit</button>
+        </section>
+
+        <div class="workspace-grid">
+          <section class="primary-pane">
+            <div class="pane-header">
               <div>
-                <p class="eyebrow">Secure Channel</p>
-                <h3>Local Control Plane Connection</h3>
+                <p class="eyebrow">Fleet</p>
+                <h3>Local Control Planes</h3>
               </div>
-              <button id="probeButton" class="primary-button">Run Probe</button>
+              <div class="table-tools">
+                <select id="statusFilter" aria-label="Status filter">
+                  <option value="all">All status</option>
+                  <option value="connected">Connected</option>
+                  <option value="degraded">Degraded</option>
+                  <option value="offline">Offline</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </div>
             </div>
-            <div class="form-row">
-              <label for="lcpUrl">LCP URL</label>
+            <div class="table-wrap">
+              <table class="fleet-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Name</th>
+                    <th>Site</th>
+                    <th>Version</th>
+                    <th>Contract</th>
+                    <th>Bundle</th>
+                    <th>Agents</th>
+                    <th>Coverage</th>
+                    <th>Last Seen</th>
+                  </tr>
+                </thead>
+                <tbody id="fleetRows"></tbody>
+              </table>
+            </div>
+
+            <div class="lower-grid">
+              <section class="sub-pane">
+                <div class="pane-header compact">
+                  <div>
+                    <p class="eyebrow">Relationships</p>
+                    <h3>Object Map</h3>
+                  </div>
+                </div>
+                <div id="relationshipMap" class="relationship-map"></div>
+              </section>
+              <section class="sub-pane">
+                <div class="pane-header compact">
+                  <div>
+                    <p class="eyebrow">Telemetry</p>
+                    <h3>Recent Events</h3>
+                  </div>
+                </div>
+                <div id="eventTable" class="event-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <aside class="ops-rail">
+            <section class="ops-panel">
+              <div class="pane-header compact">
+                <div>
+                  <p class="eyebrow">Secure Channel</p>
+                  <h3>LCP Probe</h3>
+                </div>
+                <button id="probeButton" class="primary-button">Run</button>
+              </div>
+              <label for="lcpUrl">Endpoint</label>
               <input id="lcpUrl" value="http://127.0.0.1:43891" />
-            </div>
-            <div class="form-row">
               <label for="lcpToken">Bearer token</label>
-              <input id="lcpToken" placeholder="Optional when DEK_LCP_AUTH_DISABLE=1" />
-            </div>
-            <div id="probeResult" class="probe-result">
-              Waiting for probe.
-            </div>
-          </section>
+              <input id="lcpToken" placeholder="Optional in local auth-disabled mode" />
+              <div id="probeResult" class="probe-result">No probe in this session.</div>
+            </section>
 
-          <section class="panel">
-            <p class="eyebrow">Contract Hub</p>
-            <h3>Cloud Discovery</h3>
-            <dl class="kv">
-              <dt>Cloud URL</dt>
-              <dd id="cloudUrl">-</dd>
-              <dt>Contract</dt>
-              <dd id="contractVersion">-</dd>
-              <dt>Transports</dt>
-              <dd id="transports">-</dd>
-            </dl>
-          </section>
+            <section class="ops-panel">
+              <div class="pane-header compact">
+                <div>
+                  <p class="eyebrow">Alarms</p>
+                  <h3>Open Alarms</h3>
+                </div>
+                <span id="alarmCount" class="count-badge">0</span>
+              </div>
+              <div id="alarmList" class="alarm-list"></div>
+            </section>
 
-          <section class="panel">
-            <p class="eyebrow">Task Center</p>
-            <h3>Recent Tasks</h3>
-            <ul id="taskList" class="list"></ul>
-          </section>
-
-          <section class="panel wide">
-            <p class="eyebrow">Observe Center</p>
-            <h3>Recent Protocol Events</h3>
-            <div id="eventTable" class="event-table"></div>
-          </section>
+            <section class="ops-panel">
+              <div class="pane-header compact">
+                <div>
+                  <p class="eyebrow">Tasks</p>
+                  <h3>Recent Tasks</h3>
+                </div>
+              </div>
+              <div id="taskList" class="task-list"></div>
+            </section>
+          </aside>
         </div>
       </main>
     </div>
