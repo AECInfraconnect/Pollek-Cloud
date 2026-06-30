@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS telemetry_events (
 CREATE INDEX IF NOT EXISTS telemetry_events_tenant_time_idx ON telemetry_events(tenant_id, received_at DESC);
 CREATE INDEX IF NOT EXISTS telemetry_events_type_idx ON telemetry_events(event_type);
 CREATE INDEX IF NOT EXISTS telemetry_events_device_idx ON telemetry_events(device_id);
+CREATE INDEX IF NOT EXISTS telemetry_events_tenant_device_time_idx ON telemetry_events(tenant_id, device_id, received_at DESC);
+CREATE INDEX IF NOT EXISTS telemetry_events_payload_gin_idx ON telemetry_events USING gin (payload);
 
 CREATE TABLE IF NOT EXISTS event_stream_journal (
   id text PRIMARY KEY,
@@ -457,6 +459,9 @@ CREATE TABLE IF NOT EXISTS local_entities (
 CREATE INDEX IF NOT EXISTS local_entities_tenant_device_idx ON local_entities(tenant_id, device_id);
 CREATE INDEX IF NOT EXISTS local_entities_type_status_idx ON local_entities(tenant_id, entity_type, status);
 CREATE INDEX IF NOT EXISTS local_entities_lcp_idx ON local_entities(lcp_id);
+CREATE INDEX IF NOT EXISTS local_entities_tenant_lcp_type_idx ON local_entities(tenant_id, lcp_id, entity_type);
+CREATE INDEX IF NOT EXISTS local_entities_trace_gin_idx ON local_entities USING gin (trace);
+CREATE INDEX IF NOT EXISTS local_entities_observability_gin_idx ON local_entities USING gin (observability);
 
 CREATE TABLE IF NOT EXISTS entity_health_snapshots (
   id text PRIMARY KEY,

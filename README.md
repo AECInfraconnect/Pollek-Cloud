@@ -134,6 +134,20 @@ npm run contracts:check
 npm test
 ```
 
+Run the release-readiness audit gate with:
+
+```powershell
+npm run audit:foundation
+```
+
+The local server also exposes production-oriented guard rails that can be tuned before larger load tests:
+
+- `POLLEK_CLOUD_MAX_JSON_BODY_BYTES`: request body limit for JSON and form payloads. Default: `1048576`.
+- `POLLEK_CLOUD_RATE_WINDOW_MS` and `POLLEK_CLOUD_RATE_MAX`: per-client request budget. Defaults: `60000` and `900`.
+- `POLLEK_CLOUD_DEFAULT_API_PAGE_LIMIT` and `POLLEK_CLOUD_MAX_API_PAGE_LIMIT`: bounded API response sizes for high-cardinality fleet data.
+- `POLLEK_CLOUD_PRETTY_JSON=1`: opt in to pretty JSON for local debugging. Compact JSON is the default for lower bandwidth.
+- `POLLEK_CLOUD_MAX_AUDIT_PAYLOAD_BYTES`: audit payload redaction/truncation threshold. Default: `32768`.
+
 ## Database Direction
 
 Production will use PostgreSQL. Development should also use PostgreSQL through `deploy/docker-compose/docker-compose.yml` so Row Level Security, JSONB, indexing, tenant context, and migrations behave like production.

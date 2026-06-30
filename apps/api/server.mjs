@@ -25,6 +25,14 @@ const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
 const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
 const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
 const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
+const maxJsonBodyBytes = Number(process.env.POLLEK_CLOUD_MAX_JSON_BODY_BYTES || 1024 * 1024);
+const maxAuditPayloadBytes = Number(process.env.POLLEK_CLOUD_MAX_AUDIT_PAYLOAD_BYTES || 32 * 1024);
+const defaultApiPageLimit = Number(process.env.POLLEK_CLOUD_DEFAULT_API_PAGE_LIMIT || 1000);
+const maxApiPageLimit = Number(process.env.POLLEK_CLOUD_MAX_API_PAGE_LIMIT || 5000);
+const requestBudgetWindowMs = Number(process.env.POLLEK_CLOUD_RATE_WINDOW_MS || 60000);
+const requestBudgetMax = Number(process.env.POLLEK_CLOUD_RATE_MAX || 900);
+const compactJsonResponses = process.env.POLLEK_CLOUD_PRETTY_JSON !== "1";
+const exposeInternalErrors = process.env.NODE_ENV !== "production" || process.env.POLLEK_CLOUD_EXPOSE_ERRORS === "1";
 const lcpReconcileIntervalMs = Math.max(30000, Number(process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS || process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 300000));
 const bundleSigningKeyPair = crypto.generateKeyPairSync("ed25519");
 const bundleSigningPublicKeyPem = bundleSigningKeyPair.publicKey.export({ type: "spki", format: "pem" });
@@ -1292,20 +1300,77 @@ let lcpWatchTimer = null;
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
+  "cache-control": "no-store",
+  "cross-origin-opener-policy": "same-origin",
+  "content-security-policy": "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:*",
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "referrer-policy": "no-referrer",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
   "access-control-allow-headers": "authorization,content-type,x-pollek-device-id,x-pollek-tenant-id,x-pollek-lcp-id,x-idempotency-key"
 };
 
 function sendJson(res, status, body, extraHeaders = {}) {
-  const payload = JSON.stringify(body, null, 2);
+  const payload = compactJsonResponses ? JSON.stringify(body) : JSON.stringify(body, null, 2);
   res.writeHead(status, { ...jsonHeaders, ...extraHeaders });
   res.end(payload);
 }
 
 function sendText(res, status, text, contentType = "text/plain; charset=utf-8") {
-  res.writeHead(status, { "content-type": contentType });
+  res.writeHead(status, {
+    ...jsonHeaders,
+    "content-type": contentType,
+    "cache-control": "no-store"
+  });
   res.end(text);
+}
+
+const requestBudgetBuckets = new Map();
+
+function httpError(statusCode, message, code = message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+}
+
+function clientBudgetKey(req) {
+  const forwardedFor = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const remote = forwardedFor || req.socket?.remoteAddress || "unknown";
+  const tenant = req.headers["x-pollek-tenant-id"] || "no-tenant";
+  return `${remote}:${tenant}`;
+}
+
+function enforceRequestBudget(req, res) {
+  if (!requestBudgetMax || requestBudgetMax < 1) return true;
+  const now = Date.now();
+  const key = clientBudgetKey(req);
+  const current = requestBudgetBuckets.get(key);
+  const bucket = current && current.reset_at > now
+    ? current
+    : { count: 0, reset_at: now + requestBudgetWindowMs };
+  bucket.count += 1;
+  requestBudgetBuckets.set(key, bucket);
+  if (requestBudgetBuckets.size > 5000) {
+    for (const [bucketKey, value] of requestBudgetBuckets.entries()) {
+      if (value.reset_at <= now) requestBudgetBuckets.delete(bucketKey);
+    }
+  }
+  const remaining = Math.max(0, requestBudgetMax - bucket.count);
+  res.setHeader("x-ratelimit-limit", String(requestBudgetMax));
+  res.setHeader("x-ratelimit-remaining", String(remaining));
+  res.setHeader("x-ratelimit-reset", new Date(bucket.reset_at).toISOString());
+  if (bucket.count <= requestBudgetMax) return true;
+  sendJson(res, 429, {
+    error: "rate_limit_exceeded",
+    detail: "Request budget exceeded for this client and tenant context.",
+    retry_after_ms: Math.max(0, bucket.reset_at - now)
+  }, {
+    "retry-after": String(Math.ceil(Math.max(0, bucket.reset_at - now) / 1000))
+  });
+  return false;
 }
 
 function mapToEntries(map) {
@@ -2786,12 +2851,27 @@ function signControlEnvelope(fields) {
 }
 
 function redactSensitive(value) {
-  if (Array.isArray(value)) return value.map((item) => redactSensitive(item));
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => redactSensitive(item));
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, item]) => {
-    if (/token|secret|password|private|credential|authorization/i.test(key)) return [key, "[redacted]"];
+    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (/token|secret|password|private|credential|authorization|apikey|cookie/.test(normalized)) return [key, "[redacted]"];
+    if (["reference", "paymentreference", "providerreference"].includes(normalized)) return [key, "[redacted]"];
     return [key, redactSensitive(item)];
   }));
+}
+
+function safeAuditPayload(payload = {}) {
+  const redacted = redactSensitive(payload);
+  const encoded = stableJson(redacted);
+  if (Buffer.byteLength(encoded, "utf8") <= maxAuditPayloadBytes) return redacted;
+  return {
+    truncated: true,
+    payload_hash: sha256(encoded),
+    byte_length: Buffer.byteLength(encoded, "utf8"),
+    keys: redacted && typeof redacted === "object" && !Array.isArray(redacted) ? Object.keys(redacted).sort() : [],
+    preview: typeof redacted === "string" ? redacted.slice(0, 1024) : undefined
+  };
 }
 
 function securityPostureStatus() {
@@ -3157,14 +3237,15 @@ function enforcementStatusPage(tenantId = "local") {
 }
 
 function recordAudit(action, targetType, targetId, payload = {}) {
+  const safePayload = safeAuditPayload(payload);
   const event = {
     id: `audit_${crypto.randomUUID()}`,
-    tenant_id: payload.tenant_id || "local",
-    actor_id: payload.actor_id || "local-dev-admin",
+    tenant_id: safePayload.tenant_id || payload.tenant_id || "local",
+    actor_id: safePayload.actor_id || payload.actor_id || "local-dev-admin",
     action,
     target_type: targetType,
     target_id: targetId,
-    payload,
+    payload: safePayload,
     occurred_at: new Date().toISOString()
   };
   state.auditEvents.unshift(event);
@@ -5009,15 +5090,22 @@ function applyProbeToFleet(probe, capabilitySnapshot) {
 
 async function readBody(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxJsonBodyBytes) {
+      throw httpError(413, `request_body_too_large:${totalBytes}`, "request_body_too_large");
+    }
+    chunks.push(chunk);
+  }
   const raw = Buffer.concat(chunks).toString("utf8");
   const contentType = req.headers["content-type"] || "";
   if (!raw) return {};
   if (contentType.includes("application/json")) {
     try {
       return JSON.parse(raw);
-    } catch {
-      return { raw };
+    } catch (error) {
+      throw httpError(400, "invalid_json_body", "invalid_json_body");
     }
   }
   if (contentType.includes("application/x-www-form-urlencoded")) {
@@ -5353,6 +5441,24 @@ function devSpiffeId({ tenantId, siteId = "site_local_lab", deviceId, lcpId = "l
 function parsePath(req) {
   const url = new URL(req.url, publicUrl);
   return { url, pathname: url.pathname };
+}
+
+function boundedInt(value, fallback, min = 0, max = maxApiPageLimit) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
+function pageSlice(items = [], limit = defaultApiPageLimit) {
+  const safeLimit = boundedInt(limit, defaultApiPageLimit, 0, maxApiPageLimit);
+  const rows = Array.isArray(items) ? items : [];
+  return {
+    rows: rows.slice(0, safeLimit),
+    total: rows.length,
+    returned: Math.min(rows.length, safeLimit),
+    limit: safeLimit,
+    truncated: rows.length > safeLimit
+  };
 }
 
 async function handleApi(req, res) {
@@ -6194,6 +6300,11 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && pathname === "/api/fleet") {
     const objects = Object.fromEntries(fleetObjectMap());
+    const localEntitiesPage = pageSlice(state.fleet.localEntities, url.searchParams.get("local_entities_limit") || defaultApiPageLimit);
+    const relationshipsPage = pageSlice(state.fleet.localEntityRelationships, url.searchParams.get("relationships_limit") || maxApiPageLimit);
+    const usageRecordsPage = pageSlice(state.fleet.usageRecords || [], url.searchParams.get("usage_records_limit") || 30);
+    const auditEventsPage = pageSlice(state.auditEvents || [], url.searchParams.get("audit_limit") || 30);
+    const eventPage = pageSlice(state.events || [], url.searchParams.get("events_limit") || 30);
     sendJson(res, 200, {
       cloud_url: publicUrl,
       tenant: state.tenant,
@@ -6236,14 +6347,14 @@ async function handleApi(req, res) {
       billing_accounts: state.fleet.billingAccounts || [],
       subscriptions: state.fleet.subscriptions || [],
       usage_counters: refreshAllTenantUsage(),
-      usage_records: (state.fleet.usageRecords || []).slice(0, 30),
+      usage_records: usageRecordsPage.rows,
       invoices: state.fleet.invoices || [],
       payment_methods: (state.fleet.paymentMethods || []).map((method) => ({ ...method, reference_hash: method.reference_hash?.slice(0, 12) })),
       licenses: state.fleet.licenses || [],
       billing_events: (state.fleet.billingEvents || []).slice(0, 30),
       device_users: state.fleet.deviceUsers,
-      local_entities: state.fleet.localEntities,
-      local_entity_relationships: state.fleet.localEntityRelationships,
+      local_entities: localEntitiesPage.rows,
+      local_entity_relationships: relationshipsPage.rows,
       local_entity_sync_runs: state.fleet.localEntitySyncRuns,
       local_change_cursors: state.fleet.localChangeCursors || [],
       local_change_batches: state.fleet.localChangeBatches || [],
@@ -6254,8 +6365,8 @@ async function handleApi(req, res) {
       rollout_plans: state.fleet.rolloutPlans,
       hot_reload_events: state.fleet.hotReloadEvents,
       alarms: state.fleet.alarms,
-      events: state.events.slice(0, 30),
-      audit_events: state.auditEvents.slice(0, 30),
+      events: eventPage.rows,
+      audit_events: auditEventsPage.rows,
       tasks: state.tasks.slice(0, 30),
       probes: state.probes.slice(0, 10),
       persistence: runtimePersistenceStatus(),
@@ -6270,6 +6381,13 @@ async function handleApi(req, res) {
         recent_batches: (state.fleet.localChangeBatches || []).slice(0, 5)
       },
       security_posture: securityPostureStatus(),
+      response_limits: {
+        local_entities: { total: localEntitiesPage.total, returned: localEntitiesPage.returned, limit: localEntitiesPage.limit, truncated: localEntitiesPage.truncated },
+        local_entity_relationships: { total: relationshipsPage.total, returned: relationshipsPage.returned, limit: relationshipsPage.limit, truncated: relationshipsPage.truncated },
+        usage_records: { total: usageRecordsPage.total, returned: usageRecordsPage.returned, limit: usageRecordsPage.limit, truncated: usageRecordsPage.truncated },
+        events: { total: eventPage.total, returned: eventPage.returned, limit: eventPage.limit, truncated: eventPage.truncated },
+        audit_events: { total: auditEventsPage.total, returned: auditEventsPage.returned, limit: auditEventsPage.limit, truncated: auditEventsPage.truncated }
+      },
       contract: await contractDiscovery()
     });
     return true;
@@ -7379,21 +7497,41 @@ function serveStatic(req, res) {
     ".json": "application/json; charset=utf-8"
   };
   res.writeHead(200, {
+    ...jsonHeaders,
     "content-type": types[ext] || "application/octet-stream",
     "cache-control": "no-store"
   });
   createReadStream(filePath).pipe(res);
 }
 
+function errorStatusCode(error) {
+  const status = Number(error?.statusCode || error?.status || 500);
+  if (Number.isInteger(status) && status >= 400 && status <= 599) return status;
+  return 500;
+}
+
+function sendError(res, error, requestId = "") {
+  const status = errorStatusCode(error);
+  const code = error?.code || (status === 500 ? "internal_server_error" : "request_failed");
+  const body = {
+    error: code,
+    request_id: requestId || undefined
+  };
+  if (status < 500 || exposeInternalErrors) {
+    body.detail = error instanceof Error ? error.message : String(error);
+  }
+  sendJson(res, status, body);
+}
+
 const server = createServer(async (req, res) => {
+  const requestId = `req_${crypto.randomUUID()}`;
+  res.setHeader("x-pollek-request-id", requestId);
   try {
+    if (!enforceRequestBudget(req, res)) return;
     if (await handleApi(req, res)) return;
     serveStatic(req, res);
   } catch (error) {
-    sendJson(res, 500, {
-      error: "internal_server_error",
-      detail: error instanceof Error ? error.message : String(error)
-    });
+    sendError(res, error, requestId);
   }
 });
 

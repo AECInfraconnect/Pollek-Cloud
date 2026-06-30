@@ -244,6 +244,8 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2"].get);
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest"].post);
   assert.equal(packageJson.scripts["contracts:sdk"], "node scripts/generate-sdk.mjs");
+  assert.match(packageJson.scripts["audit:foundation"], /contracts:check/);
+  assert.match(packageJson.scripts["audit:foundation"], /npm test/);
   assert.deepEqual(missing, []);
   assert.deepEqual(extra, []);
 });
@@ -333,6 +335,10 @@ test("postgres foundation migration includes tenant RLS policies", async () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS local_change_batches/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS event_stream_journal/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS entity_health_snapshots/);
+  assert.match(migration, /telemetry_events_tenant_device_time_idx/);
+  assert.match(migration, /telemetry_events_payload_gin_idx/);
+  assert.match(migration, /local_entities_tenant_lcp_type_idx/);
+  assert.match(migration, /local_entities_observability_gin_idx/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS adapter_catalog_entries/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS staged_rollout_results/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS hot_reload_events/);
@@ -379,6 +385,8 @@ test("identity and billing migration keeps tenant ownership explicit", async () 
   assert.match(migration, /CREATE TABLE IF NOT EXISTS subscriptions/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS usage_records/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS usage_counters/);
+  assert.match(migration, /usage_records_source_time_idx/);
+  assert.match(migration, /usage_records_metadata_gin_idx/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS invoices/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS payment_methods/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS licenses/);
@@ -531,6 +539,43 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /discovery\\\/\(candidates\|entities\)/);
   assert.match(server, /capability-snapshot-v2/);
   assert.match(server, /devices\\\/\(\[\^\/\]\+\)\\\/bundles\\\/latest/);
+});
+
+test("api foundation enforces security headers, bounded responses, and body limits", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const health = await fetch(`${baseUrl}/health`);
+    assert.equal(health.status, 200);
+    assert.equal(health.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(health.headers.get("x-frame-options"), "DENY");
+    assert.match(health.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
+    assert.ok(health.headers.get("x-pollek-request-id"));
+
+    const fleet = await api(baseUrl, "/api/fleet?local_entities_limit=2&usage_records_limit=1");
+    assert.equal(fleet.response.status, 200);
+    assert.equal(fleet.payload.local_entities.length, 2);
+    assert.equal(fleet.payload.usage_records.length, 1);
+    assert.equal(fleet.payload.response_limits.local_entities.limit, 2);
+    assert.equal(fleet.payload.response_limits.local_entities.returned, 2);
+    assert.equal(fleet.payload.response_limits.usage_records.limit, 1);
+
+    const invalidJson = await fetch(`${baseUrl}/api/lcp/usage-ledgers`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{"
+    });
+    assert.equal(invalidJson.status, 400);
+    const invalidJsonPayload = await invalidJson.json();
+    assert.equal(invalidJsonPayload.error, "invalid_json_body");
+
+    const oversized = await fetch(`${baseUrl}/api/lcp/usage-ledgers`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tenant_id: "local", payload: "x".repeat(1024 * 1024 + 256) })
+    });
+    assert.equal(oversized.status, 413);
+    const oversizedPayload = await oversized.json();
+    assert.equal(oversizedPayload.error, "request_body_too_large");
+  });
 });
 
 test("dev server serves latest LCP compatibility endpoints", async (t) => {

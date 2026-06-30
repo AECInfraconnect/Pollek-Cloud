@@ -11,6 +11,7 @@
     "dev": "node apps/api/server.mjs",
     "start": "node apps/api/server.mjs",
     "test:lcp": "node scripts/test-lcp-connection.mjs",
+    "audit:foundation": "node --check apps/api/server.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {

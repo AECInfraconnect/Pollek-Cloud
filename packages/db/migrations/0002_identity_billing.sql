@@ -203,6 +203,8 @@ CREATE TABLE IF NOT EXISTS usage_records (
 );
 
 CREATE INDEX IF NOT EXISTS usage_records_tenant_metric_idx ON usage_records(tenant_id, metric, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS usage_records_source_time_idx ON usage_records(tenant_id, source, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS usage_records_metadata_gin_idx ON usage_records USING gin (metadata);
 
 CREATE TABLE IF NOT EXISTS usage_counters (
   id text PRIMARY KEY,
