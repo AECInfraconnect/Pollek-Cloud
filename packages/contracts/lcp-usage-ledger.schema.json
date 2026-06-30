@@ -24,6 +24,23 @@
     "device_id": {
       "type": "string"
     },
+    "os_family": {
+      "type": "string",
+      "enum": ["windows", "macos", "linux", "unknown"]
+    },
+    "os_version": {
+      "type": "string"
+    },
+    "capture_method": {
+      "type": "string",
+      "enum": [
+        "windows_etw_wmi",
+        "macos_endpoint_security_tcc",
+        "linux_ebpf_auditd",
+        "lcp_native",
+        "unknown"
+      ]
+    },
     "observed_at": {
       "type": "string",
       "format": "date-time"
@@ -44,6 +61,21 @@
           "application_name": { "type": "string" },
           "device_id": { "type": "string", "minLength": 1 },
           "device_name": { "type": "string" },
+          "os_family": {
+            "type": "string",
+            "enum": ["windows", "macos", "linux", "unknown"]
+          },
+          "os_version": { "type": "string" },
+          "capture_method": {
+            "type": "string",
+            "enum": [
+              "windows_etw_wmi",
+              "macos_endpoint_security_tcc",
+              "linux_ebpf_auditd",
+              "lcp_native",
+              "unknown"
+            ]
+          },
           "user_subject": { "type": "string", "minLength": 1 },
           "provider": { "type": "string", "minLength": 1 },
           "model": { "type": "string", "minLength": 1 },

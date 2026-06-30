@@ -59,6 +59,36 @@ The test probes:
 - `GET /v1/tenants/local/devices/local/capability-snapshot-v2`.
 - `POST /v1/telemetry/batches` against Pollek Cloud.
 
+## Cross-OS LCP Usage Ledger Testing
+
+Pollek Cloud now includes Contract Hub fixtures for Local Control Plane usage ledgers from Windows, macOS, and Linux:
+
+- `packages/contracts/fixtures/lcp-usage-ledger/windows.json`
+- `packages/contracts/fixtures/lcp-usage-ledger/macos.json`
+- `packages/contracts/fixtures/lcp-usage-ledger/linux.json`
+
+When the dev server is running, the same fixtures are served from:
+
+- `http://127.0.0.1:8790/contracts/fixtures/lcp-usage-ledger/windows.json`
+- `http://127.0.0.1:8790/contracts/fixtures/lcp-usage-ledger/macos.json`
+- `http://127.0.0.1:8790/contracts/fixtures/lcp-usage-ledger/linux.json`
+
+Each fixture uses `pollek.lcp.usage-ledger.v1`, includes `os_family`, `os_version`, and `capture_method`, and is accepted through:
+
+```powershell
+curl.exe -X POST http://127.0.0.1:8790/v1/tenants/local/lcp/usage-ledgers `
+  -H "content-type: application/json" `
+  --data-binary "@packages/contracts/fixtures/lcp-usage-ledger/windows.json"
+```
+
+Run the cross-OS smoke tests locally with:
+
+```powershell
+npm test
+```
+
+GitHub Actions also has an `OS Compatibility Fixtures` workflow that runs contract generation checks and the Node test suite on `windows-latest`, `macos-latest`, and `ubuntu-latest`.
+
 ## Local Pollek Entity Sync
 
 The console now has an `Entities` tab for Cloud-side aggregation of Local Pollek state by device and user. It tracks:

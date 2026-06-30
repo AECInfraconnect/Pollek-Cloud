@@ -1,0 +1,29 @@
+name: OS Compatibility Fixtures
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lcp-usage-ledger-fixtures:
+    name: LCP usage ledger fixtures (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check API syntax
+        run: node --check apps/api/server.mjs
+      - name: Check web script syntax
+        run: node --check apps/web/static/app.js
+      - name: Check Contract Hub artifacts
+        run: npm run contracts:check
+      - name: Run foundation and cross-OS fixture tests
+        run: npm test

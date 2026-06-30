@@ -2911,6 +2911,141 @@
         "x-pollek-tenant-scoped": false
       }
     },
+    "/contracts/fixtures/lcp-usage-ledger/linux.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/fixtures/lcp-usage-ledger/linux.json",
+        "operationId": "getContractsFixturesLcpUsageLedgerLinuxJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/contracts/fixtures/lcp-usage-ledger/macos.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/fixtures/lcp-usage-ledger/macos.json",
+        "operationId": "getContractsFixturesLcpUsageLedgerMacosJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/contracts/fixtures/lcp-usage-ledger/windows.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/fixtures/lcp-usage-ledger/windows.json",
+        "operationId": "getContractsFixturesLcpUsageLedgerWindowsJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
     "/contracts/lcp-usage-ledger.schema.json": {
       "get": {
         "tags": [

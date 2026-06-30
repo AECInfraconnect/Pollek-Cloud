@@ -1,0 +1,63 @@
+{
+  "schema_version": "pollek.lcp.usage-ledger.v1",
+  "ledger_id": "fixture_macos_usage_ledger_20260630",
+  "tenant_id": "local",
+  "lcp_id": "lcp_macos_byo",
+  "device_id": "device_macos_mbp_14",
+  "os_family": "macos",
+  "os_version": "macOS 15.5",
+  "capture_method": "macos_endpoint_security_tcc",
+  "observed_at": "2026-06-30T01:15:00.000Z",
+  "usage_entries": [
+    {
+      "id": "fixture_macos_claude_sonnet",
+      "agent_id": "agent_macos_claude_desktop",
+      "agent_name": "Claude Desktop",
+      "application_name": "Claude Desktop",
+      "device_id": "device_macos_mbp_14",
+      "device_name": "MBP-14-BYOD",
+      "os_family": "macos",
+      "user_subject": "corp\\designer",
+      "provider": "Anthropic",
+      "model": "claude-sonnet-4",
+      "pricing_model": "token_metered_with_prompt_cache",
+      "allocation_method": "direct_token_meter",
+      "call_count": 22,
+      "input_tokens": 64200,
+      "output_tokens": 18100,
+      "cached_input_tokens": 9100,
+      "total_tokens": 82300,
+      "allocated_cost_cents": 719,
+      "currency": "USD",
+      "confidence": "reported_by_lcp",
+      "observed_at": "2026-06-30T01:15:00.000Z"
+    },
+    {
+      "id": "fixture_macos_cursor_gpt5",
+      "agent_id": "agent_macos_cursor",
+      "agent_name": "Cursor Agent",
+      "application_name": "Cursor",
+      "device_id": "device_macos_mbp_14",
+      "device_name": "MBP-14-BYOD",
+      "os_family": "macos",
+      "user_subject": "corp\\designer",
+      "provider": "OpenAI",
+      "model": "gpt-5-codex",
+      "pricing_model": "token_metered",
+      "allocation_method": "direct_token_meter",
+      "call_count": 13,
+      "input_tokens": 33800,
+      "output_tokens": 12700,
+      "total_tokens": 46500,
+      "allocated_cost_cents": 421,
+      "currency": "USD",
+      "confidence": "reported_by_lcp",
+      "observed_at": "2026-06-30T01:15:00.000Z"
+    }
+  ],
+  "signature": {
+    "alg": "fixture-none",
+    "kid": "local-dev-fixture",
+    "value": "unsigned-fixture"
+  }
+}

@@ -137,6 +137,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/api/lcp/usage-ledgers"));
   assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/v1/tenants/{tenant_id}/lcp/usage-ledgers"));
   assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("lcp_reported_agent_usage_ledger"));
+  assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("cross_os_usage_fixtures"));
   assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("credit_pool_allocation"));
   assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("webhook_idempotency"));
   assert.ok(contract.interfaces["pollek.cloud.kms"].paths.includes("/v1/kms/health"));
@@ -199,6 +200,9 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/contracts/bundle-manifest.schema.json"].get);
   assert.ok(openapi.paths["/contracts/telemetry-envelope.schema.json"].get);
   assert.ok(openapi.paths["/contracts/lcp-usage-ledger.schema.json"].get);
+  assert.ok(openapi.paths["/contracts/fixtures/lcp-usage-ledger/windows.json"].get);
+  assert.ok(openapi.paths["/contracts/fixtures/lcp-usage-ledger/macos.json"].get);
+  assert.ok(openapi.paths["/contracts/fixtures/lcp-usage-ledger/linux.json"].get);
   assert.ok(openapi.paths["/api/contract-hub/drift"].get);
   assert.ok(openapi.paths["/api/persistence/status"].get);
   assert.ok(openapi.paths["/api/persistence/flush"].post);
@@ -867,6 +871,45 @@ test("LCP usage ledger ingestion validates agent-first credit allocation", async
   });
 });
 
+test("cross-OS LCP usage ledger fixtures ingest through tenant endpoint", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const fixtureNames = ["windows", "macos", "linux"];
+    for (const fixtureName of fixtureNames) {
+      const fixture = JSON.parse(await readFile(`packages/contracts/fixtures/lcp-usage-ledger/${fixtureName}.json`, "utf8"));
+      assert.equal(fixture.schema_version, "pollek.lcp.usage-ledger.v1");
+      assert.equal(fixture.os_family, fixtureName);
+      assert.ok(fixture.usage_entries.length >= 1);
+      assert.ok(fixture.usage_entries.every((entry) => entry.device_id === fixture.device_id));
+
+      const servedFixture = await api(baseUrl, `/contracts/fixtures/lcp-usage-ledger/${fixtureName}.json`);
+      assert.equal(servedFixture.response.status, 200);
+      assert.equal(servedFixture.payload.ledger_id, fixture.ledger_id);
+
+      const result = await api(baseUrl, `/v1/tenants/${fixture.tenant_id}/lcp/usage-ledgers`, {
+        method: "POST",
+        body: fixture
+      });
+      assert.equal(result.response.status, 202);
+      assert.equal(result.payload.ledger.accepted_count, fixture.usage_entries.length);
+      assert.equal(result.payload.ledger.os_family, fixture.os_family);
+      assert.ok(result.payload.usage_records.every((record) => record.source === "lcp_usage_ledger"));
+      assert.ok(result.payload.usage_records.every((record) => record.os_family === fixture.os_family));
+    }
+
+    const fleet = await api(baseUrl, "/api/fleet");
+    assert.equal(fleet.response.status, 200);
+    const osFamilies = new Set(fleet.payload.usage_records.map((record) => record.os_family).filter(Boolean));
+    assert.ok(osFamilies.has("windows"));
+    assert.ok(osFamilies.has("macos"));
+    assert.ok(osFamilies.has("linux"));
+
+    const usage = await api(baseUrl, "/v1/tenants/local/billing/usage");
+    assert.equal(usage.response.status, 200);
+    assert.ok(usage.payload.summary.ai_model_tokens > 0);
+    assert.ok(usage.payload.summary.ai_model_estimated_cost_cents > 0);
+  });
+});
+
 test("contract hub serves concrete schema artifacts", async (t) => {
   await withDevServer(t, async (baseUrl) => {
     for (const artifactPath of ["/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json"]) {
@@ -886,8 +929,8 @@ test("console wires fleet operations controls", async () => {
   const html = await readFile("apps/web/static/index.html", "utf8");
   const css = await readFile("apps/web/static/styles.css", "utf8");
 
-  assert.match(html, /styles\.css\?v=20260630-agent-first-cost/);
-  assert.match(html, /app\.js\?v=20260630-agent-first-cost/);
+  assert.match(html, /styles\.css\?v=20260630-os-fixtures/);
+  assert.match(html, /app\.js\?v=20260630-os-fixtures/);
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="appShell"/);
@@ -1024,6 +1067,10 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /function renderAdministrationWorkspace/);
   assert.match(app, /function selectedTenantId/);
   assert.match(app, /function tenantCatalog/);
+  assert.match(app, /function osFamilyForRecord/);
+  assert.match(app, /function osFamilyForEntity/);
+  assert.match(app, /Fixtures ready: Windows, macOS, Linux/);
+  assert.match(app, /OS pending/);
   assert.match(app, /async function seedRoleUsers/);
   assert.match(app, /async function loginDemoUser/);
   assert.match(app, /async function logoutDemoUser/);

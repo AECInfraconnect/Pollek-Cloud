@@ -780,6 +780,63 @@ function usagePricingModel(record) {
   return recordValue(record, ["pricing_model", "billing_model", "billing_unit"], usageCreditCount(record) ? "credit_pool" : "token_metered");
 }
 
+function normalizeOsFamily(value = "") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "unknown";
+  if (normalized.startsWith("win")) return "windows";
+  if (normalized === "darwin" || normalized.startsWith("mac")) return "macos";
+  if (normalized.includes("linux") || normalized.includes("ubuntu") || normalized.includes("debian") || normalized.includes("fedora")) return "linux";
+  return ["windows", "macos", "linux"].includes(normalized) ? normalized : "unknown";
+}
+
+function inferOsFamilyFromText(value = "") {
+  const text = String(value || "").toLowerCase();
+  if (/win|dell-windows/.test(text)) return "windows";
+  if (/mac|darwin|mbp/.test(text)) return "macos";
+  if (/linux|ubuntu|debian|fedora|gpu|sgx/.test(text)) return "linux";
+  return "unknown";
+}
+
+function osFamilyLabel(value = "") {
+  const normalized = normalizeOsFamily(value);
+  if (normalized === "windows") return "Windows";
+  if (normalized === "macos") return "macOS";
+  if (normalized === "linux") return "Linux";
+  return "OS pending";
+}
+
+function lcpForDevice(deviceId = "", lcpId = "") {
+  const lcps = app.data.local_control_planes || [];
+  return lcps.find((lcp) => lcp.id === lcpId)
+    || lcps.find((lcp) => lcp.device_id === deviceId || lcp.device_name === deviceId)
+    || null;
+}
+
+function osFamilyForRecord(record) {
+  const direct = normalizeOsFamily(recordValue(record, ["os_family", "platform", "host_os"], ""));
+  if (direct !== "unknown") return direct;
+  const lcp = lcpForDevice(recordValue(record, ["device_id", "device_name"], ""), recordValue(record, ["lcp_id"], ""));
+  const fromLcp = normalizeOsFamily(lcp?.os_family || "");
+  if (fromLcp !== "unknown") return fromLcp;
+  return inferOsFamilyFromText(`${recordValue(record, ["device_name", "device_id"], "")} ${recordValue(record, ["lcp_id"], "")}`);
+}
+
+function osVersionForRecord(record) {
+  const direct = recordValue(record, ["os_version", "platform_version"], "");
+  if (direct) return direct;
+  const lcp = lcpForDevice(recordValue(record, ["device_id", "device_name"], ""), recordValue(record, ["lcp_id"], ""));
+  return lcp?.os_version || "";
+}
+
+function osFamilyForEntity(entity) {
+  const direct = normalizeOsFamily(entity?.os_family || entity?.platform || "");
+  if (direct !== "unknown") return direct;
+  const lcp = lcpForEntity(entity);
+  const fromLcp = normalizeOsFamily(lcp?.os_family || "");
+  if (fromLcp !== "unknown") return fromLcp;
+  return inferOsFamilyFromText(`${entity?.device_name || entity?.device_id || ""} ${entity?.lcp_id || ""}`);
+}
+
 function costBasisLabel(item) {
   if (item.creditPools?.length || item.credits) return `${fmtMoney(item.costCents || 0)} allocated / ${fmtCredits(item.credits || 0)}`;
   return fmtMoney(item.costCents || 0);
@@ -812,6 +869,8 @@ function syntheticUsageRecords(tenantId = selectedTenantId()) {
       agent_name: entity.name || entity.local_object_id || entity.id,
       device_id: entity.device_id,
       device_name: entity.device_name || entity.device_id || "Unknown device",
+      os_family: osFamilyForEntity(entity),
+      os_version: lcpForEntity(entity)?.os_version || entity.os_version || "",
       lcp_id: entity.lcp_id,
       user_subject: entity.user_subject || "unknown user",
       provider,
@@ -885,11 +944,15 @@ function usageRecordsByDevice(records) {
   const devices = new Map();
   for (const record of records) {
     const deviceId = recordValue(record, ["device_id", "device_name"], "unknown-device");
+    const recordOsFamily = osFamilyForRecord(record);
+    const recordOsVersion = osVersionForRecord(record);
     if (!devices.has(deviceId)) {
       devices.set(deviceId, {
         deviceId,
         deviceName: recordValue(record, ["device_name"], deviceId),
         lcpId: recordValue(record, ["lcp_id"], "unknown-lcp"),
+        osFamily: recordOsFamily,
+        osVersion: recordOsVersion,
         tokens: 0,
         costCents: 0,
         credits: 0,
@@ -899,6 +962,8 @@ function usageRecordsByDevice(records) {
       });
     }
     const device = devices.get(deviceId);
+    if (device.osFamily === "unknown" && recordOsFamily !== "unknown") device.osFamily = recordOsFamily;
+    if (!device.osVersion && recordOsVersion) device.osVersion = recordOsVersion;
     const tokens = usageTokenCount(record);
     const costCents = usageCostCents(record);
     const credits = usageCreditCount(record);
@@ -997,8 +1062,10 @@ function renderAiUsageOverview() {
   const summary = summarizeUsageRecords(records);
   const devices = usageRecordsByDevice(records);
   const lcpLedgerCount = records.filter((record) => record.source === "lcp_usage_ledger" || record.confidence === "reported_by_lcp").length;
+  const observedOsFamilies = new Set(records.map((record) => osFamilyForRecord(record)).filter((family) => family !== "unknown"));
   refs.aiUsageSummary.innerHTML = [
     { kind: "integration", value: lcpLedgerCount ? "Validated" : "Estimate", label: lcpLedgerCount ? `${lcpLedgerCount} LCP ledger records` : "Awaiting LCP ledger", status: lcpLedgerCount ? "ok" : "warn" },
+    { kind: "integration", value: `${observedOsFamilies.size}/3 OS seen`, label: "Fixtures ready: Windows, macOS, Linux", status: observedOsFamilies.size >= 3 ? "ok" : "warn" },
     { kind: "billing", value: fmtMoney(summary.totalCostCents), label: "Estimated org spend", status: summary.totalCostCents ? "warn" : "neutral" },
     { kind: "telemetry", value: fmtNumber(summary.totalTokens), label: "Tokens observed", status: "neutral" },
     { kind: "billing", value: fmtCredits(summary.credits), label: `${summary.creditPools.length} credit pools`, status: summary.creditPools.length ? "warn" : "neutral" },
@@ -1018,7 +1085,7 @@ function renderAiUsageOverview() {
         ${iconHtml("device", device.costCents ? "warn" : "neutral")}
         <span>
           <strong>${escapeHtml(device.deviceName)}</strong>
-          <small>${escapeHtml(device.lcpId)} | ${escapeHtml(fmtNumber(device.calls))} calls | agent first | ${escapeHtml(device.creditPools.length)} pools</small>
+          <small>${escapeHtml(osFamilyLabel(device.osFamily))}${device.osVersion ? ` ${escapeHtml(device.osVersion)}` : ""} | ${escapeHtml(device.lcpId)} | ${escapeHtml(fmtNumber(device.calls))} calls | agent first | ${escapeHtml(device.creditPools.length)} pools</small>
         </span>
         <b>${escapeHtml(costBasisLabel(device))}</b>
       </div>
@@ -1319,8 +1386,10 @@ function pathToObject(id) {
 function renderObjectHeader() {
   const object = selectedObject();
   const kind = objectKind(object);
+  const objectOsFamily = object.os_family || (object.device_id ? osFamilyForEntity(object) : "");
   const contextParts = [
     kindLabel(kind),
+    objectOsFamily && normalizeOsFamily(objectOsFamily) !== "unknown" ? osFamilyLabel(objectOsFamily) : "",
     object.device_name || object.site || object.group || object.tenant_id,
     object.user_subject,
     object.spiffe_id || object.trace?.spiffe_id || object.identity?.spiffe_id,
@@ -1369,7 +1438,7 @@ function renderFleetRows() {
     tr.innerHTML = `
       <td><span class="status-dot ${statusClass(lcp.status)}"></span><strong>${escapeHtml(lcp.status)}</strong>${openAlarms ? `<small>${openAlarms} open alarm${openAlarms > 1 ? "s" : ""}</small>` : ""}</td>
       <td>
-        <div class="object-cell">${iconHtml("lcp", lcp.status)}<span><button class="link-button" data-object-id="${escapeHtml(lcp.id)}">${escapeHtml(lcp.name)}</button><small>${escapeHtml(lcp.device_name)}</small></span></div>
+        <div class="object-cell">${iconHtml("lcp", lcp.status)}<span><button class="link-button" data-object-id="${escapeHtml(lcp.id)}">${escapeHtml(lcp.name)}</button><small>${escapeHtml(lcp.device_name)} | ${escapeHtml(osFamilyLabel(lcp.os_family))}</small></span></div>
       </td>
       <td>${escapeHtml(lcp.site)}<small>${escapeHtml(lcp.group)}</small></td>
       <td>${escapeHtml(lcp.version)}</td>

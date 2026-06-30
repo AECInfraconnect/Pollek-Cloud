@@ -14,7 +14,10 @@ const contractArtifactPaths = new Map([
   ["/contracts/events.schema.json", path.join(rootDir, "packages/contracts/events.schema.json")],
   ["/contracts/bundle-manifest.schema.json", path.join(rootDir, "packages/contracts/bundle-manifest.schema.json")],
   ["/contracts/telemetry-envelope.schema.json", path.join(rootDir, "packages/contracts/telemetry-envelope.schema.json")],
-  ["/contracts/lcp-usage-ledger.schema.json", path.join(rootDir, "packages/contracts/lcp-usage-ledger.schema.json")]
+  ["/contracts/lcp-usage-ledger.schema.json", path.join(rootDir, "packages/contracts/lcp-usage-ledger.schema.json")],
+  ["/contracts/fixtures/lcp-usage-ledger/windows.json", path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/windows.json")],
+  ["/contracts/fixtures/lcp-usage-ledger/macos.json", path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/macos.json")],
+  ["/contracts/fixtures/lcp-usage-ledger/linux.json", path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/linux.json")]
 ]);
 const stateFilePath = process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
 
@@ -580,6 +583,10 @@ function createFleetState() {
       { id: "lcp_local", parent_id: "device_local_windows", type: "lcp", name: "Local Control Plane", status: "unknown", risk: "medium" },
       { id: "agent_cursor", parent_id: "lcp_local", type: "agent", name: "Cursor Agent", status: "observed", risk: "medium" },
       { id: "agent_claude", parent_id: "lcp_local", type: "agent", name: "Claude Desktop", status: "observed", risk: "medium" },
+      { id: "site_byo", parent_id: "tenant_local_lab", type: "site", name: "BYOD Workstations", status: "connected", risk: "medium" },
+      { id: "group_design", parent_id: "site_byo", type: "device_group", name: "Design and Product", status: "connected", risk: "medium" },
+      { id: "device_macos_mbp_14", parent_id: "group_design", type: "device", name: "MBP-14-BYOD", status: "connected", risk: "medium" },
+      { id: "lcp_macos_byo", parent_id: "device_macos_mbp_14", type: "lcp", name: "LCP macOS BYOD", status: "connected", risk: "medium" },
       { id: "site_private_dc", parent_id: "tenant_local_lab", type: "site", name: "Private DC", status: "degraded", risk: "high" },
       { id: "group_gpu_nodes", parent_id: "site_private_dc", type: "device_group", name: "GPU Nodes", status: "connected", risk: "medium" },
       { id: "device_dc_gpu_01", parent_id: "group_gpu_nodes", type: "device", name: "DC-GPU-01", status: "connected", risk: "medium" },
@@ -597,6 +604,8 @@ function createFleetState() {
         group: "Developers",
         device_id: "device_local_windows",
         device_name: "DELL-WINDOWS",
+        os_family: "windows",
+        os_version: "Windows 11 Pro 24H2",
         name: "Local Control Plane",
         endpoint: localEndpoint,
         status: "unknown",
@@ -613,12 +622,38 @@ function createFleetState() {
         spiffe_id: "spiffe://local.pollek.cloud/tenant/local/site/site_bkk_hq/device/device_local_windows/lcp/lcp_local"
       },
       {
+        id: "lcp_macos_byo",
+        tenant_id: "local",
+        site: "BYOD Workstations",
+        group: "Design and Product",
+        device_id: "device_macos_mbp_14",
+        device_name: "MBP-14-BYOD",
+        os_family: "macos",
+        os_version: "macOS 15.5",
+        name: "LCP macOS BYOD",
+        endpoint: "https://lcp-macos-byo.private.example",
+        status: "connected",
+        risk: "medium",
+        version: "1.0.0-beta.10",
+        contract_version: "2026.06.30",
+        active_bundle: "bnd_ai_data_protection",
+        agents: 7,
+        tools: 19,
+        resources: 58,
+        policy_coverage: 79,
+        last_seen_at: now,
+        capability_summary: "Endpoint Security, TCC-aware file observation, telemetry batch",
+        spiffe_id: "spiffe://local.pollek.cloud/tenant/local/site/site_byo/device/device_macos_mbp_14/lcp/lcp_macos_byo"
+      },
+      {
         id: "lcp_dc_gpu_01",
         tenant_id: "local",
         site: "Private DC",
         group: "GPU Nodes",
         device_id: "device_dc_gpu_01",
         device_name: "DC-GPU-01",
+        os_family: "linux",
+        os_version: "Ubuntu Server 24.04 LTS",
         name: "LCP DC GPU 01",
         endpoint: "https://lcp-dc-gpu-01.private.example",
         status: "connected",
@@ -641,6 +676,8 @@ function createFleetState() {
         group: "Research",
         device_id: "device_sgx_07",
         device_name: "SGX-LAB-07",
+        os_family: "linux",
+        os_version: "Ubuntu Server 22.04 LTS",
         name: "LCP SGX 07",
         endpoint: "https://lcp-sgx-07.private.example",
         status: "offline",
@@ -663,6 +700,8 @@ function createFleetState() {
       { from: "lcp_local", to: "agent_cursor", label: "observes" },
       { from: "lcp_local", to: "agent_claude", label: "observes" },
       { from: "lcp_local", to: "bnd_local_dev_baseline", label: "desired bundle" },
+      { from: "site_byo", to: "lcp_macos_byo", label: "manages" },
+      { from: "lcp_macos_byo", to: "bnd_ai_data_protection", label: "active bundle" },
       { from: "lcp_dc_gpu_01", to: "bnd_ai_data_protection", label: "active bundle" },
       { from: "lcp_sgx_07", to: "alarm_lcp_offline", label: "raises" }
     ],
@@ -1013,6 +1052,8 @@ function createFleetState() {
         agent_name: "Antigravity",
         device_id: "device_local_windows",
         device_name: "DELL-WINDOWS",
+        os_family: "windows",
+        os_version: "Windows 11 Pro 24H2",
         lcp_id: "lcp_local",
         user_subject: "DELL\\LocalAdmin",
         provider: "Google",
@@ -1041,6 +1082,8 @@ function createFleetState() {
         agent_name: "Unregistered Browser AI",
         device_id: "device_local_windows",
         device_name: "DELL-WINDOWS",
+        os_family: "windows",
+        os_version: "Windows 11 Pro 24H2",
         lcp_id: "lcp_local",
         user_subject: "DELL\\LocalAdmin",
         provider: "Unknown",
@@ -1068,6 +1111,8 @@ function createFleetState() {
         agent_name: "OpenAI Codex (CLI)",
         device_id: "device_dc_gpu_01",
         device_name: "DC-GPU-01",
+        os_family: "linux",
+        os_version: "Ubuntu Server 24.04 LTS",
         lcp_id: "lcp_dc_gpu_01",
         user_subject: "research\\ml-admin",
         provider: "OpenAI",
@@ -1093,6 +1138,8 @@ function createFleetState() {
         agent_name: "Claude Desktop",
         device_id: "device_dc_gpu_01",
         device_name: "DC-GPU-01",
+        os_family: "linux",
+        os_version: "Ubuntu Server 24.04 LTS",
         lcp_id: "lcp_dc_gpu_01",
         user_subject: "research\\analyst",
         provider: "Anthropic",
@@ -1109,6 +1156,34 @@ function createFleetState() {
         recorded_at: now
       },
       {
+        id: "usage_ai_claude_macos_byo",
+        tenant_id: "local",
+        metric: "ai_model_usage",
+        source: "lcp_model_usage_telemetry",
+        confidence: "reported",
+        agent_id: "agent_macos_claude_desktop",
+        agent_name: "Claude Desktop",
+        device_id: "device_macos_mbp_14",
+        device_name: "MBP-14-BYOD",
+        os_family: "macos",
+        os_version: "macOS 15.5",
+        lcp_id: "lcp_macos_byo",
+        user_subject: "corp\\designer",
+        provider: "Anthropic",
+        model: "claude-sonnet-4",
+        pricing_model: "token_metered_with_prompt_cache",
+        allocation_method: "direct_token_meter",
+        billed_credits: 0,
+        call_count: 22,
+        input_tokens: 64200,
+        output_tokens: 18100,
+        cached_input_tokens: 9100,
+        total_tokens: 82300,
+        estimated_cost_cents: 719,
+        currency: "USD",
+        recorded_at: now
+      },
+      {
         id: "usage_ai_sgx_stale",
         tenant_id: "local",
         metric: "ai_model_usage",
@@ -1118,6 +1193,8 @@ function createFleetState() {
         agent_name: "Possible AI Agent (SGX)",
         device_id: "device_sgx_07",
         device_name: "SGX-LAB-07",
+        os_family: "linux",
+        os_version: "Ubuntu Server 22.04 LTS",
         lcp_id: "lcp_sgx_07",
         user_subject: "research\\contractor",
         provider: "Unknown",
@@ -1976,6 +2053,14 @@ function numberFromUsage(entry, fields) {
   return 0;
 }
 
+function normalizeOsFamily(value = "unknown") {
+  const normalized = String(value || "unknown").trim().toLowerCase();
+  if (normalized.startsWith("win")) return "windows";
+  if (normalized === "darwin" || normalized.startsWith("mac")) return "macos";
+  if (normalized.includes("linux") || normalized.includes("ubuntu") || normalized.includes("debian") || normalized.includes("fedora")) return "linux";
+  return ["windows", "macos", "linux"].includes(normalized) ? normalized : "unknown";
+}
+
 function validateLcpUsageLedger(body = {}) {
   const tenantId = body.tenant_id || body.tenantId || "local";
   requiredTenantContext(tenantId);
@@ -1989,7 +2074,14 @@ function validateLcpUsageLedger(body = {}) {
   if (!entries.length) throw new Error("usage_entries array is required");
   const knownLcp = (state.fleet.localControlPlanes || []).find((item) => item.id === lcpId && item.tenant_id === tenantId);
   if (!knownLcp) throw new Error(`unknown_lcp:${lcpId}`);
-  return { tenantId, lcpId, entries };
+  return {
+    tenantId,
+    lcpId,
+    entries,
+    osFamily: normalizeOsFamily(body.os_family || body.osFamily || knownLcp.os_family),
+    osVersion: body.os_version || body.osVersion || knownLcp.os_version || "",
+    captureMethod: body.capture_method || body.captureMethod || "unknown"
+  };
 }
 
 function normalizeLcpUsageEntry(entry, context, index) {
@@ -2004,6 +2096,7 @@ function normalizeLcpUsageEntry(entry, context, index) {
   const totalTokens = numberFromUsage(entry, ["total_tokens", "tokens"]) || inputTokens + outputTokens;
   const credits = numberFromUsage(entry, ["billed_credits", "credits", "credit_units"]);
   const allocatedCostCents = numberFromUsage(entry, ["allocated_cost_cents", "estimated_cost_cents", "cost_cents", "amount_cents"]);
+  const osFamily = normalizeOsFamily(entry.os_family || entry.osFamily || context.osFamily);
   if (pricingModel.includes("credit") && !entry.billing_pool_id && !entry.credit_pool_id) {
     throw new Error(`usage_entries[${index}].billing_pool_id is required for credit pricing`);
   }
@@ -2020,6 +2113,9 @@ function normalizeLcpUsageEntry(entry, context, index) {
     lcp_id: context.lcpId,
     device_id: deviceId,
     device_name: entry.device_name || deviceId,
+    os_family: osFamily,
+    os_version: entry.os_version || entry.osVersion || context.osVersion,
+    capture_method: entry.capture_method || entry.captureMethod || context.captureMethod,
     user_subject: userSubject,
     agent_id: agentId,
     entity_id: entry.entity_id || agentId,
@@ -2044,12 +2140,15 @@ function normalizeLcpUsageEntry(entry, context, index) {
 }
 
 function ingestLcpUsageLedger(body = {}) {
-  const { tenantId, lcpId, entries } = validateLcpUsageLedger(body);
+  const { tenantId, lcpId, entries, osFamily, osVersion, captureMethod } = validateLcpUsageLedger(body);
   const ledgerId = body.ledger_id || `lcp_usage_ledger_${crypto.randomUUID()}`;
   const context = {
     tenantId,
     lcpId,
     ledgerId,
+    osFamily,
+    osVersion,
+    captureMethod,
     receivedAt: nowIso(),
     observedAt: body.observed_at || body.occurred_at || nowIso()
   };
@@ -2073,6 +2172,9 @@ function ingestLcpUsageLedger(body = {}) {
     ledger_id: ledgerId,
     tenant_id: tenantId,
     lcp_id: lcpId,
+    os_family: osFamily,
+    os_version: osVersion,
+    capture_method: captureMethod,
     accepted_count: accepted.length,
     duplicate_count: duplicates.length,
     rejected_count: 0,

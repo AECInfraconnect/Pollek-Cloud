@@ -91,7 +91,7 @@
       "direction": "local_to_cloud",
       "requires_oauth": false,
       "requires_spiffe": false,
-      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json", "/api/contract-hub/drift"],
+      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json", "/contracts/fixtures/lcp-usage-ledger/windows.json", "/contracts/fixtures/lcp-usage-ledger/macos.json", "/contracts/fixtures/lcp-usage-ledger/linux.json", "/api/contract-hub/drift"],
       "purpose": "Contract Hub publishes machine-readable cloud protocol artifacts and drift status for Local Pollek compatibility checks."
     },
     "pollek.cloud.policy_bundle": {
@@ -182,7 +182,7 @@
       "tenant_scoped": true,
       "paths": ["/v1/tenants/{tenant_id}/billing/subscription", "/v1/tenants/{tenant_id}/billing/usage", "/v1/tenants/{tenant_id}/billing/invoices", "/v1/tenants/{tenant_id}/billing/payment-methods", "/v1/tenants/{tenant_id}/billing/license/issue", "/v1/billing/webhooks/{provider}", "/api/lcp/usage-ledgers", "/v1/tenants/{tenant_id}/lcp/usage-ledgers"],
       "meters": ["console_seats", "local_control_planes", "managed_devices", "telemetry_events", "ai_model_tokens", "ai_model_credits", "ai_model_estimated_cost_cents"],
-      "controls": ["seat_device_lcp_metering", "lcp_reported_agent_usage_ledger", "credit_pool_allocation", "cloud_validation_reconciliation", "payment_token_hash", "webhook_idempotency", "offline_license", "audit_event", "task_record"]
+      "controls": ["seat_device_lcp_metering", "lcp_reported_agent_usage_ledger", "cross_os_usage_fixtures", "credit_pool_allocation", "cloud_validation_reconciliation", "payment_token_hash", "webhook_idempotency", "offline_license", "audit_event", "task_record"]
     },
     "pollek.cloud.kms": {
       "direction": "cloud_admin",
