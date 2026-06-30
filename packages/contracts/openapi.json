@@ -2020,6 +2020,71 @@
         "x-pollek-tenant-scoped": true
       }
     },
+    "/api/lcp/usage-ledgers": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry",
+          "pollek.cloud.billing"
+        ],
+        "summary": "Pollek Cloud POST /api/lcp/usage-ledgers",
+        "operationId": "postApiLcpUsageLedgers",
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry",
+          "pollek.cloud.billing"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud",
+          "cloud_admin"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
     "/api/persistence/flush": {
       "post": {
         "tags": [
@@ -2808,6 +2873,51 @@
         ],
         "summary": "Pollek Cloud GET /contracts/events.schema.json",
         "operationId": "getContractsEventsSchemaJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/contracts/lcp-usage-ledger.schema.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/lcp-usage-ledger.schema.json",
+        "operationId": "getContractsLcpUsageLedgerSchemaJson",
         "responses": {
           "200": {
             "description": "Successful local development response",
@@ -6095,6 +6205,81 @@
         "x-pollek-direction": [
           "local_to_cloud",
           "bidirectional"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/lcp/usage-ledgers": {
+      "post": {
+        "tags": [
+          "pollek.cloud.telemetry",
+          "pollek.cloud.billing"
+        ],
+        "summary": "Pollek Cloud POST /v1/tenants/{tenant_id}/lcp/usage-ledgers",
+        "operationId": "postV1TenantsTenantIdLcpUsageLedgers",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": [],
+            "spiffeMtls": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.telemetry",
+          "pollek.cloud.billing"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud",
+          "cloud_admin"
         ],
         "x-pollek-enterprise-only": false,
         "x-pollek-tenant-scoped": true

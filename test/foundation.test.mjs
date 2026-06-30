@@ -67,6 +67,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   const contract = JSON.parse(await readFile("packages/contracts/pollek-contract.json", "utf8"));
 
   assert.equal(contract.schema_version, "pollek-cloud-contract-discovery.v1");
+  assert.equal(contract.schemas.lcp_usage_ledger, "/contracts/lcp-usage-ledger.schema.json");
   assert.equal(contract.features.hot_reload, true);
   assert.equal(contract.features.signed_bundles, true);
   assert.equal(contract.features.content_addressed_bundle_artifacts, true);
@@ -114,6 +115,7 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.durable_event_stream_replay, true);
   assert.equal(contract.features.near_real_time_lcp_watch, true);
   assert.equal(contract.features.hybrid_lcp_delta_push, true);
+  assert.equal(contract.features.lcp_ai_usage_ledger, true);
   assert.equal(contract.features.lcp_change_batch_ack_cursor, true);
   assert.equal(contract.features.secure_cloud_to_local_dispatch, true);
   assert.equal(contract.features.signed_control_envelopes, true);
@@ -132,11 +134,16 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/v1/tenants/{tenant_id}/members/{account_id}/roles"));
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/scim/v2/Users"));
   assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/v1/tenants/{tenant_id}/billing/license/issue"));
+  assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/api/lcp/usage-ledgers"));
+  assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/v1/tenants/{tenant_id}/lcp/usage-ledgers"));
+  assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("lcp_reported_agent_usage_ledger"));
+  assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("credit_pool_allocation"));
   assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("webhook_idempotency"));
   assert.ok(contract.interfaces["pollek.cloud.kms"].paths.includes("/v1/kms/health"));
   assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/events.schema.json"));
   assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/bundle-manifest.schema.json"));
   assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/telemetry-envelope.schema.json"));
+  assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/lcp-usage-ledger.schema.json"));
   assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/api/lcp/change-batches"));
   assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/lcp/change-batches"));
   assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/registry/resources"));
@@ -191,6 +198,7 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/contracts/events.schema.json"].get);
   assert.ok(openapi.paths["/contracts/bundle-manifest.schema.json"].get);
   assert.ok(openapi.paths["/contracts/telemetry-envelope.schema.json"].get);
+  assert.ok(openapi.paths["/contracts/lcp-usage-ledger.schema.json"].get);
   assert.ok(openapi.paths["/api/contract-hub/drift"].get);
   assert.ok(openapi.paths["/api/persistence/status"].get);
   assert.ok(openapi.paths["/api/persistence/flush"].post);
@@ -215,6 +223,8 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/identity-providers"].put);
   assert.ok(openapi.paths["/scim/v2/Users"].post);
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/billing/usage"].get);
+  assert.ok(openapi.paths["/api/lcp/usage-ledgers"].post);
+  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/lcp/usage-ledgers"].post);
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/billing/license/issue"].post);
   assert.ok(openapi.paths["/v1/kms/health"].get);
   assert.ok(openapi.paths["/api/policy/providers"].get);
@@ -247,6 +257,9 @@ test("typespec source and sdk artifact cover core Contract Hub APIs", async () =
   assert.match(typespec, /op signupTenant/);
   assert.match(typespec, /op inviteMember/);
   assert.match(typespec, /op getEventSchema/);
+  assert.match(typespec, /op getLcpUsageLedgerSchema/);
+  assert.match(typespec, /op ingestLcpUsageLedger/);
+  assert.match(typespec, /op ingestTenantLcpUsageLedger/);
   assert.match(typespec, /op updateMemberRoles/);
   assert.match(typespec, /op removeMember/);
   assert.match(typespec, /op createScimUser/);
@@ -271,6 +284,9 @@ test("typespec source and sdk artifact cover core Contract Hub APIs", async () =
   assert.match(sdk, /getEventSchema/);
   assert.match(sdk, /getBundleManifestSchema/);
   assert.match(sdk, /getTelemetryEnvelopeSchema/);
+  assert.match(sdk, /getLcpUsageLedgerSchema/);
+  assert.match(sdk, /ingestLcpUsageLedger/);
+  assert.match(sdk, /ingestTenantLcpUsageLedger/);
   assert.match(sdk, /updateMemberRoles/);
   assert.match(sdk, /removeMember/);
   assert.match(sdk, /createScimUser/);
@@ -468,6 +484,10 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /function upsertIdentityProvider/);
   assert.match(server, /function billingUsageSnapshot/);
   assert.match(server, /function invoicePreview/);
+  assert.match(server, /function ingestLcpUsageLedger/);
+  assert.match(server, /function validateLcpUsageLedger/);
+  assert.match(server, /\/api\/lcp\/usage-ledgers/);
+  assert.match(server, /lcp_usage_ledger\.ingested/);
   assert.match(server, /function issueOfflineLicense/);
   assert.match(server, /function kmsHealth/);
   assert.match(server, /function ensureRoleTestUsers/);
@@ -738,9 +758,118 @@ test("admin IAM and billing workflows enforce tenant context and redact secrets"
   });
 });
 
+test("billing usage exposes organization AI token and cost allocation", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const usage = await api(baseUrl, "/v1/tenants/local/billing/usage");
+    assert.equal(usage.response.status, 200);
+    assert.ok(usage.payload.summary.ai_model_tokens > 0);
+    assert.ok(usage.payload.summary.ai_model_estimated_cost_cents > 0);
+
+    const invoices = await api(baseUrl, "/v1/tenants/local/billing/invoices");
+    assert.equal(invoices.response.status, 200);
+    const metrics = invoices.payload.invoices[0].line_items.map((item) => item.metric);
+    assert.ok(metrics.includes("ai_model_cost_allocation"));
+  });
+});
+
+test("LCP usage ledger ingestion validates agent-first credit allocation", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const valid = await api(baseUrl, "/v1/tenants/local/lcp/usage-ledgers", {
+      method: "POST",
+      body: {
+        schema_version: "pollek.lcp.usage-ledger.v1",
+        ledger_id: "ledger_smoke_lcp_usage",
+        tenant_id: "local",
+        lcp_id: "lcp_local",
+        observed_at: "2026-06-30T00:00:00.000Z",
+        usage_entries: [
+          {
+            id: "usage_smoke_antigravity_gemini",
+            entity_id: "entity_agent_antigravity",
+            agent_id: "entity_agent_antigravity",
+            agent_name: "Antigravity",
+            device_id: "device_local_windows",
+            device_name: "DELL-WINDOWS",
+            user_subject: "DELL\\LocalAdmin",
+            provider: "Google",
+            model: "gemini-2.5-pro",
+            pricing_model: "credit_pool",
+            billing_pool_id: "credit_pool_local_gemini_agents",
+            allocation_method: "lcp_reported_agent_share",
+            call_count: 3,
+            input_tokens: 1000,
+            output_tokens: 500,
+            total_tokens: 1500,
+            billed_credits: 1.5,
+            allocated_cost_cents: 150,
+            confidence: "reported_by_lcp"
+          },
+          {
+            id: "usage_smoke_claw_same_model",
+            entity_id: "agent_openclaw_gateway",
+            agent_id: "agent_openclaw_gateway",
+            agent_name: "OpenClaw Gateway",
+            device_id: "device_local_windows",
+            device_name: "DELL-WINDOWS",
+            user_subject: "DELL\\LocalAdmin",
+            provider: "Google",
+            model: "gemini-2.5-pro",
+            pricing_model: "credit_pool",
+            billing_pool_id: "credit_pool_local_gemini_agents",
+            allocation_method: "lcp_reported_agent_share",
+            call_count: 2,
+            input_tokens: 700,
+            output_tokens: 300,
+            total_tokens: 1000,
+            billed_credits: 1,
+            allocated_cost_cents: 100,
+            confidence: "reported_by_lcp"
+          }
+        ]
+      }
+    });
+    assert.equal(valid.response.status, 202);
+    assert.equal(valid.payload.ledger.accepted_count, 2);
+    assert.equal(valid.payload.ledger.billed_credits, 2.5);
+    assert.equal(valid.payload.usage_records[0].source, "lcp_usage_ledger");
+
+    const usage = await api(baseUrl, "/v1/tenants/local/billing/usage");
+    assert.equal(usage.response.status, 200);
+    assert.ok(usage.payload.summary.ai_model_tokens >= 2500);
+    assert.ok(usage.payload.summary.ai_model_credits >= 2.5);
+
+    const invalid = await api(baseUrl, "/api/lcp/usage-ledgers", {
+      method: "POST",
+      body: {
+        schema_version: "pollek.lcp.usage-ledger.v1",
+        ledger_id: "ledger_missing_pool",
+        tenant_id: "local",
+        lcp_id: "lcp_local",
+        observed_at: "2026-06-30T00:00:00.000Z",
+        usage_entries: [
+          {
+            id: "usage_missing_pool",
+            agent_id: "entity_agent_antigravity",
+            agent_name: "Antigravity",
+            device_id: "device_local_windows",
+            user_subject: "DELL\\LocalAdmin",
+            provider: "Google",
+            model: "gemini-2.5-pro",
+            pricing_model: "credit_pool",
+            total_tokens: 1
+          }
+        ]
+      }
+    });
+    assert.equal(invalid.response.status, 400);
+    assert.equal(invalid.payload.error, "invalid_lcp_usage_ledger");
+    assert.match(invalid.payload.detail, /billing_pool_id is required/);
+  });
+});
+
 test("contract hub serves concrete schema artifacts", async (t) => {
   await withDevServer(t, async (baseUrl) => {
-    for (const artifactPath of ["/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json"]) {
+    for (const artifactPath of ["/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json"]) {
       const artifact = await api(baseUrl, artifactPath);
       assert.equal(artifact.response.status, 200);
       assert.equal(artifact.payload.$schema, "https://json-schema.org/draft/2020-12/schema");
@@ -757,8 +886,8 @@ test("console wires fleet operations controls", async () => {
   const html = await readFile("apps/web/static/index.html", "utf8");
   const css = await readFile("apps/web/static/styles.css", "utf8");
 
-  assert.match(html, /styles\.css\?v=20260629-agent-nav-polish/);
-  assert.match(html, /app\.js\?v=20260629-agent-nav-focus/);
+  assert.match(html, /styles\.css\?v=20260630-agent-first-cost/);
+  assert.match(html, /app\.js\?v=20260630-agent-first-cost/);
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="appShell"/);
@@ -807,6 +936,16 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /id="kmsHealthList"/);
   assert.match(html, /id="entityList"/);
   assert.match(html, /id="entityTracePanel"/);
+  assert.match(html, /id="selectedEntityDetail"/);
+  assert.match(html, /id="aiUsageSummary"/);
+  assert.match(html, /id="aiUsageDeviceList"/);
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /role="tab" id="tab-timeline" aria-controls="panel-timeline"/);
+  assert.match(html, /id="activitySourceFilter"/);
+  assert.match(html, /id="activitySeverityFilter"/);
+  assert.match(html, /id="activitySearch"/);
+  assert.match(html, /id="activitySummaryStrip"/);
+  assert.match(html, /id="activityLedger"/);
   assert.match(html, /id="entitySyncButton"/);
   assert.match(html, /id="liveRefreshButton"/);
   assert.match(html, /id="pushConfigButton"/);
@@ -825,6 +964,32 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /async function acknowledgeAlarm/);
   assert.match(app, /function setActiveTab/);
   assert.match(app, /function renderEntities/);
+  assert.match(app, /function buildActivityLedger/);
+  assert.match(app, /function renderActivityLedger/);
+  assert.match(app, /function ledgerNextAction/);
+  assert.match(app, /function renderAiUsageOverview/);
+  assert.match(app, /function aiUsageRecords/);
+  assert.match(app, /function syntheticUsageRecords/);
+  assert.match(app, /function usageAgentKey/);
+  assert.match(app, /function usageModelKey/);
+  assert.match(app, /agent first/);
+  assert.match(app, /Awaiting LCP ledger/);
+  assert.match(app, /LCP ledger records/);
+  assert.match(app, /function renderSelectedEntityDetail/);
+  assert.match(app, /Agent Cost & Tokens/);
+  assert.match(app, /function safeDomId/);
+  assert.match(app, /aria-controls="\$\{scopePanelId\}"/);
+  assert.match(app, /role="region" aria-labelledby="\$\{scopeButtonId\}"/);
+  assert.match(app, /activitySourceFilter/);
+  assert.match(app, /Payload and evidence/);
+  assert.match(css, /\.activity-ledger/);
+  assert.match(css, /\.ledger-entry/);
+  assert.match(css, /\.ledger-next-action/);
+  assert.match(css, /\.ledger-evidence/);
+  assert.match(css, /\.usage-overview/);
+  assert.match(css, /\.usage-device-card/);
+  assert.match(css, /\.usage-model-chip/);
+  assert.match(css, /\.entity-detail-card/);
   assert.ok(app.includes('const sideNavAgentKinds = new Set(["agent", "registered_agent", "found_agent"]);'));
   assert.match(app, /const sideNavEntityGroups = \[/);
   assert.match(app, /function navigationAgentGroup/);

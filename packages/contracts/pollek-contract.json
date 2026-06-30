@@ -11,7 +11,8 @@
     "openapi": "/contracts/openapi.json",
     "events": "/contracts/events.schema.json",
     "bundle_manifest": "/contracts/bundle-manifest.schema.json",
-    "telemetry_envelope": "/contracts/telemetry-envelope.schema.json"
+    "telemetry_envelope": "/contracts/telemetry-envelope.schema.json",
+    "lcp_usage_ledger": "/contracts/lcp-usage-ledger.schema.json"
   },
   "interfaces": {
     "pollek.cloud.enrollment": {
@@ -46,9 +47,11 @@
         "/v1/tenants/{tenant_id}/telemetry/identities",
         "/v1/tenants/{tenant_id}/telemetry/guard-events",
         "/v1/tenants/{tenant_id}/browser-extension/events",
-        "/v1/tenants/{tenant_id}/browser-extension/status"
+        "/v1/tenants/{tenant_id}/browser-extension/status",
+        "/api/lcp/usage-ledgers",
+        "/v1/tenants/{tenant_id}/lcp/usage-ledgers"
       ],
-      "controls": ["secret_redaction", "schema_version_validation", "tenant_device_headers", "sender_constrained_token_planned"]
+      "controls": ["secret_redaction", "schema_version_validation", "tenant_device_headers", "sender_constrained_token_planned", "lcp_usage_ledger_validation"]
     },
     "pollek.cloud.local_entities": {
       "direction": "local_to_cloud",
@@ -88,7 +91,7 @@
       "direction": "local_to_cloud",
       "requires_oauth": false,
       "requires_spiffe": false,
-      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/api/contract-hub/drift"],
+      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json", "/api/contract-hub/drift"],
       "purpose": "Contract Hub publishes machine-readable cloud protocol artifacts and drift status for Local Pollek compatibility checks."
     },
     "pollek.cloud.policy_bundle": {
@@ -177,9 +180,9 @@
       "requires_oauth": true,
       "requires_spiffe": false,
       "tenant_scoped": true,
-      "paths": ["/v1/tenants/{tenant_id}/billing/subscription", "/v1/tenants/{tenant_id}/billing/usage", "/v1/tenants/{tenant_id}/billing/invoices", "/v1/tenants/{tenant_id}/billing/payment-methods", "/v1/tenants/{tenant_id}/billing/license/issue", "/v1/billing/webhooks/{provider}"],
-      "meters": ["console_seats", "local_control_planes", "managed_devices", "telemetry_events"],
-      "controls": ["seat_device_lcp_metering", "payment_token_hash", "webhook_idempotency", "offline_license", "audit_event", "task_record"]
+      "paths": ["/v1/tenants/{tenant_id}/billing/subscription", "/v1/tenants/{tenant_id}/billing/usage", "/v1/tenants/{tenant_id}/billing/invoices", "/v1/tenants/{tenant_id}/billing/payment-methods", "/v1/tenants/{tenant_id}/billing/license/issue", "/v1/billing/webhooks/{provider}", "/api/lcp/usage-ledgers", "/v1/tenants/{tenant_id}/lcp/usage-ledgers"],
+      "meters": ["console_seats", "local_control_planes", "managed_devices", "telemetry_events", "ai_model_tokens", "ai_model_credits", "ai_model_estimated_cost_cents"],
+      "controls": ["seat_device_lcp_metering", "lcp_reported_agent_usage_ledger", "credit_pool_allocation", "cloud_validation_reconciliation", "payment_token_hash", "webhook_idempotency", "offline_license", "audit_event", "task_record"]
     },
     "pollek.cloud.kms": {
       "direction": "cloud_admin",
@@ -238,6 +241,7 @@
     "durable_event_stream_replay": true,
     "near_real_time_lcp_watch": true,
     "hybrid_lcp_delta_push": true,
+    "lcp_ai_usage_ledger": true,
     "lcp_change_batch_ack_cursor": true,
     "secure_cloud_to_local_dispatch": true,
     "signed_control_envelopes": true,

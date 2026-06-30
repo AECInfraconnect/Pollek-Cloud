@@ -65,6 +65,10 @@ export class PollekCloudClient {
     return this.request("/contracts/telemetry-envelope.schema.json");
   }
 
+  getLcpUsageLedgerSchema() {
+    return this.request("/contracts/lcp-usage-ledger.schema.json");
+  }
+
   ingestTelemetry(path, request) {
     return this.request(path, { method: "POST", body: request });
   }
@@ -139,6 +143,14 @@ export class PollekCloudClient {
 
   getBillingUsage(tenantId) {
     return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/billing/usage\`);
+  }
+
+  ingestLcpUsageLedger(request) {
+    return this.request("/api/lcp/usage-ledgers", { method: "POST", body: request });
+  }
+
+  ingestTenantLcpUsageLedger(tenantId, request) {
+    return this.request(\`/v1/tenants/\${encodeURIComponent(tenantId)}/lcp/usage-ledgers\`, { method: "POST", body: request });
   }
 
   updateSubscription(tenantId, request) {

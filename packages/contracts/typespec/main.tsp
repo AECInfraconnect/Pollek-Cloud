@@ -130,6 +130,9 @@ model OfflineLicenseRequest {
 @route("/contracts/telemetry-envelope.schema.json")
 @get op getTelemetryEnvelopeSchema(): unknown;
 
+@route("/contracts/lcp-usage-ledger.schema.json")
+@get op getLcpUsageLedgerSchema(): unknown;
+
 @route("/v1/telemetry/batches")
 @post op ingestTelemetryBatch(@body request: Record<unknown>): unknown;
 
@@ -192,6 +195,12 @@ model OfflineLicenseRequest {
 
 @route("/v1/tenants/{tenant_id}/browser-extension/events")
 @post op ingestBrowserExtensionEvent(@path tenant_id: string, @body request: Record<unknown>): unknown;
+
+@route("/api/lcp/usage-ledgers")
+@post op ingestLcpUsageLedger(@body request: Record<unknown>): unknown;
+
+@route("/v1/tenants/{tenant_id}/lcp/usage-ledgers")
+@post op ingestTenantLcpUsageLedger(@path tenant_id: string, @body request: Record<unknown>): unknown;
 
 @route("/v1/tenants/{tenant_id}/browser-extension/status")
 @get op getBrowserExtensionStatus(@path tenant_id: string): unknown;

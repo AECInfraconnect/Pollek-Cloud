@@ -21,6 +21,8 @@ const refs = {
   metricCoverage: document.querySelector("#metricCoverage"),
   fleetRows: document.querySelector("#fleetRows"),
   operationsFocus: document.querySelector("#operationsFocus"),
+  aiUsageSummary: document.querySelector("#aiUsageSummary"),
+  aiUsageDeviceList: document.querySelector("#aiUsageDeviceList"),
   statusFilter: document.querySelector("#statusFilter"),
   entitySyncButton: document.querySelector("#entitySyncButton"),
   entityTypeFilter: document.querySelector("#entityTypeFilter"),
@@ -28,6 +30,7 @@ const refs = {
   entityUserFilter: document.querySelector("#entityUserFilter"),
   entitySearch: document.querySelector("#entitySearch"),
   entityInsightStrip: document.querySelector("#entityInsightStrip"),
+  selectedEntityDetail: document.querySelector("#selectedEntityDetail"),
   entityList: document.querySelector("#entityList"),
   entityTracePanel: document.querySelector("#entityTracePanel"),
   connectionProfileList: document.querySelector("#connectionProfileList"),
@@ -69,6 +72,11 @@ const refs = {
   telemetryExplorer: document.querySelector("#telemetryExplorer"),
   alarmTabList: document.querySelector("#alarmTabList"),
   enrollmentButton: document.querySelector("#enrollmentButton"),
+  activitySourceFilter: document.querySelector("#activitySourceFilter"),
+  activitySeverityFilter: document.querySelector("#activitySeverityFilter"),
+  activitySearch: document.querySelector("#activitySearch"),
+  activitySummaryStrip: document.querySelector("#activitySummaryStrip"),
+  activityLedger: document.querySelector("#activityLedger"),
   enrollmentList: document.querySelector("#enrollmentList"),
   evidenceExportList: document.querySelector("#evidenceExportList"),
   rolloutTimeline: document.querySelector("#rolloutTimeline"),
@@ -142,6 +150,9 @@ const app = {
   entityDeviceFilter: "all",
   entityUserFilter: "all",
   entityQuery: "",
+  activitySourceFilter: "all",
+  activitySeverityFilter: "all",
+  activityQuery: "",
   telemetryResults: [],
   latestPolicyDraftId: null
 };
@@ -152,6 +163,10 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function safeDomId(prefix, value) {
+  return `${prefix}-${String(value || "item").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80)}`;
 }
 
 function fmtTime(value) {
@@ -165,6 +180,7 @@ function fmtMoney(cents, currency = "USD") {
 }
 
 function statusClass(status) {
+  if (["ok", "bad", "warn", "neutral"].includes(status)) return status;
   if (["connected", "active", "available", "registered", "published", "enforcing", "observed", "configured", "ready", "completed", "healthy", "issued", "accepted"].includes(status)) return "ok";
   if (["offline", "critical", "failed", "untrusted", "denied", "deny"].includes(status)) return "bad";
   if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp", "warning", "pending_approval", "warn", "trialing", "preview", "pending"].includes(status)) return "warn";
@@ -466,8 +482,10 @@ function applyOpsSectionState() {
     const collapsed = app.collapsedOpsSections.has(section);
     panel.classList.toggle("collapsed", collapsed);
     const button = panel.querySelector("[data-ops-section-toggle]");
+    const body = panel.querySelector(".ops-panel-body");
     const glyph = panel.querySelector(".ops-toggle-glyph");
     button?.setAttribute("aria-expanded", String(!collapsed));
+    if (body) body.hidden = collapsed;
     if (glyph) glyph.textContent = collapsed ? "+" : "-";
   });
 }
@@ -492,15 +510,26 @@ function setActiveTab(tabName, options = {}) {
   const nextTab = panel ? tabName : "summary";
   const detailTabs = document.querySelector(".detail-tabs");
   app.activeTab = nextTab;
+  detailTabs?.setAttribute("role", "tablist");
 
   document.querySelectorAll(".tab").forEach((button) => {
     const active = button.dataset.tab === nextTab;
+    const controls = `panel-${button.dataset.tab}`;
+    button.id ||= `tab-${button.dataset.tab}`;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-controls", controls);
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
+    button.setAttribute("tabindex", active ? "0" : "-1");
   });
   document.querySelectorAll("[data-tab-panel]").forEach((item) => {
-    item.hidden = item.dataset.tabPanel !== nextTab;
-    item.classList.toggle("active", item.dataset.tabPanel === nextTab);
+    const active = item.dataset.tabPanel === nextTab;
+    item.id ||= `panel-${item.dataset.tabPanel}`;
+    item.setAttribute("role", "tabpanel");
+    const tabButton = document.querySelector(`.tab[data-tab="${item.dataset.tabPanel}"]`);
+    if (tabButton) item.setAttribute("aria-labelledby", tabButton.id);
+    item.hidden = !active;
+    item.classList.toggle("active", active);
   });
   if (detailTabs) {
     detailTabs.hidden = nextTab === "administration";
@@ -580,6 +609,7 @@ function render() {
   renderTree();
   renderObjectHeader();
   renderOperationsFocus();
+  renderAiUsageOverview();
   renderFleetRows();
   renderEntityFilters();
   renderEntityInsights();
@@ -696,6 +726,323 @@ function renderOperationsFocus() {
       render();
     });
   });
+}
+
+function fmtNumber(value) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+
+function stableNumber(value) {
+  return Array.from(String(value || "pollek")).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
+function slugify(value) {
+  return String(value || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "unknown";
+}
+
+function recordValue(record, keys, fallback = "") {
+  for (const key of keys) {
+    const value = record?.[key]
+      ?? record?.payload?.[key]
+      ?? record?.attributes?.[key]
+      ?? record?.dimensions?.[key]
+      ?? record?.metadata?.[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return fallback;
+}
+
+function usageTokenCount(record) {
+  const direct = recordValue(record, ["total_tokens", "tokens", "token_count", "quantity"], 0);
+  const input = Number(recordValue(record, ["input_tokens", "prompt_tokens"], 0));
+  const output = Number(recordValue(record, ["output_tokens", "completion_tokens"], 0));
+  return Number(direct || 0) || input + output;
+}
+
+function usageCostCents(record) {
+  const allocated = recordValue(record, ["allocated_cost_cents"], null);
+  if (allocated !== null && allocated !== undefined && allocated !== "") return Number(allocated || 0);
+  const direct = recordValue(record, ["estimated_cost_cents", "cost_cents", "amount_cents"], null);
+  if (direct !== null && direct !== undefined && direct !== "") return Number(direct || 0);
+  const dollars = Number(recordValue(record, ["estimated_cost_usd", "cost_usd"], 0));
+  return Math.round(dollars * 100);
+}
+
+function usageCreditCount(record) {
+  return Number(recordValue(record, ["billed_credits", "credits", "credit_units"], 0) || 0);
+}
+
+function fmtCredits(value) {
+  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(value || 0))} cr`;
+}
+
+function usagePricingModel(record) {
+  return recordValue(record, ["pricing_model", "billing_model", "billing_unit"], usageCreditCount(record) ? "credit_pool" : "token_metered");
+}
+
+function costBasisLabel(item) {
+  if (item.creditPools?.length || item.credits) return `${fmtMoney(item.costCents || 0)} allocated / ${fmtCredits(item.credits || 0)}`;
+  return fmtMoney(item.costCents || 0);
+}
+
+function syntheticUsageRecords(tenantId = selectedTenantId()) {
+  const agentEntities = (app.data.local_entities || []).filter((entity) => {
+    const kind = entity.entity_type || entity.class || "";
+    return ["registered_agent", "found_agent", "agent"].includes(kind) || entity.class === "agent";
+  });
+  return agentEntities.map((entity, index) => {
+    const seed = stableNumber(`${entity.id}:${entity.name}:${index}`);
+    const calls = Number(entity.observability?.call_count || 18 + (seed % 42));
+    const inputTokens = calls * (850 + (seed % 550));
+    const outputTokens = calls * (220 + (seed % 240));
+    const totalTokens = inputTokens + outputTokens;
+    const estimatedCostCents = Math.max(1, Math.round(((inputTokens * 0.0000025) + (outputTokens * 0.000010)) * 100));
+    const pooledCreditAgent = /antigravity|claw|openclaw|browser ai/i.test(entity.name || "");
+    const provider = entity.vendor || (entity.status === "found_unregistered" ? "Unknown" : "Observed provider");
+    const model = pooledCreditAgent ? "gemini-2.5-pro-credit" : (entity.model || (entity.status === "found_unregistered" ? "unclassified-ai" : "observed-ai-workload"));
+    const creditPoolId = pooledCreditAgent ? `credit_pool_${slugify(entity.tenant_id || tenantId)}_gemini_agents` : "";
+    return {
+      id: `estimated_usage_${entity.id}`,
+      tenant_id: entity.tenant_id || tenantId,
+      metric: "ai_model_usage",
+      source: "estimated_from_lcp_telemetry",
+      confidence: "estimated",
+      entity_id: entity.id,
+      agent_id: entity.id,
+      agent_name: entity.name || entity.local_object_id || entity.id,
+      device_id: entity.device_id,
+      device_name: entity.device_name || entity.device_id || "Unknown device",
+      lcp_id: entity.lcp_id,
+      user_subject: entity.user_subject || "unknown user",
+      provider,
+      model,
+      pricing_model: pooledCreditAgent ? "credit_pool" : "token_metered",
+      billing_pool_id: creditPoolId,
+      allocation_method: pooledCreditAgent ? "agent_proportional_tokens_with_device_scope" : "direct_token_meter",
+      billed_credits: pooledCreditAgent ? Number((estimatedCostCents / 100).toFixed(2)) : 0,
+      allocated_cost_cents: pooledCreditAgent ? estimatedCostCents : undefined,
+      call_count: calls,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: totalTokens,
+      estimated_cost_cents: estimatedCostCents,
+      currency: "USD",
+      recorded_at: entity.observability?.last_event_at || entity.last_seen_at || new Date().toISOString()
+    };
+  });
+}
+
+function aiUsageRecords(tenantId = selectedTenantId()) {
+  const explicit = filteredByTenant(app.data.usage_records || [], tenantId).filter((record) => {
+    const metric = String(record.metric || "");
+    return metric === "ai_model_usage"
+      || metric.includes("token")
+      || metric.includes("cost")
+      || usageTokenCount(record) > 0
+      || usageCostCents(record) > 0;
+  });
+  return explicit.length ? explicit : syntheticUsageRecords(tenantId);
+}
+
+function summarizeUsageRecords(records) {
+  const totalTokens = records.reduce((sum, record) => sum + usageTokenCount(record), 0);
+  const totalCostCents = records.reduce((sum, record) => sum + usageCostCents(record), 0);
+  const credits = records.reduce((sum, record) => sum + usageCreditCount(record), 0);
+  const devices = new Set(records.map((record) => recordValue(record, ["device_id", "device_name"], "unknown")).filter(Boolean));
+  const users = new Set(records.map((record) => recordValue(record, ["user_subject", "user_id"], "unknown")).filter(Boolean));
+  const agents = new Set(records.map((record) => usageAgentKey(record)).filter(Boolean));
+  const creditPools = new Set(records.map((record) => recordValue(record, ["billing_pool_id", "credit_pool_id"], "")).filter(Boolean));
+  const calls = records.reduce((sum, record) => sum + Number(recordValue(record, ["call_count", "calls"], 0) || 0), 0);
+  return {
+    records: records.length,
+    agents: agents.size,
+    totalTokens,
+    totalCostCents,
+    credits,
+    creditPools: [...creditPools],
+    devices: devices.size,
+    users: users.size,
+    calls,
+    avgCostPerDeviceCents: devices.size ? Math.round(totalCostCents / devices.size) : 0
+  };
+}
+
+function usageAgentKey(record) {
+  const agentId = recordValue(record, ["agent_id", "entity_id", "object_id"], "");
+  const agentName = recordValue(record, ["agent_name", "name"], agentId || "unknown-agent");
+  const deviceId = recordValue(record, ["device_id", "device_name"], "unknown-device");
+  const user = recordValue(record, ["user_subject", "user_id"], "unknown-user");
+  return `${deviceId}::${user}::${agentId || agentName}`;
+}
+
+function usageModelKey(record) {
+  const provider = recordValue(record, ["provider"], "unknown provider");
+  const model = recordValue(record, ["model"], "unknown model");
+  return `${provider}::${model}`;
+}
+
+function usageRecordsByDevice(records) {
+  const devices = new Map();
+  for (const record of records) {
+    const deviceId = recordValue(record, ["device_id", "device_name"], "unknown-device");
+    if (!devices.has(deviceId)) {
+      devices.set(deviceId, {
+        deviceId,
+        deviceName: recordValue(record, ["device_name"], deviceId),
+        lcpId: recordValue(record, ["lcp_id"], "unknown-lcp"),
+        tokens: 0,
+        costCents: 0,
+        credits: 0,
+        creditPools: new Set(),
+        calls: 0,
+        agentsByKey: new Map()
+      });
+    }
+    const device = devices.get(deviceId);
+    const tokens = usageTokenCount(record);
+    const costCents = usageCostCents(record);
+    const credits = usageCreditCount(record);
+    const calls = Number(recordValue(record, ["call_count", "calls"], 0) || 0);
+    const poolId = recordValue(record, ["billing_pool_id", "credit_pool_id"], "");
+    if (poolId) device.creditPools.add(poolId);
+    const agentKey = usageAgentKey(record);
+    if (!device.agentsByKey.has(agentKey)) {
+      device.agentsByKey.set(agentKey, {
+        id: recordValue(record, ["agent_id", "entity_id"], record.id),
+        name: recordValue(record, ["agent_name", "name"], recordValue(record, ["agent_id", "entity_id"], "unknown agent")),
+        user: recordValue(record, ["user_subject", "user_id"], "unknown user"),
+        tokens: 0,
+        costCents: 0,
+        credits: 0,
+        creditPools: new Set(),
+        calls: 0,
+        modelsByKey: new Map()
+      });
+    }
+    const agent = device.agentsByKey.get(agentKey);
+    agent.tokens += tokens;
+    agent.costCents += costCents;
+    agent.credits += credits;
+    if (poolId) agent.creditPools.add(poolId);
+    agent.calls += calls;
+    const modelKey = usageModelKey(record);
+    if (!agent.modelsByKey.has(modelKey)) {
+      agent.modelsByKey.set(modelKey, {
+        provider: recordValue(record, ["provider"], "unknown provider"),
+        model: recordValue(record, ["model"], "unknown model"),
+        tokens: 0,
+        costCents: 0,
+        credits: 0,
+        creditPools: new Set(),
+        calls: 0,
+        allocationMethod: recordValue(record, ["allocation_method", "cost_allocation_method"], usagePricingModel(record)),
+        confidence: recordValue(record, ["confidence", "source"], "reported")
+      });
+    }
+    const model = agent.modelsByKey.get(modelKey);
+    model.tokens += tokens;
+    model.costCents += costCents;
+    model.credits += credits;
+    if (poolId) model.creditPools.add(poolId);
+    model.calls += calls;
+  }
+  for (const device of devices.values()) {
+    device.agents = [...device.agentsByKey.values()].map((agent) => {
+      const models = [...agent.modelsByKey.values()].map((model) => ({
+        ...model,
+        creditPools: [...model.creditPools]
+      })).sort((a, b) => b.costCents - a.costCents || b.tokens - a.tokens);
+      const { modelsByKey, creditPools, ...safeAgent } = agent;
+      return { ...safeAgent, creditPools: [...creditPools], models };
+    }).sort((a, b) => b.costCents - a.costCents || b.tokens - a.tokens);
+    device.tokens = device.agents.reduce((sum, agent) => sum + agent.tokens, 0);
+    device.costCents = device.agents.reduce((sum, agent) => sum + agent.costCents, 0);
+    device.credits = device.agents.reduce((sum, agent) => sum + agent.credits, 0);
+    device.calls = device.agents.reduce((sum, agent) => sum + agent.calls, 0);
+    device.creditPools = [...device.creditPools];
+    delete device.agentsByKey;
+  }
+  return [...devices.values()].sort((a, b) => b.costCents - a.costCents || b.tokens - a.tokens);
+}
+
+function usageRecordsForEntity(entity) {
+  if (!entity) return [];
+  const entityKind = entity.entity_type || entity.class || objectKind(entity);
+  const isAgent = ["registered_agent", "found_agent", "agent"].includes(entityKind) || entity.class === "agent";
+  const expectedNames = [entity.name, entity.local_object_id, entity.id].filter(Boolean).map((value) => String(value).toLowerCase());
+  return aiUsageRecords(entity.tenant_id || selectedTenantId()).filter((record) => {
+    const ids = [
+      recordValue(record, ["entity_id"]),
+      recordValue(record, ["agent_id"]),
+      recordValue(record, ["object_id"])
+    ].filter(Boolean);
+    const agentName = String(recordValue(record, ["agent_name", "name"], "")).toLowerCase();
+    const deviceValue = recordValue(record, ["device_id", "device_name"], "");
+    const userValue = recordValue(record, ["user_subject", "user_id"], "");
+    const sameDevice = [entity.device_id, entity.device_name].filter(Boolean).includes(deviceValue);
+    const sameUser = [entity.user_id, entity.user_subject].filter(Boolean).includes(userValue);
+    const scopedNameMatch = expectedNames.includes(agentName) && sameDevice && sameUser;
+    const directAgentMatch = ids.includes(entity.id)
+      || ids.includes(entity.local_object_id)
+      || scopedNameMatch;
+    if (isAgent) return directAgentMatch;
+    const deviceId = recordValue(record, ["device_id", "device_name"], "");
+    return directAgentMatch || (entity.id && deviceId === entity.id) || (entity.device_id && deviceId === entity.device_id);
+  });
+}
+
+function renderAiUsageOverview() {
+  if (!refs.aiUsageSummary || !refs.aiUsageDeviceList) return;
+  const records = aiUsageRecords();
+  const summary = summarizeUsageRecords(records);
+  const devices = usageRecordsByDevice(records);
+  const lcpLedgerCount = records.filter((record) => record.source === "lcp_usage_ledger" || record.confidence === "reported_by_lcp").length;
+  refs.aiUsageSummary.innerHTML = [
+    { kind: "integration", value: lcpLedgerCount ? "Validated" : "Estimate", label: lcpLedgerCount ? `${lcpLedgerCount} LCP ledger records` : "Awaiting LCP ledger", status: lcpLedgerCount ? "ok" : "warn" },
+    { kind: "billing", value: fmtMoney(summary.totalCostCents), label: "Estimated org spend", status: summary.totalCostCents ? "warn" : "neutral" },
+    { kind: "telemetry", value: fmtNumber(summary.totalTokens), label: "Tokens observed", status: "neutral" },
+    { kind: "billing", value: fmtCredits(summary.credits), label: `${summary.creditPools.length} credit pools`, status: summary.creditPools.length ? "warn" : "neutral" },
+    { kind: "device", value: fmtNumber(summary.devices), label: "Devices with AI usage", status: summary.devices ? "ok" : "warn" },
+    { kind: "agent", value: fmtNumber(summary.agents), label: "Agent applications", status: summary.agents ? "ok" : "warn" },
+    { kind: "billing", value: fmtMoney(summary.avgCostPerDeviceCents), label: "Average per device", status: "neutral" }
+  ].map((item) => `
+    <div class="usage-total-card ${statusClass(item.status)}">
+      ${iconHtml(item.kind, item.status)}
+      <span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.label)}</small></span>
+    </div>
+  `).join("");
+
+  refs.aiUsageDeviceList.innerHTML = devices.length ? devices.slice(0, 8).map((device) => `
+    <article class="usage-device-card">
+      <div class="usage-device-head">
+        ${iconHtml("device", device.costCents ? "warn" : "neutral")}
+        <span>
+          <strong>${escapeHtml(device.deviceName)}</strong>
+          <small>${escapeHtml(device.lcpId)} | ${escapeHtml(fmtNumber(device.calls))} calls | agent first | ${escapeHtml(device.creditPools.length)} pools</small>
+        </span>
+        <b>${escapeHtml(costBasisLabel(device))}</b>
+      </div>
+      <div class="usage-meter" aria-label="Token volume for ${escapeHtml(device.deviceName)}">
+        <span style="width:${Math.min(100, Math.max(4, Math.round((device.tokens / Math.max(1, summary.totalTokens)) * 100)))}%"></span>
+      </div>
+      <div class="usage-agent-list" aria-label="Agent-first usage under ${escapeHtml(device.deviceName)}">
+        ${device.agents.slice(0, 4).map((agent) => `
+          <div class="usage-agent-row">
+            <span><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.user)} | ${escapeHtml(fmtNumber(agent.calls))} calls | ${escapeHtml(agent.models.length)} model${agent.models.length === 1 ? "" : "s"} | ${escapeHtml(agent.creditPools.length ? agent.creditPools[0] : "direct token meter")}</small></span>
+            <span>${escapeHtml(fmtNumber(agent.tokens))} tokens<br><b>${escapeHtml(costBasisLabel(agent))}</b></span>
+            <div class="usage-model-list">
+              ${agent.models.slice(0, 3).map((model) => `
+                <span class="usage-model-chip">
+                  <b>${escapeHtml(model.provider)} / ${escapeHtml(model.model)}</b>
+                  ${escapeHtml(fmtNumber(model.tokens))} tokens | ${escapeHtml(costBasisLabel(model))} | ${escapeHtml(model.allocationMethod)}
+                </span>
+              `).join("")}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `).join("") : `<div class="detail-row"><strong>No AI usage recorded</strong><span>Usage appears after Local Pollek sends model/tool telemetry.</span></div>`;
 }
 
 const entityNavigationGroups = [
@@ -1184,6 +1531,75 @@ function renderEntityInsights() {
   `).join("");
 }
 
+function renderSelectedEntityDetail(entity) {
+  if (!refs.selectedEntityDetail) return;
+  if (!entity) {
+    refs.selectedEntityDetail.innerHTML = `
+      <section class="entity-detail-card neutral">
+        ${iconHtml("entity_group", "neutral")}
+        <div>
+          <p class="eyebrow">Selected Entity</p>
+          <h3>No entity selected</h3>
+          <span>Select an agent, policy, enforcement point, or observed resource from the navigator or inventory.</span>
+        </div>
+      </section>
+    `;
+    return;
+  }
+
+  const readiness = entityReadiness(entity);
+  const usageRecords = usageRecordsForEntity(entity);
+  const usage = summarizeUsageRecords(usageRecords);
+  const streams = entity.observability?.telemetry_streams || [];
+  const entityStatus = entityHealthStatus(entity);
+  const traceId = entity.trace?.spiffe_id || entity.identity?.spiffe_id || "SPIFFE pending";
+  const policySummary = (entity.policy_ids || []).join(", ") || entity.enforcement?.mode || "No active policy binding";
+  refs.selectedEntityDetail.innerHTML = `
+    <section class="entity-detail-card ${statusClass(entityStatus)}">
+      <div class="entity-detail-head">
+        ${iconHtml(entity.entity_type || entity.class, entity.status)}
+        <span>
+          <p class="eyebrow">Selected Entity</p>
+          <h3>${escapeHtml(entity.name || entity.local_object_id || entity.id)}</h3>
+          <small>${escapeHtml(kindLabel(entity.entity_type || entity.class))} | ${escapeHtml(entity.status || "unknown")} | ${escapeHtml(entity.device_name || entity.device_id || "unknown device")} | ${escapeHtml(entity.user_subject || "unknown user")}</small>
+        </span>
+        <span class="status-pill ${statusClass(entityStatus)}">${escapeHtml(entityStatus)}</span>
+      </div>
+      <div class="chip-row">
+        ${entityChips(entity)}
+        ${chipHtml(`${fmtNumber(usage.totalTokens)} tokens`, usage.totalTokens ? "neutral" : "warn")}
+        ${chipHtml(`${fmtMoney(usage.totalCostCents)} allocated`, usage.totalCostCents ? "warn" : "neutral")}
+        ${usage.credits ? chipHtml(`${fmtCredits(usage.credits)} credits`, "warn") : ""}
+      </div>
+      <div class="entity-detail-grid">
+        <div>
+          <strong>Identity and Trace</strong>
+          <small>${escapeHtml(readiness.identityReady ? "ready" : "needs binding")} | ${escapeHtml(traceId)}</small>
+        </div>
+        <div>
+          <strong>Policy and Enforcement</strong>
+          <small>${escapeHtml(readiness.policyReady ? "covered" : "gap")} | ${escapeHtml(policySummary)}</small>
+        </div>
+        <div>
+          <strong>Observe Streams</strong>
+          <small>${escapeHtml(streams.join(", ") || "no telemetry stream")} | ${escapeHtml(fmtTime(entity.observability?.last_event_at || entity.last_seen_at))}</small>
+        </div>
+        <div>
+          <strong>WASM Hot Reload</strong>
+          <small>${escapeHtml(readiness.wasmReady ? "ready" : "pending")} | generation ${escapeHtml(entity.wasm?.generation || 0)}</small>
+        </div>
+      </div>
+      <div class="entity-cost-ledger">
+        <strong>Agent Cost & Tokens</strong>
+        <span>${escapeHtml(usageRecords.length ? `${usageRecords.length} usage records / ${fmtNumber(usage.calls)} calls / ${usage.creditPools.length ? usage.creditPools.join(", ") : "direct token meter"}` : "No reported usage yet; showing zero until LCP sends model usage telemetry.")}</span>
+        ${usageRecords.slice(0, 3).map((record) => `
+          <code>${escapeHtml(recordValue(record, ["provider"], "provider"))} / ${escapeHtml(recordValue(record, ["model"], "model"))} | ${escapeHtml(fmtNumber(usageTokenCount(record)))} tokens | ${escapeHtml(costBasisLabel({ costCents: usageCostCents(record), credits: usageCreditCount(record), creditPools: recordValue(record, ["billing_pool_id", "credit_pool_id"], "") ? [recordValue(record, ["billing_pool_id", "credit_pool_id"], "")] : [] }))} | ${escapeHtml(recordValue(record, ["allocation_method", "cost_allocation_method"], usagePricingModel(record)))} | ${escapeHtml(recordValue(record, ["confidence", "source"], "reported"))}</code>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function filteredEntities() {
   const query = app.entityQuery.trim().toLowerCase();
   return (app.data.local_entities || []).filter((entity) => {
@@ -1344,6 +1760,7 @@ function renderEntities() {
   if (!refs.entityList) return;
   const entities = sortedEntitiesForDisplay(filteredEntities());
   const activeEntity = selectedLocalEntity(entities);
+  renderSelectedEntityDetail(activeEntity);
   refs.entityList.innerHTML = "";
 
   if (!entities.length) {
@@ -1358,10 +1775,12 @@ function renderEntities() {
     const scopeDefaultCollapsed = scopeGroup.entities.length > 80;
     const scopeCollapsed = entityGroupCollapsed(scopeGroup.key, scopeDefaultCollapsed, scopeHasActive);
     const scopeStatus = entityGroupStatus(scopeGroup.entities);
+    const scopeButtonId = safeDomId("entity-scope-button", scopeGroup.key);
+    const scopePanelId = safeDomId("entity-scope-panel", scopeGroup.key);
     const section = document.createElement("section");
     section.className = `entity-scope-group ${statusClass(scopeStatus)} ${scopeCollapsed ? "collapsed" : "expanded"}`;
     section.innerHTML = `
-      <button class="entity-scope-toggle" type="button" aria-expanded="${escapeHtml(!scopeCollapsed)}">
+      <button id="${scopeButtonId}" class="entity-scope-toggle" type="button" aria-expanded="${escapeHtml(!scopeCollapsed)}" aria-controls="${scopePanelId}">
         <span class="entity-group-chevron" aria-hidden="true">&gt;</span>
         ${iconHtml("device", scopeStatus)}
         <span class="entity-group-title">
@@ -1371,7 +1790,7 @@ function renderEntities() {
         <span class="entity-group-count">${escapeHtml(scopeGroup.entities.length)}</span>
       </button>
       <div class="chip-row entity-scope-chips">${entitySummaryChips(scopeGroup.entities)}</div>
-      <div class="entity-scope-body"></div>
+      <div id="${scopePanelId}" class="entity-scope-body" role="region" aria-labelledby="${scopeButtonId}" ${scopeCollapsed ? "hidden" : ""}></div>
     `;
     section.querySelector(".entity-scope-toggle").addEventListener("click", () => {
       toggleEntityGroup(scopeGroup.key, scopeDefaultCollapsed, scopeHasActive);
@@ -1386,10 +1805,12 @@ function renderEntities() {
       const categoryDefaultCollapsed = category.entities.length > 12 || category.kind === "observability";
       const categoryCollapsed = entityGroupCollapsed(categoryKey, categoryDefaultCollapsed, categoryHasActive);
       const categoryStatus = entityGroupStatus(category.entities);
+      const categoryButtonId = safeDomId("entity-kind-button", categoryKey);
+      const categoryPanelId = safeDomId("entity-kind-panel", categoryKey);
       const categorySection = document.createElement("section");
       categorySection.className = `entity-kind-group ${statusClass(categoryStatus)} ${categoryCollapsed ? "collapsed" : "expanded"}`;
       categorySection.innerHTML = `
-        <button class="entity-kind-toggle" type="button" aria-expanded="${escapeHtml(!categoryCollapsed)}">
+        <button id="${categoryButtonId}" class="entity-kind-toggle" type="button" aria-expanded="${escapeHtml(!categoryCollapsed)}" aria-controls="${categoryPanelId}">
           <span class="entity-group-chevron" aria-hidden="true">&gt;</span>
           ${iconHtml(category.kind, categoryStatus, "node-icon")}
           <span class="entity-group-title">
@@ -1398,7 +1819,7 @@ function renderEntities() {
           </span>
           <span class="entity-group-count">${escapeHtml(category.entities.length)}</span>
         </button>
-        <div class="entity-kind-body ${category.entities.length > 20 ? "large" : ""}"></div>
+        <div id="${categoryPanelId}" class="entity-kind-body ${category.entities.length > 20 ? "large" : ""}" role="region" aria-labelledby="${categoryButtonId}" ${categoryCollapsed ? "hidden" : ""}></div>
       `;
       categorySection.querySelector(".entity-kind-toggle").addEventListener("click", () => {
         toggleEntityGroup(categoryKey, categoryDefaultCollapsed, categoryHasActive);
@@ -1742,7 +2163,303 @@ function renderPolicyWorkspace() {
   }
 }
 
+function eventTime(value) {
+  const time = new Date(value || Date.now()).getTime();
+  return Number.isFinite(time) ? time : Date.now();
+}
+
+function ledgerSeverity(statusOrSeverity) {
+  const mapped = statusClass(statusOrSeverity);
+  if (mapped === "bad") return "bad";
+  if (mapped === "warn") return "warn";
+  if (mapped === "ok") return "ok";
+  return "neutral";
+}
+
+function ledgerNextAction(entry) {
+  if (entry.next_action) return entry.next_action;
+  if (entry.source === "alarm" && entry.severity !== "ok") return "Human review: acknowledge the alert, open the object, and assign an owner.";
+  if (entry.source === "policy" && /approval|review|simulation/i.test(entry.title)) return "Human approval is required before rollout or bundle signing.";
+  if (entry.source === "identity" && /waiting|pending/i.test(`${entry.status} ${entry.title}`)) return "Operator action: complete enrollment or invitation acceptance.";
+  if (entry.source === "control" && entry.severity !== "ok") return "Operator action: inspect secure channel status and retry dispatch.";
+  if (entry.severity === "bad") return "Human review required before the next automated action.";
+  if (entry.severity === "warn") return "Review recommended; automation can continue only after the owner confirms scope.";
+  return "No manual action required.";
+}
+
+function addLedgerEntry(entries, entry) {
+  const severity = ledgerSeverity(entry.severity || entry.status);
+  entries.push({
+    id: entry.id || `ledger_${entries.length}`,
+    source: entry.source || "activity",
+    severity,
+    status: entry.status || entry.severity || "info",
+    timestamp: entry.timestamp || entry.created_at || entry.received_at || entry.occurred_at || new Date().toISOString(),
+    title: entry.title || entry.event_type || entry.action || "Activity",
+    summary: entry.summary || entry.detail || "",
+    object: entry.object || entry.object_name || entry.target_id || entry.device_id || entry.lcp_id || "fleet",
+    device: entry.device || entry.device_id || entry.payload?.device_id || entry.details?.device_id || "",
+    user: entry.user || entry.user_subject || entry.actor_id || entry.payload?.actor_id || entry.details?.actor_id || "",
+    result: entry.result || entry.status || entry.severity || "recorded",
+    icon: entry.icon || entry.source || "telemetry",
+    next_action: entry.next_action,
+    raw: entry.raw || entry
+  });
+}
+
+function buildActivityLedger() {
+  const entries = [];
+  for (const event of app.data.events || []) {
+    addLedgerEntry(entries, {
+      id: event.event_id,
+      source: "telemetry",
+      icon: "telemetry",
+      severity: event.severity,
+      timestamp: event.received_at,
+      title: event.event_type,
+      summary: event.payload?.detail || event.payload?.schema_version || event.payload?.telemetry_kind || "Telemetry event received.",
+      object: event.payload?.object_id || event.payload?.lcp_id || event.device_id || "cloud",
+      device: event.device_id,
+      user: event.payload?.user_subject || event.payload?.actor_id || "",
+      result: event.severity || "info",
+      raw: event
+    });
+  }
+  for (const event of app.data.audit_events || []) {
+    addLedgerEntry(entries, {
+      id: event.id,
+      source: "audit",
+      icon: "task",
+      severity: /denied|failed|rejected/i.test(event.action) ? "warning" : "completed",
+      timestamp: event.occurred_at,
+      title: event.action,
+      summary: `${event.target_type} | ${event.target_id}`,
+      object: event.target_id,
+      user: event.actor_id,
+      result: "audited",
+      raw: event
+    });
+  }
+  for (const task of app.data.tasks || []) {
+    addLedgerEntry(entries, {
+      id: task.id,
+      source: "task",
+      icon: "task",
+      severity: task.status,
+      timestamp: task.updated_at || task.created_at,
+      title: task.summary,
+      summary: task.type,
+      object: task.details?.lcp_id || task.details?.device_id || task.details?.tenant_id || "task-center",
+      device: task.details?.device_id || "",
+      result: task.status,
+      raw: task
+    });
+  }
+  for (const alarm of app.data.alarms || []) {
+    addLedgerEntry(entries, {
+      id: alarm.id,
+      source: "alarm",
+      icon: "alarm",
+      severity: alarm.state === "open" ? alarm.severity : "completed",
+      timestamp: alarm.acknowledged_at || alarm.created_at,
+      title: alarm.summary,
+      summary: `${alarm.object_name} | ${alarm.state}`,
+      object: alarm.object_id,
+      result: alarm.state,
+      raw: alarm
+    });
+  }
+  for (const rollout of app.data.rollout_plans || []) {
+    addLedgerEntry(entries, {
+      id: rollout.id,
+      source: "rollout",
+      icon: "rollout",
+      severity: rollout.status,
+      timestamp: rollout.updated_at || rollout.created_at,
+      title: `Rollout ${rollout.bundle_id}`,
+      summary: `${rollout.wave_strategy || "manual"} | stage ${(rollout.current_stage ?? -1) + 1}/${rollout.total_stages || 0}`,
+      object: rollout.bundle_id,
+      result: rollout.status,
+      raw: rollout
+    });
+  }
+  for (const event of app.data.hot_reload_events || []) {
+    addLedgerEntry(entries, {
+      id: event.id,
+      source: "rollout",
+      icon: "rollout",
+      severity: event.status,
+      timestamp: event.created_at,
+      title: event.event_type,
+      summary: `${event.bundle_id} | generation ${event.wasm_generation || 0}`,
+      object: event.lcp_id,
+      device: event.device_id || event.lcp_id,
+      result: event.status,
+      raw: event
+    });
+  }
+  for (const dispatch of app.data.cloud_to_local_dispatches || []) {
+    addLedgerEntry(entries, {
+      id: dispatch.id,
+      source: "control",
+      icon: "integration",
+      severity: dispatch.status,
+      timestamp: dispatch.created_at,
+      title: dispatch.action || dispatch.control_type || "Cloud-to-Local dispatch",
+      summary: `${dispatch.lcp_id || "lcp"} | ${dispatch.envelope?.scope?.join(", ") || "signed control envelope"}`,
+      object: dispatch.lcp_id,
+      result: dispatch.status,
+      raw: dispatch
+    });
+  }
+  for (const run of app.data.local_entity_sync_runs || []) {
+    addLedgerEntry(entries, {
+      id: run.id,
+      source: "telemetry",
+      icon: "entity_group",
+      severity: run.status,
+      timestamp: run.created_at,
+      title: "Local entity sync",
+      summary: `${run.mode} | ${run.entity_count} entities`,
+      object: run.lcp_id,
+      device: run.device_id,
+      result: run.status,
+      raw: run
+    });
+  }
+  for (const session of app.data.enrollment_sessions || []) {
+    addLedgerEntry(entries, {
+      id: session.id,
+      source: "identity",
+      icon: "identity",
+      severity: session.status,
+      timestamp: session.created_at,
+      title: `Enrollment ${session.user_code}`,
+      summary: session.device_name || session.command,
+      object: session.site_id || session.device_name,
+      device: session.device_name,
+      result: session.status,
+      raw: session
+    });
+  }
+  for (const item of app.data.evidence_exports || []) {
+    addLedgerEntry(entries, {
+      id: item.id,
+      source: "evidence",
+      icon: "compliance",
+      severity: item.status,
+      timestamp: item.completed_at || item.requested_at,
+      title: `Evidence export ${item.scope || item.id}`,
+      summary: item.status,
+      object: item.scope || "compliance",
+      result: item.status,
+      raw: item
+    });
+  }
+  for (const draft of app.data.policy_drafts || []) {
+    addLedgerEntry(entries, {
+      id: draft.id,
+      source: "policy",
+      icon: "policy",
+      severity: draft.status === "approved" ? "completed" : "warning",
+      timestamp: draft.updated_at || draft.created_at,
+      title: draft.title,
+      summary: `${draft.status} | ${draft.recommended_engine}`,
+      object: draft.id,
+      result: draft.status,
+      raw: draft
+    });
+  }
+  return entries.sort((a, b) => eventTime(b.timestamp) - eventTime(a.timestamp));
+}
+
+function filteredActivityLedger() {
+  const query = app.activityQuery.trim().toLowerCase();
+  return buildActivityLedger().filter((entry) => {
+    if (app.activitySourceFilter !== "all" && entry.source !== app.activitySourceFilter) return false;
+    if (app.activitySeverityFilter !== "all" && entry.severity !== app.activitySeverityFilter) return false;
+    if (!query) return true;
+    return [entry.source, entry.status, entry.title, entry.summary, entry.object, entry.device, entry.user, entry.result]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+  });
+}
+
+function renderActivitySummary(entries) {
+  if (!refs.activitySummaryStrip) return;
+  const counts = {
+    total: entries.length,
+    critical: entries.filter((entry) => entry.severity === "bad").length,
+    review: entries.filter((entry) => entry.severity === "warn").length,
+    ok: entries.filter((entry) => entry.severity === "ok").length
+  };
+  refs.activitySummaryStrip.innerHTML = [
+    ["Visible events", counts.total, "neutral"],
+    ["Needs review", counts.review, counts.review ? "warn" : "ok"],
+    ["Critical", counts.critical, counts.critical ? "bad" : "ok"],
+    ["Successful", counts.ok, "ok"]
+  ].map(([label, value, status]) => `
+    <div class="insight-card ${statusClass(status)}">
+      ${iconHtml(status === "bad" ? "alarm" : status === "warn" ? "task" : "telemetry", status)}
+      <span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>
+    </div>
+  `).join("");
+}
+
+function renderActivityLedger() {
+  if (!refs.activityLedger) return;
+  const entries = filteredActivityLedger();
+  refs.activityLedger.innerHTML = "";
+  renderActivitySummary(entries);
+  const visible = entries.length ? entries : [{
+    id: "ledger_empty",
+    source: "activity",
+    severity: "neutral",
+    status: "idle",
+    timestamp: new Date().toISOString(),
+    title: "No activity matches the current filters",
+    summary: "Adjust source, severity, or search to continue investigation.",
+    object: "fleet",
+    device: "",
+    user: "",
+    result: "idle",
+    icon: "task",
+    raw: {}
+  }];
+  for (const entry of visible.slice(0, 80)) {
+    const article = document.createElement("article");
+    article.className = `ledger-entry ${entry.severity}`;
+    article.innerHTML = `
+      <div class="ledger-time">
+        <strong>${escapeHtml(fmtTime(entry.timestamp))}</strong>
+        <span>${escapeHtml(entry.source)}</span>
+      </div>
+      <div class="ledger-body">
+        <div class="ledger-headline">
+          ${iconHtml(entry.icon, entry.status)}
+          <span>
+            <strong>${escapeHtml(entry.title)}</strong>
+            <small>${escapeHtml(entry.summary || "Recorded activity")}</small>
+          </span>
+          ${chipHtml(entry.result || entry.status, entry.severity)}
+        </div>
+        <div class="ledger-fields">
+          <span><b>Object</b>${escapeHtml(entry.object || "fleet")}</span>
+          <span><b>Device</b>${escapeHtml(entry.device || "n/a")}</span>
+          <span><b>User</b>${escapeHtml(entry.user || "n/a")}</span>
+        </div>
+        <div class="ledger-next-action">${escapeHtml(ledgerNextAction(entry))}</div>
+        <details class="ledger-evidence">
+          <summary>Payload and evidence</summary>
+          <code>${escapeHtml(JSON.stringify(entry.raw || {}, null, 2))}</code>
+        </details>
+      </div>
+    `;
+    refs.activityLedger.append(article);
+  }
+}
+
 function renderTimeline() {
+  renderActivityLedger();
   refs.rolloutTimeline.innerHTML = "";
   refs.enrollmentList.innerHTML = "";
   refs.evidenceExportList.innerHTML = "";
@@ -3153,6 +3870,21 @@ refs.entityUserFilter.addEventListener("change", (event) => {
 refs.entitySearch.addEventListener("input", (event) => {
   app.entityQuery = event.target.value;
   renderEntities();
+});
+
+refs.activitySourceFilter?.addEventListener("change", (event) => {
+  app.activitySourceFilter = event.target.value;
+  renderTimeline();
+});
+
+refs.activitySeverityFilter?.addEventListener("change", (event) => {
+  app.activitySeverityFilter = event.target.value;
+  renderTimeline();
+});
+
+refs.activitySearch?.addEventListener("input", (event) => {
+  app.activityQuery = event.target.value;
+  renderTimeline();
 });
 
 refs.tenantSwitcher?.addEventListener("change", (event) => setSelectedTenant(event.target.value));

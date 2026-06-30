@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pollek Cloud Console</title>
-    <link rel="stylesheet" href="/styles.css?v=20260629-agent-nav-polish" />
+    <link rel="stylesheet" href="/styles.css?v=20260630-agent-first-cost" />
   </head>
   <body>
     <div id="appShell" class="app-shell">
@@ -95,23 +95,23 @@
           </div>
         </section>
 
-        <section class="detail-tabs" aria-label="Object detail tabs">
-          <button class="tab active" data-tab="summary">Summary</button>
-          <button class="tab" data-tab="entities">Entities</button>
-          <button class="tab" data-tab="relationships">Relationships</button>
-          <button class="tab" data-tab="policies">Policies</button>
-          <button class="tab" data-tab="telemetry">Telemetry</button>
-          <button class="tab" data-tab="timeline">Timeline</button>
-          <button class="tab" data-tab="alarms">Alerts</button>
-          <button class="tab" data-tab="bundle_status">Bundle Status</button>
-          <button class="tab" data-tab="compliance">Compliance</button>
-          <button class="tab" data-tab="audit">Audit</button>
-          <button class="tab" data-tab="settings">Settings</button>
+        <section class="detail-tabs" role="tablist" aria-label="Object detail tabs">
+          <button class="tab active" data-tab="summary" role="tab" id="tab-summary" aria-controls="panel-summary" aria-selected="true">Summary</button>
+          <button class="tab" data-tab="entities" role="tab" id="tab-entities" aria-controls="panel-entities" aria-selected="false">Entities</button>
+          <button class="tab" data-tab="relationships" role="tab" id="tab-relationships" aria-controls="panel-relationships" aria-selected="false">Relationships</button>
+          <button class="tab" data-tab="policies" role="tab" id="tab-policies" aria-controls="panel-policies" aria-selected="false">Policies</button>
+          <button class="tab" data-tab="telemetry" role="tab" id="tab-telemetry" aria-controls="panel-telemetry" aria-selected="false">Telemetry</button>
+          <button class="tab" data-tab="timeline" role="tab" id="tab-timeline" aria-controls="panel-timeline" aria-selected="false">Activity</button>
+          <button class="tab" data-tab="alarms" role="tab" id="tab-alarms" aria-controls="panel-alarms" aria-selected="false">Alerts</button>
+          <button class="tab" data-tab="bundle_status" role="tab" id="tab-bundle_status" aria-controls="panel-bundle_status" aria-selected="false">Bundle Status</button>
+          <button class="tab" data-tab="compliance" role="tab" id="tab-compliance" aria-controls="panel-compliance" aria-selected="false">Compliance</button>
+          <button class="tab" data-tab="audit" role="tab" id="tab-audit" aria-controls="panel-audit" aria-selected="false">Audit</button>
+          <button class="tab" data-tab="settings" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false">Settings</button>
         </section>
 
         <div class="workspace-grid">
           <section class="primary-pane">
-            <div class="tab-panel active" data-tab-panel="summary">
+            <div class="tab-panel active" data-tab-panel="summary" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Fleet</p>
@@ -128,6 +128,17 @@
                 </div>
               </div>
               <div id="operationsFocus" class="focus-board" aria-label="Operations focus"></div>
+              <section class="usage-overview" aria-label="AI usage cost and token summary">
+                <div class="pane-header compact">
+                  <div>
+                    <p class="eyebrow">Cost & Tokens</p>
+                    <h3>Organization AI Usage</h3>
+                  </div>
+                  <span class="status-pill neutral">per tenant / per device</span>
+                </div>
+                <div id="aiUsageSummary" class="usage-summary-strip" aria-label="Organization AI usage totals"></div>
+                <div id="aiUsageDeviceList" class="usage-device-list" aria-label="AI usage by device and agent"></div>
+              </section>
               <div class="table-wrap">
                 <table class="fleet-table">
                   <thead>
@@ -169,7 +180,7 @@
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="entities" hidden>
+            <div class="tab-panel" data-tab-panel="entities" id="panel-entities" role="tabpanel" aria-labelledby="tab-entities" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Local Pollek</p>
@@ -195,6 +206,7 @@
                 <input id="entitySearch" aria-label="Entity search" placeholder="Search entity, SPIFFE, policy, source" />
               </div>
               <div id="entityInsightStrip" class="insight-strip" aria-label="Entity insights"></div>
+              <div id="selectedEntityDetail" class="selected-entity-detail" aria-label="Selected entity detail"></div>
               <div class="entity-grid">
                 <section class="inline-panel">
                   <div class="pane-header compact">
@@ -237,7 +249,7 @@
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="relationships" hidden>
+            <div class="tab-panel" data-tab-panel="relationships" id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Relationships</p>
@@ -248,7 +260,7 @@
               <div id="relationshipDetailList" class="detail-list"></div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="policies" hidden>
+            <div class="tab-panel" data-tab-panel="policies" id="panel-policies" role="tabpanel" aria-labelledby="tab-policies" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Policy Center</p>
@@ -297,7 +309,7 @@
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="telemetry" hidden>
+            <div class="tab-panel" data-tab-panel="telemetry" id="panel-telemetry" role="tabpanel" aria-labelledby="tab-telemetry" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Observe Center</p>
@@ -319,7 +331,7 @@
               <div id="telemetryExplorer" class="event-list large"></div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="alarms" hidden>
+            <div class="tab-panel" data-tab-panel="alarms" id="panel-alarms" role="tabpanel" aria-labelledby="tab-alarms" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Alarms</p>
@@ -329,38 +341,60 @@
               <div id="alarmTabList" class="alarm-list large"></div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="timeline" hidden>
+            <div class="tab-panel" data-tab-panel="timeline" id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline" hidden>
               <div class="pane-header">
                 <div>
-                  <p class="eyebrow">Timeline</p>
-                  <h3>Rollouts and Evidence</h3>
+                  <p class="eyebrow">Activity</p>
+                  <h3>Investigation Ledger</h3>
                 </div>
                 <button id="enrollmentButton" class="secondary-button">Create Enrollment</button>
               </div>
-              <div class="split-panel">
-                <section class="inline-panel">
+              <div class="filter-row activity-filter-row">
+                <select id="activitySourceFilter" aria-label="Activity source filter">
+                  <option value="all">All sources</option>
+                  <option value="telemetry">Telemetry</option>
+                  <option value="audit">Audit</option>
+                  <option value="task">Tasks</option>
+                  <option value="alarm">Alerts</option>
+                  <option value="rollout">Rollouts</option>
+                  <option value="identity">Identity</option>
+                  <option value="evidence">Evidence</option>
+                </select>
+                <select id="activitySeverityFilter" aria-label="Activity severity filter">
+                  <option value="all">All severity</option>
+                  <option value="bad">Critical</option>
+                  <option value="warn">Needs review</option>
+                  <option value="ok">Successful</option>
+                  <option value="neutral">Informational</option>
+                </select>
+                <input id="activitySearch" aria-label="Activity search" placeholder="Search activity, object, device, user, policy" />
+              </div>
+              <div id="activitySummaryStrip" class="insight-strip" aria-label="Activity ledger summary"></div>
+              <div class="activity-ledger-layout">
+                <section class="inline-panel ledger-panel">
                   <div class="pane-header compact">
                     <div>
-                      <p class="eyebrow">Bundle Rollout Timeline</p>
-                      <h3>Deployment Waves</h3>
+                      <p class="eyebrow">Unified Event Ledger</p>
+                      <h3>Readable Timeline</h3>
                     </div>
                   </div>
-                  <div id="rolloutTimeline" class="detail-list"></div>
+                  <div id="activityLedger" class="activity-ledger"></div>
                 </section>
-                <section class="inline-panel">
+                <section class="inline-panel ledger-side-panel">
                   <div class="pane-header compact">
                     <div>
-                      <p class="eyebrow">Enrollment and Evidence</p>
-                      <h3>Operational Records</h3>
+                      <p class="eyebrow">Operational Records</p>
+                      <h3>Rollout, Enrollment, Evidence</h3>
                     </div>
                   </div>
-                  <div id="enrollmentList" class="detail-list"></div>
-                  <div id="evidenceExportList" class="detail-list second-list"></div>
+                  <div id="rolloutTimeline" class="detail-list compact-ledger-list"></div>
+                  <div id="enrollmentList" class="detail-list compact-ledger-list second-list"></div>
+                  <div id="evidenceExportList" class="detail-list compact-ledger-list second-list"></div>
                 </section>
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="compliance" hidden>
+            <div class="tab-panel" data-tab-panel="compliance" id="panel-compliance" role="tabpanel" aria-labelledby="tab-compliance" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Enterprise Compliance</p>
@@ -414,7 +448,7 @@
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="audit" hidden>
+            <div class="tab-panel" data-tab-panel="audit" id="panel-audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Audit</p>
@@ -431,7 +465,7 @@
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="bundle_status" hidden>
+            <div class="tab-panel" data-tab-panel="bundle_status" id="panel-bundle_status" role="tabpanel" aria-labelledby="tab-bundle_status" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Bundle Status</p>
@@ -460,7 +494,7 @@
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="settings" hidden>
+            <div class="tab-panel" data-tab-panel="settings" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Settings</p>
@@ -489,7 +523,7 @@
               </div>
             </div>
 
-            <div class="tab-panel" data-tab-panel="administration" hidden>
+            <div class="tab-panel" data-tab-panel="administration" id="panel-administration" role="tabpanel" aria-label="Administration" hidden>
               <div class="pane-header">
                 <div>
                   <p class="eyebrow">Administration</p>
@@ -707,6 +741,6 @@
         </div>
       </main>
     </div>
-    <script src="/app.js?v=20260629-agent-nav-focus" type="module"></script>
+    <script src="/app.js?v=20260630-agent-first-cost" type="module"></script>
   </body>
 </html>

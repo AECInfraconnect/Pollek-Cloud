@@ -13,7 +13,8 @@ const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
 const contractArtifactPaths = new Map([
   ["/contracts/events.schema.json", path.join(rootDir, "packages/contracts/events.schema.json")],
   ["/contracts/bundle-manifest.schema.json", path.join(rootDir, "packages/contracts/bundle-manifest.schema.json")],
-  ["/contracts/telemetry-envelope.schema.json", path.join(rootDir, "packages/contracts/telemetry-envelope.schema.json")]
+  ["/contracts/telemetry-envelope.schema.json", path.join(rootDir, "packages/contracts/telemetry-envelope.schema.json")],
+  ["/contracts/lcp-usage-ledger.schema.json", path.join(rootDir, "packages/contracts/lcp-usage-ledger.schema.json")]
 ]);
 const stateFilePath = process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
 
@@ -1000,7 +1001,141 @@ function createFleetState() {
         updated_at: now
       }
     ],
-    usageRecords: [],
+    usageRecords: [
+      {
+        id: "usage_ai_antigravity_local",
+        tenant_id: "local",
+        metric: "ai_model_usage",
+        source: "lcp_model_usage_telemetry",
+        confidence: "reported",
+        entity_id: "entity_agent_antigravity",
+        agent_id: "entity_agent_antigravity",
+        agent_name: "Antigravity",
+        device_id: "device_local_windows",
+        device_name: "DELL-WINDOWS",
+        lcp_id: "lcp_local",
+        user_subject: "DELL\\LocalAdmin",
+        provider: "Google",
+        model: "gemini-2.5-pro",
+        pricing_model: "credit_pool",
+        billing_pool_id: "credit_pool_local_gemini_agents",
+        allocation_method: "agent_proportional_tokens_with_device_scope",
+        billed_credits: 18.4,
+        allocated_cost_cents: 1840,
+        call_count: 42,
+        input_tokens: 132400,
+        output_tokens: 52100,
+        total_tokens: 184500,
+        estimated_cost_cents: 1840,
+        currency: "USD",
+        recorded_at: now
+      },
+      {
+        id: "usage_ai_shadow_browser_local",
+        tenant_id: "local",
+        metric: "ai_model_usage",
+        source: "lcp_shadow_ai_estimate",
+        confidence: "estimated",
+        entity_id: "entity_agent_shadow_browser",
+        agent_id: "entity_agent_shadow_browser",
+        agent_name: "Unregistered Browser AI",
+        device_id: "device_local_windows",
+        device_name: "DELL-WINDOWS",
+        lcp_id: "lcp_local",
+        user_subject: "DELL\\LocalAdmin",
+        provider: "Unknown",
+        model: "unclassified-browser-ai",
+        pricing_model: "credit_pool",
+        billing_pool_id: "credit_pool_local_gemini_agents",
+        allocation_method: "agent_proportional_tokens_with_device_scope",
+        billed_credits: 4.2,
+        allocated_cost_cents: 420,
+        call_count: 17,
+        input_tokens: 46200,
+        output_tokens: 13800,
+        total_tokens: 60000,
+        estimated_cost_cents: 420,
+        currency: "USD",
+        recorded_at: now
+      },
+      {
+        id: "usage_ai_codex_gpu",
+        tenant_id: "local",
+        metric: "ai_model_usage",
+        source: "lcp_model_usage_telemetry",
+        confidence: "reported",
+        agent_id: "agent_codex_gpu",
+        agent_name: "OpenAI Codex (CLI)",
+        device_id: "device_dc_gpu_01",
+        device_name: "DC-GPU-01",
+        lcp_id: "lcp_dc_gpu_01",
+        user_subject: "research\\ml-admin",
+        provider: "OpenAI",
+        model: "gpt-5-codex",
+        pricing_model: "token_metered",
+        allocation_method: "direct_token_meter",
+        billed_credits: 0,
+        call_count: 71,
+        input_tokens: 244000,
+        output_tokens: 86600,
+        total_tokens: 330600,
+        estimated_cost_cents: 2865,
+        currency: "USD",
+        recorded_at: now
+      },
+      {
+        id: "usage_ai_claude_gpu",
+        tenant_id: "local",
+        metric: "ai_model_usage",
+        source: "lcp_model_usage_telemetry",
+        confidence: "reported",
+        agent_id: "agent_claude_gpu",
+        agent_name: "Claude Desktop",
+        device_id: "device_dc_gpu_01",
+        device_name: "DC-GPU-01",
+        lcp_id: "lcp_dc_gpu_01",
+        user_subject: "research\\analyst",
+        provider: "Anthropic",
+        model: "claude-sonnet-4",
+        pricing_model: "token_metered_with_prompt_cache",
+        allocation_method: "direct_token_meter",
+        billed_credits: 0,
+        call_count: 38,
+        input_tokens: 118900,
+        output_tokens: 41100,
+        total_tokens: 160000,
+        estimated_cost_cents: 1540,
+        currency: "USD",
+        recorded_at: now
+      },
+      {
+        id: "usage_ai_sgx_stale",
+        tenant_id: "local",
+        metric: "ai_model_usage",
+        source: "last_known_lcp_usage",
+        confidence: "stale",
+        agent_id: "agent_sgx_shadow",
+        agent_name: "Possible AI Agent (SGX)",
+        device_id: "device_sgx_07",
+        device_name: "SGX-LAB-07",
+        lcp_id: "lcp_sgx_07",
+        user_subject: "research\\contractor",
+        provider: "Unknown",
+        model: "unclassified-local-model",
+        pricing_model: "credit_pool",
+        billing_pool_id: "credit_pool_local_research_lab",
+        allocation_method: "last_known_agent_share",
+        billed_credits: 1.8,
+        allocated_cost_cents: 180,
+        call_count: 12,
+        input_tokens: 28700,
+        output_tokens: 9300,
+        total_tokens: 38000,
+        estimated_cost_cents: 180,
+        currency: "USD",
+        recorded_at: "2026-06-29T02:12:00.000Z"
+      }
+    ],
     usageCounters: [
       { id: "usage_local_seats", tenant_id: "local", metric: "console_seats", quantity: 1, period: "current", updated_at: now },
       { id: "usage_local_lcps", tenant_id: "local", metric: "local_control_planes", quantity: 3, period: "current", updated_at: now },
@@ -1825,11 +1960,161 @@ function recordUsage(tenantId, metric, quantity, source = "runtime") {
   return record;
 }
 
+function requiredUsageField(entry, field, index) {
+  const value = entry?.[field];
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`usage_entries[${index}].${field} is required`);
+  }
+  return value;
+}
+
+function numberFromUsage(entry, fields) {
+  for (const field of fields) {
+    const value = entry?.[field];
+    if (value !== undefined && value !== null && value !== "") return Number(value || 0);
+  }
+  return 0;
+}
+
+function validateLcpUsageLedger(body = {}) {
+  const tenantId = body.tenant_id || body.tenantId || "local";
+  requiredTenantContext(tenantId);
+  const lcpId = body.lcp_id || body.lcpId;
+  if (!lcpId) throw new Error("lcp_id is required");
+  const entries = Array.isArray(body.usage_entries)
+    ? body.usage_entries
+    : Array.isArray(body.entries)
+      ? body.entries
+      : [];
+  if (!entries.length) throw new Error("usage_entries array is required");
+  const knownLcp = (state.fleet.localControlPlanes || []).find((item) => item.id === lcpId && item.tenant_id === tenantId);
+  if (!knownLcp) throw new Error(`unknown_lcp:${lcpId}`);
+  return { tenantId, lcpId, entries };
+}
+
+function normalizeLcpUsageEntry(entry, context, index) {
+  const agentId = requiredUsageField(entry, "agent_id", index);
+  const deviceId = requiredUsageField(entry, "device_id", index);
+  const userSubject = requiredUsageField(entry, "user_subject", index);
+  const provider = requiredUsageField(entry, "provider", index);
+  const model = requiredUsageField(entry, "model", index);
+  const pricingModel = entry.pricing_model || entry.billing_model || "token_metered";
+  const inputTokens = numberFromUsage(entry, ["input_tokens", "prompt_tokens"]);
+  const outputTokens = numberFromUsage(entry, ["output_tokens", "completion_tokens"]);
+  const totalTokens = numberFromUsage(entry, ["total_tokens", "tokens"]) || inputTokens + outputTokens;
+  const credits = numberFromUsage(entry, ["billed_credits", "credits", "credit_units"]);
+  const allocatedCostCents = numberFromUsage(entry, ["allocated_cost_cents", "estimated_cost_cents", "cost_cents", "amount_cents"]);
+  if (pricingModel.includes("credit") && !entry.billing_pool_id && !entry.credit_pool_id) {
+    throw new Error(`usage_entries[${index}].billing_pool_id is required for credit pricing`);
+  }
+  if (totalTokens < 0 || credits < 0 || allocatedCostCents < 0) {
+    throw new Error(`usage_entries[${index}] contains negative usage values`);
+  }
+  return {
+    id: entry.id || `usage_lcp_${crypto.randomUUID()}`,
+    tenant_id: context.tenantId,
+    metric: "ai_model_usage",
+    source: "lcp_usage_ledger",
+    confidence: entry.confidence || "reported_by_lcp",
+    ledger_id: context.ledgerId,
+    lcp_id: context.lcpId,
+    device_id: deviceId,
+    device_name: entry.device_name || deviceId,
+    user_subject: userSubject,
+    agent_id: agentId,
+    entity_id: entry.entity_id || agentId,
+    agent_name: entry.agent_name || entry.application_name || agentId,
+    provider,
+    model,
+    pricing_model: pricingModel,
+    billing_pool_id: entry.billing_pool_id || entry.credit_pool_id || "",
+    allocation_method: entry.allocation_method || entry.cost_allocation_method || (pricingModel.includes("credit") ? "lcp_reported_credit_allocation" : "direct_token_meter"),
+    call_count: numberFromUsage(entry, ["call_count", "calls", "request_count"]),
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: totalTokens,
+    billed_credits: credits,
+    allocated_cost_cents: allocatedCostCents,
+    estimated_cost_cents: allocatedCostCents,
+    currency: entry.currency || "USD",
+    observed_at: entry.observed_at || entry.occurred_at || context.observedAt,
+    recorded_at: context.receivedAt,
+    raw_schema: entry.schema_version || "pollek.lcp.usage-entry.v1"
+  };
+}
+
+function ingestLcpUsageLedger(body = {}) {
+  const { tenantId, lcpId, entries } = validateLcpUsageLedger(body);
+  const ledgerId = body.ledger_id || `lcp_usage_ledger_${crypto.randomUUID()}`;
+  const context = {
+    tenantId,
+    lcpId,
+    ledgerId,
+    receivedAt: nowIso(),
+    observedAt: body.observed_at || body.occurred_at || nowIso()
+  };
+  const normalized = entries.map((entry, index) => normalizeLcpUsageEntry(entry, context, index));
+  const existingIds = new Set((state.fleet.usageRecords || []).map((record) => record.id));
+  const accepted = [];
+  const duplicates = [];
+  for (const record of normalized) {
+    if (existingIds.has(record.id)) {
+      duplicates.push(record);
+      continue;
+    }
+    accepted.push(record);
+    state.fleet.usageRecords.unshift(record);
+    existingIds.add(record.id);
+  }
+  state.fleet.usageRecords = state.fleet.usageRecords.slice(0, 500);
+  refreshTenantUsage(tenantId);
+  const ledger = {
+    schema_version: "pollek.cloud.lcp-usage-ledger-ingest.v1",
+    ledger_id: ledgerId,
+    tenant_id: tenantId,
+    lcp_id: lcpId,
+    accepted_count: accepted.length,
+    duplicate_count: duplicates.length,
+    rejected_count: 0,
+    total_tokens: accepted.reduce((sum, record) => sum + Number(record.total_tokens || 0), 0),
+    billed_credits: accepted.reduce((sum, record) => sum + Number(record.billed_credits || 0), 0),
+    allocated_cost_cents: accepted.reduce((sum, record) => sum + Number(record.allocated_cost_cents || 0), 0),
+    received_at: context.receivedAt,
+    source: "local_pollek_control_plane"
+  };
+  recordAudit("lcp_usage_ledger.ingested", "lcp", lcpId, {
+    tenant_id: tenantId,
+    ledger_id: ledgerId,
+    accepted_count: ledger.accepted_count,
+    duplicate_count: ledger.duplicate_count
+  });
+  recordEvent({
+    event_id: `evt_${crypto.randomUUID()}`,
+    tenant_id: tenantId,
+    lcp_id: lcpId,
+    event_type: "lcp_usage.ledger_ingested.v1",
+    severity: "info",
+    payload: ledger
+  });
+  addTask("lcp_usage_ledger_ingest", "completed", `Accepted ${accepted.length} LCP usage records`, {
+    tenant_id: tenantId,
+    lcp_id: lcpId,
+    ledger_id: ledgerId
+  });
+  broadcastSse("lcp_usage.ledger_ingested", { ledger, usage_records: accepted.slice(0, 20), summary: billingUsageSnapshot(tenantId) });
+  scheduleRuntimePersist("lcp_usage_ledger.ingested");
+  return { ledger, usage_records: accepted, duplicates };
+}
+
 function refreshTenantUsage(tenantId) {
   upsertUsageCounter(tenantId, "console_seats", countActiveSeats(tenantId));
   upsertUsageCounter(tenantId, "local_control_planes", countLocalControlPlanes(tenantId));
   upsertUsageCounter(tenantId, "managed_devices", countManagedDevices(tenantId));
   upsertUsageCounter(tenantId, "telemetry_events", state.events.filter((event) => event.tenant_id === tenantId).length);
+  const aiUsage = (state.fleet.usageRecords || []).filter((record) => record.tenant_id === tenantId && record.metric === "ai_model_usage");
+  upsertUsageCounter(tenantId, "ai_model_tokens", aiUsage.reduce((sum, record) => sum + Number(record.total_tokens || record.tokens || 0), 0));
+  upsertUsageCounter(tenantId, "ai_model_estimated_cost_cents", aiUsage.reduce((sum, record) => sum + Number(record.allocated_cost_cents || record.estimated_cost_cents || record.cost_cents || 0), 0));
+  upsertUsageCounter(tenantId, "ai_model_credits", aiUsage.reduce((sum, record) => sum + Number(record.billed_credits || record.credits || 0), 0));
   return (state.fleet.usageCounters || []).filter((item) => item.tenant_id === tenantId);
 }
 
@@ -1867,7 +2152,10 @@ function billingUsageSnapshot(tenantId) {
       seats: byMetric.console_seats || 0,
       local_control_planes: byMetric.local_control_planes || 0,
       managed_devices: byMetric.managed_devices || 0,
-      telemetry_events: byMetric.telemetry_events || 0
+      telemetry_events: byMetric.telemetry_events || 0,
+      ai_model_tokens: byMetric.ai_model_tokens || 0,
+      ai_model_credits: byMetric.ai_model_credits || 0,
+      ai_model_estimated_cost_cents: byMetric.ai_model_estimated_cost_cents || 0
     },
     generated_at: nowIso()
   };
@@ -1885,7 +2173,8 @@ function invoicePreview(tenantId) {
     { metric: "base_subscription", quantity: 1, unit_amount_cents: plan.monthly_base_cents || 0, amount_cents: plan.monthly_base_cents || 0 },
     { metric: "seat_overage", quantity: overage.seats, unit_amount_cents: plan.seat_overage_cents || 0, amount_cents: overage.seats * Number(plan.seat_overage_cents || 0) },
     { metric: "lcp_overage", quantity: overage.local_control_planes, unit_amount_cents: plan.lcp_overage_cents || 0, amount_cents: overage.local_control_planes * Number(plan.lcp_overage_cents || 0) },
-    { metric: "device_overage", quantity: overage.managed_devices, unit_amount_cents: plan.device_overage_cents || 0, amount_cents: overage.managed_devices * Number(plan.device_overage_cents || 0) }
+    { metric: "device_overage", quantity: overage.managed_devices, unit_amount_cents: plan.device_overage_cents || 0, amount_cents: overage.managed_devices * Number(plan.device_overage_cents || 0) },
+    { metric: "ai_model_cost_allocation", quantity: usage.summary.ai_model_tokens || 0, unit_amount_cents: 0, amount_cents: usage.summary.ai_model_estimated_cost_cents || 0 }
   ];
   const total = lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
   return {
@@ -4899,6 +5188,8 @@ async function contractDiscovery() {
       scim_groups: "/scim/v2/Groups",
       billing_subscription: "/v1/tenants/{tenant_id}/billing/subscription",
       billing_usage: "/v1/tenants/{tenant_id}/billing/usage",
+      lcp_usage_ledger: "/api/lcp/usage-ledgers",
+      tenant_lcp_usage_ledger: "/v1/tenants/{tenant_id}/lcp/usage-ledgers",
       billing_invoices: "/v1/tenants/{tenant_id}/billing/invoices",
       billing_payment_methods: "/v1/tenants/{tenant_id}/billing/payment-methods",
       offline_license_issue: "/v1/tenants/{tenant_id}/billing/license/issue",
@@ -4947,6 +5238,7 @@ async function contractDiscovery() {
       connection_updates: "/api/contract-hub/connection-updates",
       contract_drift: "/api/contract-hub/drift",
       openapi: "/contracts/openapi.json",
+      lcp_usage_ledger_schema: "/contracts/lcp-usage-ledger.schema.json",
       local_pollek_pdp_route_simulate: "/v1/tenants/{tenant_id}/pdp/routes/simulate"
     }
   };
@@ -5878,6 +6170,23 @@ async function handleApi(req, res) {
       security_posture: securityPostureStatus(),
       contract: await contractDiscovery()
     });
+    return true;
+  }
+
+  const tenantLcpUsageLedgerMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/lcp\/usage-ledgers$/);
+  if (req.method === "POST" && (pathname === "/api/lcp/usage-ledgers" || tenantLcpUsageLedgerMatch)) {
+    const body = await readBody(req);
+    const tenantId = tenantLcpUsageLedgerMatch ? decodeURIComponent(tenantLcpUsageLedgerMatch[1]) : (body.tenant_id || "local");
+    try {
+      const result = ingestLcpUsageLedger({ ...body, tenant_id: tenantId });
+      sendJson(res, 202, result);
+    } catch (error) {
+      sendJson(res, 400, {
+        schema_version: "pollek.cloud.lcp-usage-ledger-error.v1",
+        error: "invalid_lcp_usage_ledger",
+        detail: error instanceof Error ? error.message : String(error)
+      });
+    }
     return true;
   }
 

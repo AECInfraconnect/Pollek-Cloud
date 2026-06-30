@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pollek.cloud/lcp-usage-ledger.schema.json",
+  "title": "Local Pollek Usage Ledger",
+  "type": "object",
+  "required": ["schema_version", "ledger_id", "tenant_id", "lcp_id", "observed_at", "usage_entries"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "pollek.lcp.usage-ledger.v1"
+    },
+    "ledger_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lcp_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "usage_entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "agent_id", "agent_name", "device_id", "user_subject", "provider", "model", "pricing_model", "total_tokens"],
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": { "type": "string" },
+          "id": { "type": "string", "minLength": 1 },
+          "entity_id": { "type": "string" },
+          "agent_id": { "type": "string", "minLength": 1 },
+          "agent_name": { "type": "string", "minLength": 1 },
+          "application_name": { "type": "string" },
+          "device_id": { "type": "string", "minLength": 1 },
+          "device_name": { "type": "string" },
+          "user_subject": { "type": "string", "minLength": 1 },
+          "provider": { "type": "string", "minLength": 1 },
+          "model": { "type": "string", "minLength": 1 },
+          "pricing_model": {
+            "type": "string",
+            "enum": ["token_metered", "token_metered_with_prompt_cache", "credit_pool", "subscription_pool", "committed_spend", "unknown"]
+          },
+          "billing_pool_id": { "type": "string" },
+          "allocation_method": { "type": "string" },
+          "call_count": { "type": "number", "minimum": 0 },
+          "input_tokens": { "type": "number", "minimum": 0 },
+          "output_tokens": { "type": "number", "minimum": 0 },
+          "cached_input_tokens": { "type": "number", "minimum": 0 },
+          "total_tokens": { "type": "number", "minimum": 0 },
+          "billed_credits": { "type": "number", "minimum": 0 },
+          "allocated_cost_cents": { "type": "number", "minimum": 0 },
+          "currency": { "type": "string" },
+          "confidence": {
+            "type": "string",
+            "enum": ["reported_by_lcp", "estimated_by_lcp", "provider_invoice_reconciled", "stale"]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "pricing_model": { "const": "credit_pool" } }
+            },
+            "then": {
+              "required": ["billing_pool_id", "allocation_method", "billed_credits"]
+            }
+          }
+        ]
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "alg": { "type": "string" },
+        "kid": { "type": "string" },
+        "value": { "type": "string" }
+      }
+    }
+  }
+}
