@@ -2353,3 +2353,153 @@ h3 {
     min-width: 980px;
   }
 }
+
+/* Cost & Tokens reporting */
+.muted-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 2px 0 10px;
+}
+
+.cost-token-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+.cost-token-table th.num,
+.cost-token-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cost-token-row {
+  cursor: pointer;
+}
+
+.cost-token-row:hover {
+  background: var(--nav-2, #f3f6fb);
+}
+
+.cost-token-row.selected {
+  background: rgba(37, 99, 235, 0.10);
+}
+
+.cost-token-group strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.cost-token-group small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.cost-token-category-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.cost-token-category-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cost-token-category-card:hover {
+  border-color: var(--blue);
+}
+
+.cost-token-category-card.active {
+  border-left-color: var(--teal, var(--blue));
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.cost-token-category-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cost-token-category-head strong {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.cost-token-category-head small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.cost-token-category-top {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cost-token-detail {
+  margin-top: 6px;
+}
+
+.cost-token-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cost-token-detail-models h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cost-token-model-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.cost-token-model-row span:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cost-token-model-row strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.cost-token-model-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .cost-token-grid {
+    grid-template-columns: 1fr;
+  }
+}

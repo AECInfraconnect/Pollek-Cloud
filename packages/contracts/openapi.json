@@ -2721,6 +2721,106 @@
         "x-pollek-tenant-scoped": false
       }
     },
+    "/api/reports/cost-tokens": {
+      "get": {
+        "tags": [
+          "pollek.cloud.billing"
+        ],
+        "summary": "Pollek Cloud GET /api/reports/cost-tokens",
+        "operationId": "getApiReportsCostTokens",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.billing"
+        ],
+        "x-pollek-direction": [
+          "cloud_admin"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/api/reports/cost-tokens/overview": {
+      "get": {
+        "tags": [
+          "pollek.cloud.billing"
+        ],
+        "summary": "Pollek Cloud GET /api/reports/cost-tokens/overview",
+        "operationId": "getApiReportsCostTokensOverview",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.billing"
+        ],
+        "x-pollek-direction": [
+          "cloud_admin"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
     "/api/services/endpoints": {
       "get": {
         "tags": [
@@ -7366,6 +7466,126 @@
         ],
         "x-pollek-direction": [
           "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/reports/cost-tokens": {
+      "get": {
+        "tags": [
+          "pollek.cloud.billing"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/reports/cost-tokens",
+        "operationId": "getV1TenantsTenantIdReportsCostTokens",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.billing"
+        ],
+        "x-pollek-direction": [
+          "cloud_admin"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": true
+      }
+    },
+    "/v1/tenants/{tenant_id}/reports/cost-tokens/overview": {
+      "get": {
+        "tags": [
+          "pollek.cloud.billing"
+        ],
+        "summary": "Pollek Cloud GET /v1/tenants/{tenant_id}/reports/cost-tokens/overview",
+        "operationId": "getV1TenantsTenantIdReportsCostTokensOverview",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.billing"
+        ],
+        "x-pollek-direction": [
+          "cloud_admin"
         ],
         "x-pollek-enterprise-only": false,
         "x-pollek-tenant-scoped": true

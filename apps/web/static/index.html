@@ -100,6 +100,7 @@
           <button class="tab" data-tab="entities" role="tab" id="tab-entities" aria-controls="panel-entities" aria-selected="false">Entities</button>
           <button class="tab" data-tab="relationships" role="tab" id="tab-relationships" aria-controls="panel-relationships" aria-selected="false">Relationships</button>
           <button class="tab" data-tab="policies" role="tab" id="tab-policies" aria-controls="panel-policies" aria-selected="false">Policies</button>
+          <button class="tab" data-tab="cost_tokens" role="tab" id="tab-cost_tokens" aria-controls="panel-cost_tokens" aria-selected="false">Cost &amp; Tokens</button>
           <button class="tab" data-tab="telemetry" role="tab" id="tab-telemetry" aria-controls="panel-telemetry" aria-selected="false">Telemetry</button>
           <button class="tab" data-tab="timeline" role="tab" id="tab-timeline" aria-controls="panel-timeline" aria-selected="false">Activity</button>
           <button class="tab" data-tab="alarms" role="tab" id="tab-alarms" aria-controls="panel-alarms" aria-selected="false">Alerts</button>
@@ -307,6 +308,80 @@
                   <div id="bundleStatusList" class="detail-list"></div>
                 </section>
               </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="cost_tokens" id="panel-cost_tokens" role="tabpanel" aria-labelledby="tab-cost_tokens" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Cost &amp; Tokens</p>
+                  <h3>Cost and Token Reporting</h3>
+                </div>
+                <div class="table-tools">
+                  <select id="costTokenScope" aria-label="Report scope">
+                    <option value="tenant">Current tenant</option>
+                    <option value="all">All tenants</option>
+                  </select>
+                  <button id="costTokenRefresh" class="secondary-button">Refresh</button>
+                </div>
+              </div>
+              <p class="muted-note" id="costTokenScopeNote"></p>
+              <div id="costTokenSummary" class="usage-summary-strip" aria-label="Cost and token overview totals"></div>
+              <div class="cost-token-grid">
+                <section class="sub-pane">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Report</p>
+                      <h3 id="costTokenReportTitle">Breakdown by User</h3>
+                    </div>
+                    <div class="table-tools">
+                      <select id="costTokenDimension" aria-label="Group cost and tokens by">
+                        <option value="user">By User</option>
+                        <option value="device">By Device</option>
+                        <option value="agent">By Agent</option>
+                        <option value="tenant">By Tenant</option>
+                        <option value="model">By Model</option>
+                        <option value="provider">By Provider</option>
+                      </select>
+                      <a id="costTokenDownloadCsv" class="secondary-button" href="#" download>CSV</a>
+                      <a id="costTokenDownloadJson" class="secondary-button" href="#" target="_blank" rel="noopener">JSON</a>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table class="fleet-table cost-token-table">
+                      <thead>
+                        <tr>
+                          <th id="costTokenGroupHeader">User</th>
+                          <th class="num">Calls</th>
+                          <th class="num">Input</th>
+                          <th class="num">Output</th>
+                          <th class="num">Total Tokens</th>
+                          <th class="num">Credits</th>
+                          <th class="num">Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody id="costTokenRows"></tbody>
+                    </table>
+                  </div>
+                </section>
+                <section class="sub-pane">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Category totals</p>
+                      <h3>Summary by Category</h3>
+                    </div>
+                  </div>
+                  <div id="costTokenCategoryCards" class="cost-token-category-cards" aria-label="Cost and token category summary"></div>
+                </section>
+              </div>
+              <section class="sub-pane">
+                <div class="pane-header compact">
+                  <div>
+                    <p class="eyebrow">Detail</p>
+                    <h3 id="costTokenDetailTitle">Select a row to drill in</h3>
+                  </div>
+                </div>
+                <div id="costTokenDetail" class="cost-token-detail" aria-live="polite"></div>
+              </section>
             </div>
 
             <div class="tab-panel" data-tab-panel="telemetry" id="panel-telemetry" role="tabpanel" aria-labelledby="tab-telemetry" hidden>

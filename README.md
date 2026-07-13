@@ -104,6 +104,19 @@ Pollek Cloud now receives the full Local Control Plane observe/telemetry surface
 
 Retention is bounded and tunable with `POLLEK_CLOUD_MAX_TELEMETRY_EVENTS` (default `5000`), `POLLEK_CLOUD_MAX_TELEMETRY_BATCHES` (default `200`), and `POLLEK_CLOUD_MAX_TELEMETRY_REJECTIONS` (default `200`).
 
+## Cost and Token Reporting
+
+The console has a `Cost & Tokens` tab that surfaces the cost and token usage reported by each Local Pollek control plane, broken down by category with an overview dashboard and downloadable reports.
+
+- Reports aggregate the `ai_model_usage` records (LCP usage ledgers, telemetry-bridged `ai_usage_event` / `agent_observation`, and estimates) by six dimensions: **device**, **user**, **agent**, **tenant**, **model**, and **provider**.
+- Each group reports input/output/cached/total tokens, cost, credits, model calls, record confidence (reported vs estimated), credit pools, and cross-dimension cardinality (how many devices/users/agents/models it spans).
+- Scope can be a single tenant or all tenants (org-wide), so cost and tokens can be viewed per tenant or across the whole fleet.
+- Endpoints:
+  - `GET /api/reports/cost-tokens/overview` and `GET /v1/tenants/{tenant_id}/reports/cost-tokens/overview` return totals plus all six category breakdowns for the dashboard.
+  - `GET /api/reports/cost-tokens?group_by=<dimension>&format=json|csv` and `GET /v1/tenants/{tenant_id}/reports/cost-tokens?group_by=<dimension>&format=json|csv` return a single downloadable report. `group_by` accepts `device`, `user`, `agent`, `tenant`, `model`, or `provider`.
+  - Omit `tenant_id` (or pass `tenant_id=all`) on the `/api/reports/cost-tokens*` endpoints for a cross-tenant view.
+- The portal tab shows an overview summary strip, a category summary, a clickable breakdown table that drills into a per-provider/model detail, and CSV/JSON download buttons for the current report.
+
 ## Local Pollek Entity Sync
 
 The console now has an `Entities` tab for Cloud-side aggregation of Local Pollek state by device and user. It tracks:

@@ -188,9 +188,10 @@
       "requires_oauth": true,
       "requires_spiffe": false,
       "tenant_scoped": true,
-      "paths": ["/v1/tenants/{tenant_id}/billing/subscription", "/v1/tenants/{tenant_id}/billing/usage", "/v1/tenants/{tenant_id}/billing/invoices", "/v1/tenants/{tenant_id}/billing/payment-methods", "/v1/tenants/{tenant_id}/billing/license/issue", "/v1/billing/webhooks/{provider}", "/api/lcp/usage-ledgers", "/v1/tenants/{tenant_id}/lcp/usage-ledgers"],
+      "paths": ["/v1/tenants/{tenant_id}/billing/subscription", "/v1/tenants/{tenant_id}/billing/usage", "/v1/tenants/{tenant_id}/billing/invoices", "/v1/tenants/{tenant_id}/billing/payment-methods", "/v1/tenants/{tenant_id}/billing/license/issue", "/v1/billing/webhooks/{provider}", "/api/lcp/usage-ledgers", "/v1/tenants/{tenant_id}/lcp/usage-ledgers", "/api/reports/cost-tokens", "/api/reports/cost-tokens/overview", "/v1/tenants/{tenant_id}/reports/cost-tokens", "/v1/tenants/{tenant_id}/reports/cost-tokens/overview"],
       "meters": ["console_seats", "local_control_planes", "managed_devices", "telemetry_events", "ai_model_tokens", "ai_model_credits", "ai_model_estimated_cost_cents"],
-      "controls": ["seat_device_lcp_metering", "lcp_reported_agent_usage_ledger", "cross_os_usage_fixtures", "credit_pool_allocation", "cloud_validation_reconciliation", "payment_token_hash", "webhook_idempotency", "offline_license", "audit_event", "task_record"]
+      "report_dimensions": ["device", "user", "agent", "tenant", "model", "provider"],
+      "controls": ["seat_device_lcp_metering", "lcp_reported_agent_usage_ledger", "cross_os_usage_fixtures", "credit_pool_allocation", "cloud_validation_reconciliation", "payment_token_hash", "webhook_idempotency", "offline_license", "audit_event", "task_record", "cost_token_reporting_by_dimension", "downloadable_cost_token_reports"]
     },
     "pollek.cloud.kms": {
       "direction": "cloud_admin",
@@ -233,6 +234,9 @@
     "telemetry_secret_quarantine": true,
     "lcp_telemetry_read_parity": true,
     "lcp_registry_sync_entity_ingest": true,
+    "cost_token_reporting": true,
+    "cost_token_reporting_by_dimension": true,
+    "downloadable_cost_token_reports": true,
     "ai_policy_editor": true,
     "ai_policy_provider_redaction_citations": true,
     "local_entity_inventory": true,

@@ -875,6 +875,92 @@ test("registry sync ingests LCP registry objects and bridged telemetry", async (
   });
 });
 
+test("cost and token reporting aggregates usage by device, user, agent, tenant, and model", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    // Bridge a fresh LCP-reported AI usage event through telemetry ingest.
+    const usageEvent = await api(baseUrl, "/v1/telemetry/batches", {
+      method: "POST",
+      body: {
+        schema_version: "telemetry-batch.v1",
+        tenant_id: "local",
+        device_id: "device_report_test",
+        batch_id: "batch_cost_report_1",
+        events: [
+          {
+            schema_version: "telemetry-envelope.v1",
+            event_id: "evt_cost_report_usage_1",
+            event_type: "ai_usage_event",
+            timestamp: "2026-07-13T05:00:00Z",
+            tenant_id: "local",
+            device_id: "device_report_test",
+            redaction_applied: true,
+            payload: {
+              agent_id: "agent_report_test",
+              agent_name: "Report Test Agent",
+              device_id: "device_report_test",
+              device_name: "REPORT-TEST-PC",
+              user_subject: "corp\\report-user",
+              lcp_id: "lcp_report_test",
+              provider: "Anthropic",
+              model: "claude-sonnet-4",
+              tokens: { input_tokens: 1000, output_tokens: 400, total_tokens: 1400, estimated: false },
+              cost: { currency: "USD", total_cost: 1.25 }
+            }
+          }
+        ]
+      }
+    });
+    assert.equal(usageEvent.response.status, 202);
+    assert.equal(usageEvent.payload.stored, 1);
+
+    const overview = await api(baseUrl, "/api/reports/cost-tokens/overview");
+    assert.equal(overview.response.status, 200);
+    assert.equal(overview.payload.schema_version, "pollek.cloud.cost-token-overview.v1");
+    assert.equal(overview.payload.scope, "all_tenants");
+    for (const dimension of ["device", "user", "agent", "tenant", "model", "provider"]) {
+      assert.ok(Array.isArray(overview.payload.categories[dimension]), `missing category ${dimension}`);
+    }
+    assert.ok(overview.payload.totals.total_tokens >= 1400);
+    assert.ok(overview.payload.totals.cost_cents >= 125);
+
+    const byUser = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=user");
+    assert.equal(byUser.response.status, 200);
+    assert.equal(byUser.payload.scope, "tenant");
+    assert.equal(byUser.payload.group_by, "user");
+    const reportUser = byUser.payload.groups.find((group) => group.key === "corp\\report-user");
+    assert.ok(reportUser, "expected report-user group");
+    assert.equal(reportUser.total_tokens, 1400);
+    assert.equal(reportUser.cost_cents, 125);
+    assert.equal(reportUser.input_tokens, 1000);
+    assert.equal(reportUser.output_tokens, 400);
+    // Groups must be sorted by cost descending.
+    for (let i = 1; i < byUser.payload.groups.length; i += 1) {
+      assert.ok(byUser.payload.groups[i - 1].cost_cents >= byUser.payload.groups[i].cost_cents);
+    }
+
+    const byAgent = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=agent");
+    const reportAgent = byAgent.payload.groups.find((group) => group.key === "agent_report_test");
+    assert.ok(reportAgent, "expected report agent group");
+    assert.equal(reportAgent.label, "Report Test Agent");
+    assert.equal(reportAgent.total_tokens, 1400);
+
+    const byDevice = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=device");
+    const reportDevice = byDevice.payload.groups.find((group) => group.key === "device_report_test");
+    assert.ok(reportDevice, "expected report device group");
+    assert.equal(reportDevice.total_tokens, 1400);
+
+    const byTenant = await api(baseUrl, "/api/reports/cost-tokens?group_by=tenant");
+    assert.ok(byTenant.payload.groups.some((group) => group.key === "local"));
+
+    const csvResponse = await fetch(`${baseUrl}/v1/tenants/local/reports/cost-tokens?group_by=user&format=csv`);
+    assert.equal(csvResponse.status, 200);
+    assert.match(csvResponse.headers.get("content-type") || "", /text\/csv/);
+    const csv = await csvResponse.text();
+    assert.match(csv, /group_by,key,label,input_tokens,output_tokens,cached_input_tokens,total_tokens,cost_cents/);
+    assert.match(csv, /report-user/);
+  });
+});
+
 test("admin IAM and billing workflows enforce tenant context and redact secrets", async (t) => {
   await withDevServer(t, async (baseUrl) => {
     const tenantId = "tenant_smoke";
@@ -1247,6 +1333,25 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /id="selectedEntityDetail"/);
   assert.match(html, /id="aiUsageSummary"/);
   assert.match(html, /id="aiUsageDeviceList"/);
+  assert.match(html, /data-tab-panel="cost_tokens"/);
+  assert.match(html, /class="tab" data-tab="cost_tokens"/);
+  assert.match(html, /id="costTokenScope"/);
+  assert.match(html, /id="costTokenDimension"/);
+  assert.match(html, /id="costTokenSummary"/);
+  assert.match(html, /id="costTokenRows"/);
+  assert.match(html, /id="costTokenCategoryCards"/);
+  assert.match(html, /id="costTokenDownloadCsv"/);
+  assert.match(html, /id="costTokenDownloadJson"/);
+  assert.match(html, /id="costTokenDetail"/);
+  assert.match(app, /function loadCostTokenOverview/);
+  assert.match(app, /function renderCostTokens/);
+  assert.match(app, /function renderCostTokenCategoryCards/);
+  assert.match(app, /function renderCostTokenDetail/);
+  assert.match(app, /function ensureCostTokensLoaded/);
+  assert.match(app, /COST_TOKEN_DIMENSION_LABELS/);
+  assert.match(css, /\.cost-token-grid/);
+  assert.match(css, /\.cost-token-category-card/);
+  assert.match(css, /\.cost-token-detail/);
   assert.match(html, /role="tablist"/);
   assert.match(html, /role="tab" id="tab-timeline" aria-controls="panel-timeline"/);
   assert.match(html, /id="activitySourceFilter"/);
