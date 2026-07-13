@@ -2,68 +2,106 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.pollek.cloud/telemetry-envelope.schema.json",
   "title": "Pollek Telemetry Envelope",
-  "type": "object",
-  "required": ["schema_version", "tenant_id", "source", "signals", "observed_at"],
-  "additionalProperties": false,
-  "properties": {
-    "schema_version": {
-      "const": "pollek.telemetry.envelope.v1"
-    },
-    "tenant_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "source": {
+  "description": "Telemetry envelopes accepted by Pollek Cloud ingest. Local Control Plane instances send lcp-telemetry-envelope.v1 (the same envelope the DEK emits locally); pollek-cloud-signal-envelope.v1 remains supported for aggregated signal batches.",
+  "oneOf": [
+    { "$ref": "#/$defs/lcp_telemetry_envelope_v1" },
+    { "$ref": "#/$defs/cloud_signal_envelope_v1" }
+  ],
+  "$defs": {
+    "lcp_telemetry_envelope_v1": {
+      "title": "PollekTelemetryEnvelopeV1",
       "type": "object",
-      "required": ["lcp_id", "device_id"],
-      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "event_id",
+        "event_type",
+        "timestamp",
+        "tenant_id",
+        "device_id",
+        "payload",
+        "redaction_applied"
+      ],
       "properties": {
-        "lcp_id": { "type": "string", "minLength": 1 },
-        "device_id": { "type": "string", "minLength": 1 },
-        "device_name": { "type": "string" },
-        "user_subject": { "type": "string" },
-        "spiffe_id": { "type": "string" }
+        "schema_version": { "type": "string", "const": "telemetry-envelope.v1" },
+        "event_id": { "type": "string" },
+        "event_type": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "tenant_id": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "environment_id": { "type": "string" },
+        "device_id": { "type": "string" },
+        "trace_id": { "type": "string" },
+        "span_id": { "type": "string" },
+        "payload": { "type": "object" },
+        "redaction_applied": { "type": "boolean" }
       }
     },
-    "observed_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "signals": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["signal_type", "name", "value"],
-        "additionalProperties": false,
-        "properties": {
-          "signal_type": {
-            "type": "string",
-            "enum": ["resource_access", "tool_usage", "identity_access", "policy_decision", "network_observation", "model_usage"]
-          },
-          "name": { "type": "string", "minLength": 1 },
-          "value": {},
-          "unit": { "type": "string" },
-          "attributes": {
+    "cloud_signal_envelope_v1": {
+      "title": "PollekCloudSignalEnvelopeV1",
+      "type": "object",
+      "required": ["schema_version", "tenant_id", "source", "signals", "observed_at"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "pollek.telemetry.envelope.v1"
+        },
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "object",
+          "required": ["lcp_id", "device_id"],
+          "additionalProperties": false,
+          "properties": {
+            "lcp_id": { "type": "string", "minLength": 1 },
+            "device_id": { "type": "string", "minLength": 1 },
+            "device_name": { "type": "string" },
+            "user_subject": { "type": "string" },
+            "spiffe_id": { "type": "string" }
+          }
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "signals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
             "type": "object",
-            "additionalProperties": true
+            "required": ["signal_type", "name", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "signal_type": {
+                "type": "string",
+                "enum": ["resource_access", "tool_usage", "identity_access", "policy_decision", "network_observation", "model_usage"]
+              },
+              "name": { "type": "string", "minLength": 1 },
+              "value": {},
+              "unit": { "type": "string" },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "otel": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "oauth_client_id": { "type": "string" },
+            "oidc_subject": { "type": "string" },
+            "spiffe_id": { "type": "string" },
+            "mtls_confirmed": { "type": "boolean" },
+            "payload_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
           }
         }
-      }
-    },
-    "otel": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "security": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "oauth_client_id": { "type": "string" },
-        "oidc_subject": { "type": "string" },
-        "spiffe_id": { "type": "string" },
-        "mtls_confirmed": { "type": "boolean" },
-        "payload_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }
     }
   }

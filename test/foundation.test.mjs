@@ -130,6 +130,22 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.billing_webhook_idempotency, true);
   assert.equal(contract.features.lcp_telemetry_endpoint_family, true);
   assert.equal(contract.features.lcp_contract_compatibility_2026_06_30, true);
+  assert.equal(contract.features.lcp_telemetry_envelope_persistence, true);
+  assert.equal(contract.features.telemetry_event_id_idempotency, true);
+  assert.equal(contract.features.telemetry_secret_quarantine, true);
+  assert.equal(contract.features.lcp_telemetry_read_parity, true);
+  assert.equal(contract.features.lcp_registry_sync_entity_ingest, true);
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/telemetry/decision-logs"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/telemetry/export"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/decisions"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/tool-invocations"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/resource-access"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/policy-deployments"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/pep-health"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/api/telemetry/ingest-status"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("event_id_idempotency"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("per_event_secret_quarantine"));
+  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("telemetry_envelope_persistence"));
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/v1/signup/tenant"));
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/v1/tenants/{tenant_id}/members/{account_id}/roles"));
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/scim/v2/Users"));
@@ -282,7 +298,7 @@ test("typespec source and sdk artifact cover core Contract Hub APIs", async () =
   assert.match(typespec, /op listRegistryAgents/);
   assert.match(typespec, /op listDiscoveryCandidates/);
   assert.match(sdk, /export class PollekCloudClient/);
-  assert.match(sdk, /POLLEK_CONTRACT_VERSION = "2026\.06\.29"/);
+  assert.match(sdk, /POLLEK_CONTRACT_VERSION = "2026\.07\.13"/);
   assert.match(sdk, /replayEvents/);
   assert.match(sdk, /checkAuthorization/);
   assert.match(sdk, /signupTenant/);
@@ -593,7 +609,9 @@ test("dev server serves latest LCP compatibility endpoints", async (t) => {
       }
     });
     assert.equal(telemetryEvent.response.status, 202);
-    assert.equal(telemetryEvent.payload.accepted, true);
+    assert.equal(telemetryEvent.payload.schema_version, "telemetry-ingest-response.v1");
+    assert.equal(telemetryEvent.payload.accepted, 1);
+    assert.equal(telemetryEvent.payload.rejected, 0);
     assert.equal(telemetryEvent.payload.tenant_id, "local");
 
     const observations = await api(baseUrl, "/v1/telemetry/observations");
@@ -620,7 +638,7 @@ test("dev server serves latest LCP compatibility endpoints", async (t) => {
       }
     });
     assert.equal(extension.response.status, 202);
-    assert.equal(extension.payload.accepted, true);
+    assert.equal(extension.payload.accepted, 1);
 
     const extensionStatus = await api(baseUrl, "/v1/tenants/local/browser-extension/status");
     assert.equal(extensionStatus.response.status, 200);
@@ -652,6 +670,208 @@ test("dev server serves latest LCP compatibility endpoints", async (t) => {
     const fleet = await api(baseUrl, "/api/fleet");
     assert.equal(fleet.response.status, 200);
     assert.doesNotMatch(JSON.stringify(fleet.payload.events), /lcp-secret-token|browser-extension-secret/);
+  });
+});
+
+test("cloud persists full LCP telemetry batches with idempotency, quarantine, and read parity", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const batchBody = {
+      schema_version: "telemetry-batch.v1",
+      tenant_id: "local",
+      device_id: "device_local_windows",
+      batch_id: "batch_full_lcp_1",
+      events: [
+        {
+          schema_version: "telemetry-envelope.v1",
+          event_id: "evt_obs_1",
+          event_type: "agent_observation",
+          timestamp: "2026-07-13T01:00:00Z",
+          tenant_id: "local",
+          device_id: "device_local_windows",
+          redaction_applied: true,
+          payload: { agent_id: "agent_cursor", provider: "Anthropic", model: "claude-sonnet-4", token_usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 } }
+        },
+        {
+          schema_version: "telemetry-envelope.v1",
+          event_id: "evt_decision_1",
+          event_type: "decision_log",
+          timestamp: "2026-07-13T01:00:01Z",
+          tenant_id: "local",
+          device_id: "device_local_windows",
+          redaction_applied: true,
+          payload: { decision: "deny", reason: "policy denied", pep_plane: "McpProxy" }
+        },
+        {
+          schema_version: "telemetry-envelope.v1",
+          event_id: "evt_guard_1",
+          event_type: "guard_incident",
+          timestamp: "2026-07-13T01:00:02Z",
+          tenant_id: "local",
+          device_id: "device_local_windows",
+          redaction_applied: true,
+          payload: { guard: "prompt_guard", verdict: "blocked" }
+        },
+        {
+          schema_version: "telemetry-envelope.v1",
+          event_id: "evt_usage_1",
+          event_type: "ai_usage_event",
+          timestamp: "2026-07-13T01:00:03Z",
+          tenant_id: "local",
+          device_id: "device_local_windows",
+          redaction_applied: true,
+          payload: {
+            agent_id: "agent_claude",
+            provider: "Anthropic",
+            model: "claude-sonnet-4",
+            tokens: { input_tokens: 500, output_tokens: 200, total_tokens: 700, estimated: false },
+            cost: { currency: "USD", total_cost: 0.42 }
+          }
+        },
+        {
+          schema_version: "telemetry-envelope.v1",
+          event_id: "evt_enforce_1",
+          event_type: "enforcement_result",
+          timestamp: "2026-07-13T01:00:04Z",
+          tenant_id: "local",
+          device_id: "device_local_windows",
+          redaction_applied: true,
+          payload: { method_id: "mcp_proxy", status: "enforced" }
+        },
+        {
+          schema_version: "telemetry-envelope.v1",
+          event_id: "evt_tool_1",
+          event_type: "tool_invocation",
+          timestamp: "2026-07-13T01:00:05Z",
+          tenant_id: "local",
+          device_id: "device_local_windows",
+          redaction_applied: true,
+          payload: { tool_id: "fs_read", agent_id: "agent_cursor" }
+        },
+        {
+          event_id: "evt_secret_1",
+          event_type: "decision_log",
+          payload: { reason: "authorization: Bearer sk-should-never-persist" }
+        },
+        {
+          schema_version: "telemetry-envelope.v1",
+          event_id: "evt_invalid_1",
+          event_type: "decision_log",
+          timestamp: "2026-07-13T01:00:06Z",
+          tenant_id: "local",
+          device_id: "device_local_windows",
+          redaction_applied: "yes",
+          payload: {}
+        }
+      ]
+    };
+
+    const first = await api(baseUrl, "/v1/telemetry/batches", { method: "POST", body: batchBody });
+    assert.equal(first.response.status, 202);
+    assert.equal(first.payload.schema_version, "telemetry-ingest-response.v1");
+    assert.equal(first.payload.accepted, 6);
+    assert.equal(first.payload.stored, 6);
+    assert.equal(first.payload.rejected, 2);
+    assert.equal(first.payload.duplicates, 0);
+    assert.equal(first.payload.batch_id, "batch_full_lcp_1");
+    assert.equal(first.payload.received_events, 8);
+    assert.ok(first.payload.rejection_reasons.some((item) => item.reason === "unredacted_secret_detected"));
+    assert.ok(first.payload.rejection_reasons.some((item) => item.reason === "invalid_envelope"));
+
+    const replay = await api(baseUrl, "/v1/telemetry/batches", { method: "POST", body: { ...batchBody, batch_id: "batch_full_lcp_1_retry" } });
+    assert.equal(replay.response.status, 202);
+    assert.equal(replay.payload.accepted, 6);
+    assert.equal(replay.payload.stored, 0);
+    assert.equal(replay.payload.duplicates, 6);
+    assert.equal(replay.payload.rejected, 2);
+
+    const observations = await api(baseUrl, "/v1/telemetry/observations");
+    assert.equal(observations.response.status, 200);
+    assert.equal(observations.payload.schema_version, "observation-page.v1");
+    assert.ok(observations.payload.items.some((item) => item.event_id === "evt_obs_1" && item.event_type === "agent_observation"));
+
+    const enforcement = await api(baseUrl, "/v1/telemetry/enforcement-status");
+    assert.ok(enforcement.payload.items.some((item) => item.event_id === "evt_enforce_1"));
+
+    const decisions = await api(baseUrl, "/v1/tenants/local/telemetry/decision-logs");
+    assert.equal(decisions.response.status, 200);
+    assert.equal(decisions.payload.count, 1);
+    assert.equal(decisions.payload.decisions[0].event_id, "evt_decision_1");
+
+    const decisionsAlias = await api(baseUrl, "/v1/tenants/local/logs/decisions");
+    assert.equal(decisionsAlias.payload.count, 1);
+
+    const toolInvocations = await api(baseUrl, "/v1/tenants/local/logs/tool-invocations");
+    assert.equal(toolInvocations.payload.count, 1);
+    assert.equal(toolInvocations.payload.tool_invocations[0].event_id, "evt_tool_1");
+
+    const guardEvents = await api(baseUrl, "/v1/tenants/local/telemetry/guard-events");
+    assert.equal(guardEvents.payload.schema_version, "guard-events.v1");
+    assert.equal(guardEvents.payload.count, 1);
+    assert.equal(guardEvents.payload.items[0].event_id, "evt_guard_1");
+
+    const exportJson = await api(baseUrl, "/v1/tenants/local/telemetry/export");
+    assert.equal(exportJson.response.status, 200);
+    assert.ok(Array.isArray(exportJson.payload));
+    assert.ok(exportJson.payload.some((item) => item.event_id === "evt_usage_1"));
+
+    const exportCsvResponse = await fetch(`${baseUrl}/v1/tenants/local/telemetry/export?format=csv`);
+    assert.equal(exportCsvResponse.status, 200);
+    assert.match(exportCsvResponse.headers.get("content-type") || "", /text\/csv/);
+    const exportCsv = await exportCsvResponse.text();
+    assert.match(exportCsv, /timestamp,event_type,event_id,tenant_id,details/);
+    assert.match(exportCsv, /evt_decision_1/);
+
+    const ingestStatus = await api(baseUrl, "/api/telemetry/ingest-status");
+    assert.equal(ingestStatus.payload.schema_version, "pollek.cloud.telemetry-ingest-status.v1");
+    assert.equal(ingestStatus.payload.stored_envelopes, 6);
+    const localTotals = ingestStatus.payload.totals.find((item) => item.tenant_id === "local");
+    assert.equal(localTotals.accepted, 6);
+    assert.equal(localTotals.duplicates, 6);
+    assert.equal(localTotals.quarantined_secrets, 2);
+    assert.equal(localTotals.invalid_envelopes, 2);
+    assert.equal(localTotals.by_event_type.agent_observation, 1);
+
+    const billingUsage = await api(baseUrl, "/v1/tenants/local/billing/usage");
+    assert.equal(billingUsage.response.status, 200);
+    assert.equal(billingUsage.payload.summary.telemetry_events, 6);
+
+    const persisted = JSON.stringify((await api(baseUrl, "/api/fleet")).payload);
+    assert.doesNotMatch(persisted, /sk-should-never-persist/);
+  });
+});
+
+test("registry sync ingests LCP registry objects and bridged telemetry", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const sync = await api(baseUrl, "/v1/tenants/local/registry/sync", {
+      method: "POST",
+      headers: { "x-pollek-device-id": "device_local_windows", "x-pollek-lcp-id": "lcp_local" },
+      body: {
+        tenant_id: "local",
+        items: [
+          { type: "agent", data: { agent_id: "agent_sync_test", name: "Synced Agent", trust_level: "trusted" } },
+          { type: "tool", data: { tool_id: "tool_sync_test", name: "Synced Tool" } },
+          { type: "resource", data: { resource_id: "res_sync_test", name: "Synced Resource" } },
+          { type: "mcp_server", data: { id: "mcp_sync_test", name: "Synced MCP Server" } },
+          { type: "telemetry_tool_invocation", data: { event_id: "evt_sync_tool_inv", tool_id: "tool_sync_test", agent_id: "agent_sync_test" } },
+          { type: "telemetry_policy_deployment", data: { event_id: "evt_sync_policy_dep", policy_id: "pol_sync" } }
+        ]
+      }
+    });
+    assert.equal(sync.response.status, 202);
+    assert.equal(sync.payload.schema_version, "pollek.cloud.registry-sync-response.v1");
+    assert.equal(sync.payload.item_count, 6);
+    assert.ok(sync.payload.ingested_entities >= 4);
+    assert.equal(sync.payload.telemetry.accepted, 2);
+    assert.equal(sync.payload.telemetry.rejected, 0);
+
+    const agents = await api(baseUrl, "/v1/tenants/local/registry/agents");
+    assert.ok(JSON.stringify(agents.payload).includes("agent_sync_test"));
+
+    const toolInvocations = await api(baseUrl, "/v1/tenants/local/logs/tool-invocations");
+    assert.ok(toolInvocations.payload.tool_invocations.some((item) => item.event_id === "evt_sync_tool_inv"));
+
+    const policyDeployments = await api(baseUrl, "/v1/tenants/local/logs/policy-deployments");
+    assert.ok(policyDeployments.payload.policy_deployments.some((item) => item.event_id === "evt_sync_policy_dep"));
   });
 });
 

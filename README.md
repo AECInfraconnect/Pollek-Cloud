@@ -89,6 +89,21 @@ npm test
 
 GitHub Actions also has an `OS Compatibility Fixtures` workflow that runs contract generation checks and the Node test suite on `windows-latest`, `macos-latest`, and `ubuntu-latest`.
 
+## LCP Observe and Telemetry Ingest
+
+Pollek Cloud now receives the full Local Control Plane observe/telemetry surface with durable per-event storage instead of sampled summaries:
+
+- `POST /v1/telemetry/batches` and the split family (`/v1/telemetry/events`, `decision-logs`, `security-events`, `traces`, `ebpf-events`, `/v1/metrics`, `runtime-metrics`, `/v1/tenants/{tenant_id}/telemetry/events`) normalize every event into a `telemetry-envelope.v1` record.
+- Responses follow the shared `telemetry-ingest-response.v1` contract with numeric `accepted` / `rejected` / `duplicates` counts.
+- Ingest is idempotent per `tenant_id` + `event_id`, so LCP spool retries never double-count. The idempotency index survives Cloud restarts through runtime persistence.
+- Events carrying unredacted secrets are quarantined per event (metadata and payload hash only), matching the LCP sink's defense-in-depth check, while the rest of the batch is still accepted.
+- `ai_usage_event` and `agent_observation` token usage are bridged into billing usage records and the `telemetry_events` usage meter.
+- Read views are backed by the stored envelopes with LCP-dashboard response parity: `/v1/telemetry/observations`, `/v1/telemetry/enforcement-status`, `/v1/telemetry/{resources,tools,identities}`, `/v1/tenants/{tenant_id}/telemetry/decision-logs`, `/v1/tenants/{tenant_id}/logs/{decisions,tool-invocations,resource-access,policy-deployments,pep-health}`, `/v1/tenants/{tenant_id}/telemetry/guard-events`, and `/v1/tenants/{tenant_id}/telemetry/export?format=json|csv`.
+- `GET /api/telemetry/ingest-status` reports per-tenant accepted/duplicate/rejected totals, per-event-type counts, recent batch receipts, and recent quarantine records.
+- `POST /v1/tenants/{tenant_id}/registry/sync` now ingests the LCP registry sync items (agents, MCP servers, tools, resources, entities, relationships, agent inventories) into the Cloud entity model and routes `telemetry_*` items into the envelope store.
+
+Retention is bounded and tunable with `POLLEK_CLOUD_MAX_TELEMETRY_EVENTS` (default `5000`), `POLLEK_CLOUD_MAX_TELEMETRY_BATCHES` (default `200`), and `POLLEK_CLOUD_MAX_TELEMETRY_REJECTIONS` (default `200`).
+
 ## Local Pollek Entity Sync
 
 The console now has an `Entities` tab for Cloud-side aggregation of Local Pollek state by device and user. It tracks:

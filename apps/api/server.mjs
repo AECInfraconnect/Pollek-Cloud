@@ -34,6 +34,9 @@ const requestBudgetMax = Number(process.env.POLLEK_CLOUD_RATE_MAX || 900);
 const compactJsonResponses = process.env.POLLEK_CLOUD_PRETTY_JSON !== "1";
 const exposeInternalErrors = process.env.NODE_ENV !== "production" || process.env.POLLEK_CLOUD_EXPOSE_ERRORS === "1";
 const lcpReconcileIntervalMs = Math.max(30000, Number(process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS || process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 300000));
+const maxTelemetryEnvelopes = Math.max(100, Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_EVENTS || 5000));
+const maxTelemetryBatchReceipts = Math.max(20, Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_BATCHES || 200));
+const maxTelemetryRejections = Math.max(20, Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_REJECTIONS || 200));
 const bundleSigningKeyPair = crypto.generateKeyPairSync("ed25519");
 const bundleSigningPublicKeyPem = bundleSigningKeyPair.publicKey.export({ type: "spki", format: "pem" });
 const eventStreamReplayWindow = Math.max(200, Number(process.env.POLLEK_EVENT_STREAM_REPLAY_WINDOW || 500));
@@ -85,7 +88,11 @@ const persistedFleetKeys = [
   "invoices",
   "paymentMethods",
   "licenses",
-  "billingEvents"
+  "billingEvents",
+  "telemetryEnvelopes",
+  "telemetryBatchReceipts",
+  "telemetryRejections",
+  "telemetryIngestTotals"
 ];
 
 const ROLE_TEST_USER_TEMPLATES = [
@@ -1230,7 +1237,11 @@ function createFleetState() {
     invoices: [],
     paymentMethods: [],
     licenses: [],
-    billingEvents: []
+    billingEvents: [],
+    telemetryEnvelopes: [],
+    telemetryBatchReceipts: [],
+    telemetryRejections: [],
+    telemetryIngestTotals: []
   };
 }
 
@@ -1398,6 +1409,9 @@ function runtimePersistenceStatus() {
     record_counts: {
       devices: state.devices.size,
       telemetry_events: state.events.length,
+      telemetry_envelopes: state.fleet.telemetryEnvelopes?.length || 0,
+      telemetry_batch_receipts: state.fleet.telemetryBatchReceipts?.length || 0,
+      telemetry_rejections: state.fleet.telemetryRejections?.length || 0,
       event_journal: state.eventJournal.length,
       audit_events: state.auditEvents.length,
       tasks: state.tasks.length,
@@ -1807,6 +1821,10 @@ function ensureRuntimeBackfills() {
   for (const account of state.fleet.billingAccounts || []) {
     if (account.tenant_id) ensureRoleTestUsers(account.tenant_id, { actor_id: "startup-backfill", emitEvidence: false });
   }
+  for (const key of ["telemetryEnvelopes", "telemetryBatchReceipts", "telemetryRejections", "telemetryIngestTotals"]) {
+    if (!Array.isArray(state.fleet[key])) state.fleet[key] = [];
+  }
+  rebuildTelemetryEventIndex();
 }
 
 function createAuthSession({ tenant_id, account_id, method = "dev-local", idp_id = "idp_keycloak_local_dev" }) {
@@ -2277,7 +2295,10 @@ function refreshTenantUsage(tenantId) {
   upsertUsageCounter(tenantId, "console_seats", countActiveSeats(tenantId));
   upsertUsageCounter(tenantId, "local_control_planes", countLocalControlPlanes(tenantId));
   upsertUsageCounter(tenantId, "managed_devices", countManagedDevices(tenantId));
-  upsertUsageCounter(tenantId, "telemetry_events", state.events.filter((event) => event.tenant_id === tenantId).length);
+  const telemetryTotals = (state.fleet.telemetryIngestTotals || []).find((item) => item.tenant_id === tenantId);
+  upsertUsageCounter(tenantId, "telemetry_events", telemetryTotals
+    ? telemetryTotals.accepted
+    : state.events.filter((event) => event.tenant_id === tenantId).length);
   const aiUsage = (state.fleet.usageRecords || []).filter((record) => record.tenant_id === tenantId && record.metric === "ai_model_usage");
   upsertUsageCounter(tenantId, "ai_model_tokens", aiUsage.reduce((sum, record) => sum + Number(record.total_tokens || record.tokens || 0), 0));
   upsertUsageCounter(tenantId, "ai_model_estimated_cost_cents", aiUsage.reduce((sum, record) => sum + Number(record.allocated_cost_cents || record.estimated_cost_cents || record.cost_cents || 0), 0));
@@ -3145,31 +3166,302 @@ function normalizeTelemetryItems(body = {}) {
   return [body];
 }
 
-function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null } = {}) {
+const TELEMETRY_ENVELOPE_SCHEMA_VERSION = "telemetry-envelope.v1";
+const TELEMETRY_ENVELOPE_REQUIRED_FIELDS = ["schema_version", "event_id", "event_type", "timestamp", "tenant_id", "device_id", "payload", "redaction_applied"];
+const TELEMETRY_ENVELOPE_OPTIONAL_FIELDS = ["workspace_id", "environment_id", "trace_id", "span_id"];
+const telemetryEventIdIndex = new Set();
+
+function rebuildTelemetryEventIndex() {
+  telemetryEventIdIndex.clear();
+  for (const envelope of state.fleet.telemetryEnvelopes || []) {
+    if (envelope?.tenant_id && envelope?.event_id) telemetryEventIdIndex.add(`${envelope.tenant_id}:${envelope.event_id}`);
+  }
+}
+
+// Same defense-in-depth heuristic the Local Control Plane telemetry sink uses:
+// the sink must never persist leaked credentials even if upstream redaction failed.
+function hasUnredactedTelemetrySecret(value) {
+  let blob = "";
+  try {
+    blob = JSON.stringify(value ?? "").toLowerCase();
+  } catch {
+    return true;
+  }
+  return blob.includes("authorization:") || blob.includes("bearer ") || blob.includes("\"password\"");
+}
+
+function telemetryIngestTotalsFor(tenantId) {
+  if (!Array.isArray(state.fleet.telemetryIngestTotals)) state.fleet.telemetryIngestTotals = [];
+  let totals = state.fleet.telemetryIngestTotals.find((item) => item.tenant_id === tenantId);
+  if (!totals) {
+    totals = {
+      tenant_id: tenantId,
+      accepted: 0,
+      duplicates: 0,
+      rejected: 0,
+      quarantined_secrets: 0,
+      invalid_envelopes: 0,
+      batches: 0,
+      by_event_type: {},
+      first_ingest_at: null,
+      last_ingest_at: null
+    };
+    state.fleet.telemetryIngestTotals.push(totals);
+  }
+  return totals;
+}
+
+function normalizeTelemetryEnvelope(item, context = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    return { error: "invalid_event_shape" };
+  }
+  if (item.schema_version === TELEMETRY_ENVELOPE_SCHEMA_VERSION) {
+    const missing = TELEMETRY_ENVELOPE_REQUIRED_FIELDS.filter((field) => item[field] === undefined || item[field] === null);
+    if (missing.length) return { error: "invalid_envelope", detail: `missing required fields: ${missing.join(", ")}` };
+    if (typeof item.payload !== "object" || Array.isArray(item.payload)) {
+      return { error: "invalid_envelope", detail: "payload must be an object" };
+    }
+    if (typeof item.redaction_applied !== "boolean") {
+      return { error: "invalid_envelope", detail: "redaction_applied must be a boolean" };
+    }
+  }
+  const receivedAt = context.received_at || new Date().toISOString();
+  const payloadSource = typeof item.payload === "object" && item.payload !== null && !Array.isArray(item.payload)
+    ? item.payload
+    : (typeof item.details === "object" && item.details !== null && !Array.isArray(item.details) ? item.details : item);
+  const envelope = {
+    schema_version: TELEMETRY_ENVELOPE_SCHEMA_VERSION,
+    event_id: String(item.event_id || item.id || `evt_${crypto.randomUUID()}`),
+    event_type: String(item.event_type || item.type || (context.kind ? `telemetry.${context.kind}.v1` : "telemetry.envelope.v1")),
+    timestamp: String(item.timestamp || item.ts || item.occurred_at || item.observed_at || receivedAt),
+    tenant_id: String(item.tenant_id || context.tenant_id || "local"),
+    device_id: String(item.device_id || context.device_id || "unknown"),
+    payload: redactSensitive(payloadSource),
+    redaction_applied: typeof item.redaction_applied === "boolean" ? item.redaction_applied : false,
+    cloud_redaction_applied: true,
+    severity: item.severity || null,
+    received_at: receivedAt,
+    batch_id: context.batch_id || null,
+    telemetry_kind: context.kind || "envelope",
+    source_path: context.source_path || null
+  };
+  for (const field of TELEMETRY_ENVELOPE_OPTIONAL_FIELDS) {
+    if (item[field] !== undefined && item[field] !== null) envelope[field] = String(item[field]);
+  }
+  return { envelope };
+}
+
+function storeTelemetryEnvelope(envelope) {
+  const idempotencyKey = `${envelope.tenant_id}:${envelope.event_id}`;
+  if (telemetryEventIdIndex.has(idempotencyKey)) return { duplicate: true };
+  telemetryEventIdIndex.add(idempotencyKey);
+  state.fleet.telemetryEnvelopes.unshift(envelope);
+  if (state.fleet.telemetryEnvelopes.length > maxTelemetryEnvelopes) state.fleet.telemetryEnvelopes.length = maxTelemetryEnvelopes;
+  if (telemetryEventIdIndex.size > maxTelemetryEnvelopes * 4) rebuildTelemetryEventIndex();
+  broadcastSse("telemetry.envelope", envelope);
+  return { duplicate: false };
+}
+
+// Mirror exact/estimated AI usage carried in telemetry into billing usage records,
+// matching the Local Control Plane's ai_usage_event / agent_observation bridge.
+function bridgeTelemetryUsageEvent(envelope) {
+  const payload = envelope.payload || {};
+  let usageRecord = null;
+  if (envelope.event_type === "ai_usage_event") {
+    const tokens = payload.tokens || {};
+    usageRecord = {
+      id: `usage_ai_${envelope.event_id}`,
+      tenant_id: envelope.tenant_id,
+      metric: "ai_model_usage",
+      source: "lcp_model_usage_telemetry",
+      confidence: tokens.estimated ? "estimated" : "reported",
+      capture_source: "telemetry_ingest",
+      agent_id: payload.agent_id || null,
+      device_id: payload.device_id || envelope.device_id,
+      lcp_id: payload.lcp_id || null,
+      provider: payload.provider || "Unknown",
+      model: payload.model || "unknown",
+      call_count: 1,
+      input_tokens: Number(tokens.input_tokens || 0),
+      output_tokens: Number(tokens.output_tokens || 0),
+      cached_input_tokens: Number(tokens.cached_input_tokens || 0),
+      total_tokens: Number(tokens.total_tokens || 0),
+      estimated_cost_cents: Math.round(Number(payload.cost?.total_cost || 0) * 100),
+      currency: payload.cost?.currency || "USD",
+      recorded_at: envelope.timestamp
+    };
+  } else if (envelope.event_type === "agent_observation" && payload.token_usage) {
+    const tokens = payload.token_usage;
+    usageRecord = {
+      id: `usage_ai_${envelope.event_id}`,
+      tenant_id: envelope.tenant_id,
+      metric: "ai_model_usage",
+      source: "lcp_model_usage_telemetry",
+      confidence: "reported",
+      capture_source: payload.pep_type || "agent_observation",
+      agent_id: payload.agent_id || null,
+      device_id: payload.device_id || envelope.device_id,
+      provider: payload.provider || "Unknown",
+      model: payload.model || "unknown",
+      call_count: 1,
+      input_tokens: Number(tokens.input_tokens || tokens.prompt_tokens || 0),
+      output_tokens: Number(tokens.output_tokens || tokens.completion_tokens || 0),
+      total_tokens: Number(tokens.total_tokens || 0)
+        || Number(tokens.input_tokens || tokens.prompt_tokens || 0) + Number(tokens.output_tokens || tokens.completion_tokens || 0),
+      currency: "USD",
+      recorded_at: envelope.timestamp
+    };
+  }
+  if (!usageRecord) return;
+  if (!Array.isArray(state.fleet.usageRecords)) state.fleet.usageRecords = [];
+  if (state.fleet.usageRecords.some((record) => record.id === usageRecord.id)) return;
+  state.fleet.usageRecords.unshift(usageRecord);
+}
+
+function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null, sourcePath = null } = {}) {
   const items = normalizeTelemetryItems(body);
   const tenantId = requestTenantId(req, body, tenantIdFromPath);
+  const deviceId = requestDeviceId(req, body);
+  const batchId = body.batch_id || null;
+  const receivedAt = new Date().toISOString();
+  const totals = telemetryIngestTotalsFor(tenantId);
+  let accepted = 0;
+  let duplicates = 0;
+  let rejected = 0;
+  const rejections = [];
+  const safeItems = [];
+
+  for (const item of items) {
+    if (hasUnredactedTelemetrySecret(item)) {
+      rejected += 1;
+      totals.quarantined_secrets += 1;
+      rejections.push({
+        reason: "unredacted_secret_detected",
+        event_id: typeof item?.event_id === "string" ? item.event_id : null,
+        event_type: typeof item?.event_type === "string" ? item.event_type : null,
+        payload_hash: sha256(stableJson(item ?? null))
+      });
+      continue;
+    }
+    safeItems.push(item);
+    const { envelope, error, detail } = normalizeTelemetryEnvelope(item, {
+      kind,
+      tenant_id: tenantId,
+      device_id: deviceId,
+      batch_id: batchId,
+      received_at: receivedAt,
+      source_path: sourcePath
+    });
+    if (error) {
+      rejected += 1;
+      totals.invalid_envelopes += 1;
+      rejections.push({
+        reason: error,
+        detail: detail || null,
+        event_id: typeof item?.event_id === "string" ? item.event_id : null,
+        event_type: typeof item?.event_type === "string" ? item.event_type : null
+      });
+      continue;
+    }
+    const { duplicate } = storeTelemetryEnvelope(envelope);
+    if (duplicate) {
+      duplicates += 1;
+      continue;
+    }
+    accepted += 1;
+    totals.by_event_type[envelope.event_type] = (totals.by_event_type[envelope.event_type] || 0) + 1;
+    bridgeTelemetryUsageEvent(envelope);
+  }
+
+  totals.accepted += accepted;
+  totals.duplicates += duplicates;
+  totals.rejected += rejected;
+  totals.batches += 1;
+  totals.last_ingest_at = receivedAt;
+  if (!totals.first_ingest_at) totals.first_ingest_at = receivedAt;
+
+  if (rejections.length) {
+    state.fleet.telemetryRejections.unshift({
+      id: `telrej_${crypto.randomUUID()}`,
+      tenant_id: tenantId,
+      device_id: deviceId,
+      batch_id: batchId,
+      telemetry_kind: kind || "envelope",
+      source_path: sourcePath,
+      rejected_count: rejected,
+      rejections: rejections.slice(0, 20),
+      received_at: receivedAt
+    });
+    state.fleet.telemetryRejections = state.fleet.telemetryRejections.slice(0, maxTelemetryRejections);
+    recordAudit("telemetry.events_rejected", "telemetry_batch", batchId || "single-event", {
+      tenant_id: tenantId,
+      device_id: deviceId,
+      rejected,
+      reasons: [...new Set(rejections.map((item) => item.reason))]
+    });
+  }
+
+  state.fleet.telemetryBatchReceipts.unshift({
+    id: batchId || `telemetry_${crypto.randomUUID()}`,
+    tenant_id: tenantId,
+    device_id: deviceId,
+    telemetry_kind: kind || "envelope",
+    source_path: sourcePath,
+    received_events: items.length,
+    accepted,
+    duplicates,
+    rejected,
+    received_at: receivedAt
+  });
+  state.fleet.telemetryBatchReceipts = state.fleet.telemetryBatchReceipts.slice(0, maxTelemetryBatchReceipts);
+
+  // Only items that passed the secret quarantine may be persisted; key-based
+  // redaction cannot mask secret values embedded in free-text fields.
+  let safeBody;
+  if (Array.isArray(body.events) || Array.isArray(body.items) || Array.isArray(body)) {
+    safeBody = Array.isArray(body) ? {} : { ...body };
+    delete safeBody.events;
+    delete safeBody.items;
+    safeBody.events = safeItems;
+  } else {
+    safeBody = safeItems.length ? body : { quarantined: true, reason: "unredacted_secret_detected" };
+  }
   const eventType = body.event_type || (kind ? `telemetry.${kind}.v1` : "telemetry.envelope.v1");
   const event = recordEvent({
     event_id: body.batch_id || body.event_id || req.headers["x-pollek-event-id"] || `evt_${crypto.randomUUID()}`,
     tenant_id: tenantId,
-    device_id: requestDeviceId(req, body),
+    device_id: deviceId,
     event_type: body.schema_version === "telemetry-batch.v1" || kind === "batch" ? "telemetry.batch.v1" : eventType,
     severity: body.severity || (kind === "security_event" ? "warning" : "info"),
     payload: {
       schema_version: body.schema_version || (kind === "batch" ? "telemetry-batch.v1" : "telemetry-envelope.v1"),
       telemetry_kind: kind || "envelope",
       event_count: items.length,
-      sample: redactSensitive(items.slice(0, 5)),
-      source_path: body.source_path || null,
-      raw: redactSensitive(body)
+      accepted,
+      duplicates,
+      rejected,
+      sample: redactSensitive(safeItems.slice(0, 5)),
+      source_path: body.source_path || sourcePath || null,
+      raw: redactSensitive(safeBody)
     }
   });
+  try {
+    refreshTenantUsage(tenantId);
+  } catch {
+    // usage counters are advisory for ingest; never fail telemetry acceptance on them
+  }
+  scheduleRuntimePersist("telemetry.ingest");
   return {
     schema_version: "telemetry-ingest-response.v1",
-    accepted: true,
+    accepted: accepted + duplicates,
+    rejected,
+    stored: accepted,
+    duplicates,
     tenant_id: tenantId,
+    batch_id: batchId,
     event_id: event.event_id,
-    received_events: items.length
+    received_events: items.length,
+    rejection_reasons: rejections.slice(0, 5)
   };
 }
 
@@ -3180,9 +3472,17 @@ function telemetryEventsFor(tenantId = "local", predicate = () => true) {
     .slice(0, 100);
 }
 
+function telemetryEnvelopesFor(tenantId = "local", predicate = () => true, limit = defaultApiPageLimit) {
+  return (state.fleet.telemetryEnvelopes || [])
+    .filter((envelope) => !tenantId || envelope.tenant_id === tenantId)
+    .filter(predicate)
+    .slice(0, boundedInt(limit, defaultApiPageLimit, 0, maxApiPageLimit));
+}
+
 function telemetryEntityPage(kind, tenantId = "local") {
   const classByKind = { resources: "resource", tools: "tool", identities: "identity" };
   const sourceByKind = { resources: "registry/resources", tools: "registry/tools", identities: "telemetry/identities" };
+  const eventTypeByKind = { resources: "resource_access", tools: "tool_usage", identities: "identity_access" };
   const entityClass = classByKind[kind];
   const items = state.fleet.localEntities
     .filter((entity) => entity.tenant_id === tenantId || tenantId === "local")
@@ -3196,6 +3496,22 @@ function telemetryEntityPage(kind, tenantId = "local") {
       last_seen_at: entity.last_seen_at,
       payload: entity.raw || entity
     }));
+  const seenIds = new Set(items.map((item) => item.id));
+  for (const envelope of telemetryEnvelopesFor(tenantId, (item) => item.event_type === eventTypeByKind[kind])) {
+    const payload = envelope.payload || {};
+    const id = payload.resource_id || payload.tool_id || payload.identity_id || payload.user_subject || payload.agent_id || envelope.event_id;
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    items.push({
+      id,
+      name: payload.name || payload.tool_name || payload.target_redacted || id,
+      device_id: envelope.device_id,
+      user_subject: payload.user_subject || null,
+      status: "observed",
+      last_seen_at: envelope.timestamp,
+      payload
+    });
+  }
   return {
     schema_version: `pollek.cloud.telemetry-${kind}-page.v1`,
     tenant_id: tenantId,
@@ -3205,14 +3521,18 @@ function telemetryEntityPage(kind, tenantId = "local") {
 }
 
 function observationTelemetryPage(tenantId = "local") {
+  const envelopes = telemetryEnvelopesFor(tenantId, (envelope) =>
+    envelope.event_type === "agent_observation" || String(envelope.event_type || "").includes("observation"));
+  const seenIds = new Set(envelopes.map((envelope) => envelope.event_id));
   const entities = state.fleet.localEntities
     .filter((entity) => entity.entity_type === "observability" && entity.source === "telemetry/observations")
     .map((entity) => entity.raw || entity);
-  const events = telemetryEventsFor(tenantId, (event) => String(event.event_type || "").includes("observation"));
+  const events = telemetryEventsFor(tenantId, (event) =>
+    String(event.event_type || "").includes("observation") && !seenIds.has(event.event_id));
   return {
     schema_version: "observation-page.v1",
     tenant_id: tenantId,
-    items: [...entities, ...events],
+    items: [...envelopes, ...entities, ...events],
     next_cursor: null
   };
 }
@@ -3232,7 +3552,77 @@ function enforcementStatusPage(tenantId = "local") {
   return {
     schema_version: "enforcement-status-list.v1",
     tenant_id: tenantId,
-    items: enforcement
+    items: [
+      ...telemetryEnvelopesFor(tenantId, (envelope) => envelope.event_type === "enforcement_result"),
+      ...enforcement
+    ]
+  };
+}
+
+function guardEventTimeKey(envelope) {
+  return envelope.timestamp
+    || envelope.payload?.timestamp
+    || envelope.payload?.ts
+    || envelope.payload?.guard_event?.timestamp
+    || envelope.received_at
+    || "";
+}
+
+function guardEventsPage(tenantId = "local") {
+  const items = telemetryEnvelopesFor(tenantId, (envelope) => ["guard_incident", "guard_event"].includes(envelope.event_type));
+  items.sort((a, b) => String(guardEventTimeKey(b)).localeCompare(String(guardEventTimeKey(a))));
+  return {
+    schema_version: "guard-events.v1",
+    tenant_id: tenantId,
+    count: items.length,
+    items
+  };
+}
+
+// Read-side parity with the Local Control Plane dashboard log endpoints:
+// the same {count, <key>} response shapes backed by ingested envelopes.
+function telemetryLogPage(tenantId, eventTypes, key) {
+  const items = telemetryEnvelopesFor(tenantId, (envelope) => eventTypes.includes(envelope.event_type));
+  return { count: items.length, [key]: items };
+}
+
+const TELEMETRY_EXPORT_EVENT_TYPES = [
+  "decision",
+  "decision_log",
+  "tool_invocation",
+  "resource_access",
+  "policy_deployment",
+  "agent_telemetry",
+  "agent_observation",
+  "ai_usage_event",
+  "guard_incident",
+  "guard_event",
+  "security_event",
+  "enforcement_result"
+];
+
+function exportTelemetryCsv(envelopes, tenantId) {
+  let csv = "timestamp,event_type,event_id,tenant_id,details\n";
+  for (const envelope of envelopes) {
+    const details = JSON.stringify(envelope).replace(/"/g, '""');
+    csv += `${envelope.timestamp || ""},${envelope.event_type || ""},${envelope.event_id || ""},${tenantId},"${details}"\n`;
+  }
+  return csv;
+}
+
+function telemetryIngestStatus() {
+  return {
+    schema_version: "pollek.cloud.telemetry-ingest-status.v1",
+    generated_at: new Date().toISOString(),
+    retention: {
+      max_envelopes: maxTelemetryEnvelopes,
+      max_batch_receipts: maxTelemetryBatchReceipts,
+      max_rejections: maxTelemetryRejections
+    },
+    stored_envelopes: state.fleet.telemetryEnvelopes?.length || 0,
+    totals: state.fleet.telemetryIngestTotals || [],
+    recent_batches: (state.fleet.telemetryBatchReceipts || []).slice(0, 20),
+    recent_rejections: (state.fleet.telemetryRejections || []).slice(0, 10)
   };
 }
 
@@ -5364,6 +5754,15 @@ async function contractDiscovery() {
       telemetry_identities: "/v1/telemetry/identities",
       telemetry_enforcement_status: "/v1/telemetry/enforcement-status",
       telemetry_query: "/api/telemetry/query",
+      telemetry_ingest_status: "/api/telemetry/ingest-status",
+      tenant_telemetry_decision_logs: "/v1/tenants/{tenant_id}/telemetry/decision-logs",
+      tenant_logs_decisions: "/v1/tenants/{tenant_id}/logs/decisions",
+      tenant_logs_tool_invocations: "/v1/tenants/{tenant_id}/logs/tool-invocations",
+      tenant_logs_resource_access: "/v1/tenants/{tenant_id}/logs/resource-access",
+      tenant_logs_policy_deployments: "/v1/tenants/{tenant_id}/logs/policy-deployments",
+      tenant_logs_pep_health: "/v1/tenants/{tenant_id}/logs/pep-health",
+      tenant_telemetry_guard_events: "/v1/tenants/{tenant_id}/telemetry/guard-events",
+      tenant_telemetry_export: "/v1/tenants/{tenant_id}/telemetry/export",
       tenant_signup: "/v1/signup/tenant",
       invitation_accept: "/v1/invitations/accept",
       auth_login: "/v1/auth/login",
@@ -7306,13 +7705,56 @@ async function handleApi(req, res) {
   if (req.method === "GET" && tenantTelemetryReadMatch) {
     const tenantId = decodeURIComponent(tenantTelemetryReadMatch[1]);
     const kind = tenantTelemetryReadMatch[2];
-    sendJson(res, 200, kind === "observations" || kind === "guard-events" ? observationTelemetryPage(tenantId) : telemetryEntityPage(kind, tenantId));
+    if (kind === "guard-events") {
+      sendJson(res, 200, guardEventsPage(tenantId));
+      return true;
+    }
+    sendJson(res, 200, kind === "observations" ? observationTelemetryPage(tenantId) : telemetryEntityPage(kind, tenantId));
+    return true;
+  }
+
+  const tenantDecisionLogsMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/telemetry\/decision-logs$/)
+    || pathname.match(/^\/v1\/tenants\/([^/]+)\/logs\/decisions$/);
+  if (req.method === "GET" && tenantDecisionLogsMatch) {
+    sendJson(res, 200, telemetryLogPage(decodeURIComponent(tenantDecisionLogsMatch[1]), ["decision_log", "decision"], "decisions"));
+    return true;
+  }
+
+  const tenantLogsMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/logs\/(tool-invocations|resource-access|policy-deployments|pep-health)$/);
+  if (req.method === "GET" && tenantLogsMatch) {
+    const tenantId = decodeURIComponent(tenantLogsMatch[1]);
+    const logKind = tenantLogsMatch[2];
+    const logPages = {
+      "tool-invocations": () => telemetryLogPage(tenantId, ["tool_invocation", "tool_usage"], "tool_invocations"),
+      "resource-access": () => telemetryLogPage(tenantId, ["resource_access"], "resource_accesses"),
+      "policy-deployments": () => telemetryLogPage(tenantId, ["policy_deployment"], "policy_deployments"),
+      "pep-health": () => telemetryLogPage(tenantId, ["pep_binding_status"], "pep_health")
+    };
+    sendJson(res, 200, logPages[logKind]());
+    return true;
+  }
+
+  const tenantTelemetryExportMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/telemetry\/export$/);
+  if (req.method === "GET" && tenantTelemetryExportMatch) {
+    const tenantId = decodeURIComponent(tenantTelemetryExportMatch[1]);
+    const format = url.searchParams.get("format") || "json";
+    const envelopes = telemetryEnvelopesFor(tenantId, (envelope) => TELEMETRY_EXPORT_EVENT_TYPES.includes(envelope.event_type));
+    if (format === "csv") {
+      sendText(res, 200, exportTelemetryCsv(envelopes, tenantId), "text/csv");
+      return true;
+    }
+    sendJson(res, 200, envelopes);
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/telemetry/ingest-status") {
+    sendJson(res, 200, telemetryIngestStatus());
     return true;
   }
 
   if (req.method === "POST" && pathname === "/v1/telemetry/batches") {
     const body = await readBody(req);
-    const response = recordTelemetryPayload(req, body, { kind: "batch" });
+    const response = recordTelemetryPayload(req, body, { kind: "batch", sourcePath: pathname });
     sendJson(res, 202, { ...response, batch_id: body.batch_id || null });
     return true;
   }
@@ -7322,7 +7764,8 @@ async function handleApi(req, res) {
     const body = await readBody(req);
     const response = recordTelemetryPayload(req, body, {
       kind: tenantTelemetryIngestMatch ? "event" : telemetryIngestKinds.get(pathname),
-      tenantIdFromPath: tenantTelemetryIngestMatch ? decodeURIComponent(tenantTelemetryIngestMatch[1]) : null
+      tenantIdFromPath: tenantTelemetryIngestMatch ? decodeURIComponent(tenantTelemetryIngestMatch[1]) : null,
+      sourcePath: pathname
     });
     sendJson(res, 202, response);
     return true;
@@ -7336,7 +7779,7 @@ async function handleApi(req, res) {
       ...body,
       event_type: body.event_type || "browser_extension.event.v1",
       schema_version: body.schema_version || "browser-extension-event.v1"
-    }, { kind: "browser_extension", tenantIdFromPath: tenantId });
+    }, { kind: "browser_extension", tenantIdFromPath: tenantId, sourcePath: pathname });
     sendJson(res, 202, response);
     return true;
   }
@@ -7388,15 +7831,67 @@ async function handleApi(req, res) {
     const tenantId = decodeURIComponent(registrySyncMatch[1]);
     const body = await readBody(req);
     const items = Array.isArray(body.items) ? body.items : [];
+    const deviceId = body.device_id || req.headers["x-pollek-device-id"] || "unknown";
+    const lcpId = body.lcp_id || req.headers["x-pollek-lcp-id"] || "lcp_local";
+    const snapshot = { agents: [], tools: [], resources: [], entities: [], relationships: [], agent_inventory: [] };
+    const telemetryItems = [];
+    for (const item of items) {
+      const itemType = String(item?.type || item?.object_type || "entity");
+      const data = item?.data ?? item;
+      if (itemType === "agent") snapshot.agents.push(data);
+      else if (itemType === "tool") snapshot.tools.push(data);
+      else if (itemType === "resource") snapshot.resources.push(data);
+      else if (itemType === "relationship") snapshot.relationships.push(data);
+      else if (itemType === "agent_inventory") snapshot.agent_inventory.push(data);
+      else if (itemType === "entity") snapshot.entities.push(data);
+      else if (itemType.startsWith("telemetry_")) {
+        telemetryItems.push({
+          ...(typeof data === "object" && data !== null ? data : { value: data }),
+          event_type: data?.event_type || itemType.replace(/^telemetry_/, "")
+        });
+      } else snapshot.entities.push({ object_type: itemType, data });
+    }
+    const entityCount = ingestLocalEntitySnapshot(snapshot, {
+      device_id: deviceId === "unknown" ? "device_local_windows" : deviceId,
+      lcp_id: lcpId,
+      user_subject: body.user_subject || "unknown"
+    });
+    const telemetryResult = telemetryItems.length
+      ? recordTelemetryPayload(req, { tenant_id: tenantId, device_id: deviceId, events: telemetryItems }, { kind: "registry_sync", tenantIdFromPath: tenantId, sourcePath: pathname })
+      : null;
+    const run = {
+      id: `entity_sync_${crypto.randomUUID()}`,
+      mode: "registry_sync_push",
+      status: "completed",
+      entity_count: entityCount,
+      telemetry_count: telemetryItems.length,
+      lcp_id: lcpId,
+      device_id: deviceId,
+      tenant_id: tenantId,
+      created_at: new Date().toISOString()
+    };
+    state.fleet.localEntitySyncRuns.unshift(run);
+    state.fleet.localEntitySyncRuns = state.fleet.localEntitySyncRuns.slice(0, 20);
+    recordAudit("registry.sync_ingested", "lcp", lcpId, { tenant_id: tenantId, item_count: items.length, entity_count: entityCount, telemetry_count: telemetryItems.length });
     recordEvent({
       event_id: `evt_${crypto.randomUUID()}`,
       tenant_id: tenantId,
-      device_id: req.headers["x-pollek-device-id"] || "unknown",
+      device_id: deviceId,
       event_type: "registry.sync.v1",
       severity: "info",
-      payload: { item_count: items.length, sample: items.slice(0, 5) }
+      payload: { item_count: items.length, entity_count: entityCount, telemetry_count: telemetryItems.length, sample: redactSensitive(items.slice(0, 5)) }
     });
-    sendJson(res, 202, { accepted: true, tenant_id: tenantId, item_count: items.length });
+    scheduleRuntimePersist("registry.sync");
+    sendJson(res, 202, {
+      schema_version: "pollek.cloud.registry-sync-response.v1",
+      accepted: true,
+      tenant_id: tenantId,
+      item_count: items.length,
+      ingested_entities: entityCount,
+      telemetry: telemetryResult
+        ? { accepted: telemetryResult.accepted, rejected: telemetryResult.rejected, duplicates: telemetryResult.duplicates }
+        : { accepted: 0, rejected: 0, duplicates: 0 }
+    });
     return true;
   }
 
