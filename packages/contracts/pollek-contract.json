@@ -1,6 +1,6 @@
 {
   "schema_version": "pollek-cloud-contract-discovery.v1",
-  "contract_version": "2026.06.29",
+  "contract_version": "2026.07.13",
   "cloud_version": "0.1.0-dev",
   "minimum_local_enforcement_kit": "1.0.0-beta.1",
   "source_compatibility_target": "1.0.0-beta.10",
@@ -46,12 +46,20 @@
         "/v1/tenants/{tenant_id}/telemetry/tools",
         "/v1/tenants/{tenant_id}/telemetry/identities",
         "/v1/tenants/{tenant_id}/telemetry/guard-events",
+        "/v1/tenants/{tenant_id}/telemetry/decision-logs",
+        "/v1/tenants/{tenant_id}/telemetry/export",
+        "/v1/tenants/{tenant_id}/logs/decisions",
+        "/v1/tenants/{tenant_id}/logs/tool-invocations",
+        "/v1/tenants/{tenant_id}/logs/resource-access",
+        "/v1/tenants/{tenant_id}/logs/policy-deployments",
+        "/v1/tenants/{tenant_id}/logs/pep-health",
+        "/api/telemetry/ingest-status",
         "/v1/tenants/{tenant_id}/browser-extension/events",
         "/v1/tenants/{tenant_id}/browser-extension/status",
         "/api/lcp/usage-ledgers",
         "/v1/tenants/{tenant_id}/lcp/usage-ledgers"
       ],
-      "controls": ["secret_redaction", "schema_version_validation", "tenant_device_headers", "sender_constrained_token_planned", "lcp_usage_ledger_validation"]
+      "controls": ["secret_redaction", "schema_version_validation", "tenant_device_headers", "sender_constrained_token_planned", "lcp_usage_ledger_validation", "event_id_idempotency", "per_event_secret_quarantine", "bounded_envelope_retention", "telemetry_envelope_persistence"]
     },
     "pollek.cloud.local_entities": {
       "direction": "local_to_cloud",
@@ -220,6 +228,11 @@
     "telemetry_otlp": true,
     "lcp_telemetry_endpoint_family": true,
     "lcp_contract_compatibility_2026_06_30": true,
+    "lcp_telemetry_envelope_persistence": true,
+    "telemetry_event_id_idempotency": true,
+    "telemetry_secret_quarantine": true,
+    "lcp_telemetry_read_parity": true,
+    "lcp_registry_sync_entity_ingest": true,
     "ai_policy_editor": true,
     "ai_policy_provider_redaction_citations": true,
     "local_entity_inventory": true,

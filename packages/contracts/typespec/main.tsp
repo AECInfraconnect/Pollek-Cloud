@@ -193,6 +193,30 @@ model OfflineLicenseRequest {
 @route("/v1/tenants/{tenant_id}/telemetry/guard-events")
 @get op listTenantTelemetryGuardEvents(@path tenant_id: string): unknown;
 
+@route("/v1/tenants/{tenant_id}/telemetry/decision-logs")
+@get op listTenantTelemetryDecisionLogs(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/telemetry/export")
+@get op exportTenantTelemetry(@path tenant_id: string, @query format?: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/logs/decisions")
+@get op listTenantDecisionLogs(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/logs/tool-invocations")
+@get op listTenantToolInvocations(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/logs/resource-access")
+@get op listTenantResourceAccess(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/logs/policy-deployments")
+@get op listTenantPolicyDeployments(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/logs/pep-health")
+@get op listTenantPepHealth(@path tenant_id: string): unknown;
+
+@route("/api/telemetry/ingest-status")
+@get op getTelemetryIngestStatus(): unknown;
+
 @route("/v1/tenants/{tenant_id}/browser-extension/events")
 @post op ingestBrowserExtensionEvent(@path tenant_id: string, @body request: Record<unknown>): unknown;
 
