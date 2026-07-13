@@ -1,0 +1,14 @@
+# Normalize line endings so generated Contract Hub artifacts compare byte-for-byte
+# across platforms. Without this, Git checks these files out with CRLF on Windows
+# while scripts/generate-openapi.mjs and scripts/generate-sdk.mjs emit LF, which
+# makes `npm run contracts:check` fail only on windows-latest.
+* text=auto eol=lf
+
+# Generated artifacts and their sources that the drift check compares exactly.
+packages/contracts/openapi.json text eol=lf
+packages/contracts/pollek-contract.json text eol=lf
+packages/contracts/typespec/main.tsp text eol=lf
+packages/sdk/pollek-cloud-client.mjs text eol=lf
+
+# PowerShell scripts keep CRLF for Windows-native tooling.
+*.ps1 text eol=crlf
