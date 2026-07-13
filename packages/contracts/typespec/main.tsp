@@ -271,6 +271,18 @@ model OfflineLicenseRequest {
 @route("/v1/tenants/{tenant_id}/billing/usage")
 @get op getBillingUsage(@path tenant_id: string): unknown;
 
+@route("/api/reports/cost-tokens/overview")
+@get op getCostTokenOverview(@query tenant_id?: string): unknown;
+
+@route("/api/reports/cost-tokens")
+@get op getCostTokenReport(@query tenant_id?: string, @query group_by?: string, @query format?: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/reports/cost-tokens/overview")
+@get op getTenantCostTokenOverview(@path tenant_id: string): unknown;
+
+@route("/v1/tenants/{tenant_id}/reports/cost-tokens")
+@get op getTenantCostTokenReport(@path tenant_id: string, @query group_by?: string, @query format?: string): unknown;
+
 @route("/v1/tenants/{tenant_id}/billing/invoices")
 @get op listInvoices(@path tenant_id: string): unknown;
 

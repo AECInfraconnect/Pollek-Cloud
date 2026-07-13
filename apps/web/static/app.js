@@ -23,6 +23,19 @@ const refs = {
   operationsFocus: document.querySelector("#operationsFocus"),
   aiUsageSummary: document.querySelector("#aiUsageSummary"),
   aiUsageDeviceList: document.querySelector("#aiUsageDeviceList"),
+  costTokenScope: document.querySelector("#costTokenScope"),
+  costTokenRefresh: document.querySelector("#costTokenRefresh"),
+  costTokenScopeNote: document.querySelector("#costTokenScopeNote"),
+  costTokenSummary: document.querySelector("#costTokenSummary"),
+  costTokenDimension: document.querySelector("#costTokenDimension"),
+  costTokenReportTitle: document.querySelector("#costTokenReportTitle"),
+  costTokenGroupHeader: document.querySelector("#costTokenGroupHeader"),
+  costTokenRows: document.querySelector("#costTokenRows"),
+  costTokenCategoryCards: document.querySelector("#costTokenCategoryCards"),
+  costTokenDownloadCsv: document.querySelector("#costTokenDownloadCsv"),
+  costTokenDownloadJson: document.querySelector("#costTokenDownloadJson"),
+  costTokenDetailTitle: document.querySelector("#costTokenDetailTitle"),
+  costTokenDetail: document.querySelector("#costTokenDetail"),
   statusFilter: document.querySelector("#statusFilter"),
   entitySyncButton: document.querySelector("#entitySyncButton"),
   entityTypeFilter: document.querySelector("#entityTypeFilter"),
@@ -142,6 +155,11 @@ const app = {
   collapsedEntityGroups: readStoredSet("pollek.cloud.entities.groups.collapsed"),
   expandedEntityGroups: readStoredSet("pollek.cloud.entities.groups.expanded"),
   selectedTenantId: localStorage.getItem("pollek.cloud.selected_tenant_id") || "local",
+  costTokenScope: localStorage.getItem("pollek.cloud.cost_token.scope") || "tenant",
+  costTokenDimension: localStorage.getItem("pollek.cloud.cost_token.dimension") || "user",
+  costTokenSelectedKey: null,
+  costTokenOverview: null,
+  costTokenLoading: false,
   currentSessionId: sessionStorage.getItem("pollek.cloud.current_session_id") || "",
   currentSessionToken: sessionStorage.getItem("pollek.cloud.current_session_token") || "",
   lastInvitationToken: sessionStorage.getItem("pollek.cloud.last_invitation_token") || "",
@@ -252,6 +270,11 @@ function selectedTenantRecord() {
 function setSelectedTenant(tenantId) {
   app.selectedTenantId = tenantId || "local";
   localStorage.setItem("pollek.cloud.selected_tenant_id", app.selectedTenantId);
+  if (app.costTokenScope !== "all") {
+    app.costTokenSelectedKey = null;
+    if (app.activeTab === "cost_tokens") ensureCostTokensLoaded(true);
+    else app.costTokenOverview = null;
+  }
   render();
 }
 
@@ -542,6 +565,18 @@ function setActiveTab(tabName, options = {}) {
   if (options.updateHash !== false) {
     history.replaceState(null, "", `#tab=${nextTab}`);
   }
+
+  if (nextTab === "cost_tokens") ensureCostTokensLoaded();
+}
+
+function ensureCostTokensLoaded(force = false) {
+  const desiredTenant = costTokenScopeTenant();
+  const loadedTenant = app.costTokenOverview ? app.costTokenOverview.tenant_id : null;
+  const stale = !app.costTokenOverview
+    || app.costTokenOverview.error
+    || (desiredTenant ? loadedTenant !== desiredTenant : loadedTenant !== "all");
+  if (force || stale) loadCostTokenOverview({ force });
+  else renderCostTokens();
 }
 
 async function refresh() {
@@ -1110,6 +1145,254 @@ function renderAiUsageOverview() {
       </div>
     </article>
   `).join("") : `<div class="detail-row"><strong>No AI usage recorded</strong><span>Usage appears after Local Pollek sends model/tool telemetry.</span></div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Cost & Tokens reporting portal
+// ---------------------------------------------------------------------------
+
+const COST_TOKEN_DIMENSION_LABELS = {
+  user: { title: "Breakdown by User", header: "User", card: "Users" },
+  device: { title: "Breakdown by Device", header: "Device", card: "Devices" },
+  agent: { title: "Breakdown by Agent", header: "Agent", card: "Agents" },
+  tenant: { title: "Breakdown by Tenant", header: "Tenant", card: "Tenants" },
+  model: { title: "Breakdown by Model", header: "Provider / Model", card: "Models" },
+  provider: { title: "Breakdown by Provider", header: "Provider", card: "Providers" }
+};
+
+function costTokenScopeTenant() {
+  return app.costTokenScope === "all" ? null : selectedTenantId();
+}
+
+function costTokenReportBasePath() {
+  const tenantId = costTokenScopeTenant();
+  return tenantId ? `/v1/tenants/${encodePathPart(tenantId)}/reports/cost-tokens` : "/api/reports/cost-tokens";
+}
+
+async function loadCostTokenOverview(options = {}) {
+  if (app.costTokenLoading && !options.force) return;
+  app.costTokenLoading = true;
+  const tenantId = costTokenScopeTenant();
+  const overviewPath = tenantId
+    ? `/v1/tenants/${encodePathPart(tenantId)}/reports/cost-tokens/overview`
+    : "/api/reports/cost-tokens/overview";
+  try {
+    const response = await fetch(overviewPath);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    app.costTokenOverview = await response.json();
+  } catch (error) {
+    app.costTokenOverview = { error: String(error), totals: {}, categories: {} };
+  } finally {
+    app.costTokenLoading = false;
+    renderCostTokens();
+  }
+}
+
+function renderCostTokens() {
+  if (!refs.costTokenSummary) return;
+  if (refs.costTokenScope) refs.costTokenScope.value = app.costTokenScope;
+  if (refs.costTokenDimension) refs.costTokenDimension.value = app.costTokenDimension;
+
+  const scopeTenant = costTokenScopeTenant();
+  if (refs.costTokenScopeNote) {
+    refs.costTokenScopeNote.textContent = scopeTenant
+      ? `Scope: ${selectedTenantRecord().name} (${scopeTenant}). Cost and token usage reported by Local Pollek control planes.`
+      : "Scope: all tenants. Aggregated cost and token usage across every Local Pollek control plane.";
+  }
+
+  const overview = app.costTokenOverview;
+  if (!overview || overview.error) {
+    const message = overview?.error ? `Unable to load report: ${escapeHtml(overview.error)}` : "Loading cost and token report...";
+    refs.costTokenSummary.innerHTML = `<div class="usage-total-card neutral"><span><strong>--</strong><small>${message}</small></span></div>`;
+    refs.costTokenRows.innerHTML = `<tr><td colspan="7" class="empty-cell">${message}</td></tr>`;
+    refs.costTokenCategoryCards.innerHTML = "";
+    return;
+  }
+
+  renderCostTokenSummary(overview.totals || {}, overview.sources || {});
+  renderCostTokenTable(overview);
+  renderCostTokenCategoryCards(overview);
+  updateCostTokenDownloadLinks();
+}
+
+function renderCostTokenSummary(totals, sources) {
+  const cards = [
+    { kind: "billing", value: fmtMoney(totals.cost_cents || 0), label: "Total cost", status: totals.cost_cents ? "warn" : "neutral" },
+    { kind: "telemetry", value: fmtNumber(totals.total_tokens || 0), label: `${fmtNumber(totals.input_tokens || 0)} in / ${fmtNumber(totals.output_tokens || 0)} out`, status: "neutral" },
+    { kind: "billing", value: fmtCredits(totals.credits || 0), label: `${(totals.credit_pools || []).length} credit pools`, status: (totals.credit_pools || []).length ? "warn" : "neutral" },
+    { kind: "device", value: fmtNumber(totals.devices || 0), label: "Devices", status: totals.devices ? "ok" : "warn" },
+    { kind: "identity", value: fmtNumber(totals.users || 0), label: "Users", status: totals.users ? "ok" : "warn" },
+    { kind: "agent", value: fmtNumber(totals.agents || 0), label: "Agents", status: totals.agents ? "ok" : "warn" },
+    { kind: "device", value: fmtNumber(totals.tenants || 0), label: "Tenants", status: totals.tenants ? "ok" : "neutral" },
+    { kind: "telemetry", value: fmtNumber(totals.calls || 0), label: "Model calls", status: "neutral" },
+    { kind: "integration", value: `${fmtNumber(sources.lcp_usage_ledger || 0)}/${fmtNumber(totals.records || 0)}`, label: "LCP ledger records", status: (sources.lcp_usage_ledger || 0) ? "ok" : "warn" }
+  ];
+  refs.costTokenSummary.innerHTML = cards.map((item) => `
+    <div class="usage-total-card ${statusClass(item.status)}">
+      ${iconHtml(item.kind, item.status)}
+      <span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.label)}</small></span>
+    </div>
+  `).join("");
+}
+
+function renderCostTokenTable(overview) {
+  const dimension = app.costTokenDimension;
+  const labels = COST_TOKEN_DIMENSION_LABELS[dimension] || COST_TOKEN_DIMENSION_LABELS.user;
+  const groups = (overview.categories && overview.categories[dimension]) || [];
+  if (refs.costTokenReportTitle) refs.costTokenReportTitle.textContent = labels.title;
+  if (refs.costTokenGroupHeader) refs.costTokenGroupHeader.textContent = labels.header;
+
+  if (!groups.length) {
+    refs.costTokenRows.innerHTML = `<tr><td colspan="7" class="empty-cell">No cost or token usage reported for this scope yet.</td></tr>`;
+    return;
+  }
+
+  refs.costTokenRows.innerHTML = "";
+  for (const group of groups) {
+    const tr = document.createElement("tr");
+    tr.className = "cost-token-row";
+    if (group.key === app.costTokenSelectedKey) tr.classList.add("selected");
+    const meta = costTokenGroupMeta(group, dimension);
+    tr.innerHTML = `
+      <td>
+        <div class="cost-token-group">
+          <strong>${escapeHtml(group.label || group.key)}</strong>
+          ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+        </div>
+      </td>
+      <td class="num">${escapeHtml(fmtNumber(group.calls || 0))}</td>
+      <td class="num">${escapeHtml(fmtNumber(group.input_tokens || 0))}</td>
+      <td class="num">${escapeHtml(fmtNumber(group.output_tokens || 0))}</td>
+      <td class="num"><strong>${escapeHtml(fmtNumber(group.total_tokens || 0))}</strong></td>
+      <td class="num">${escapeHtml(fmtCredits(group.credits || 0))}</td>
+      <td class="num"><strong>${escapeHtml(fmtMoney(group.cost_cents || 0))}</strong></td>
+    `;
+    tr.addEventListener("click", () => {
+      app.costTokenSelectedKey = group.key;
+      renderCostTokens();
+      renderCostTokenDetail(group, dimension);
+    });
+    refs.costTokenRows.append(tr);
+  }
+
+  const selected = groups.find((group) => group.key === app.costTokenSelectedKey);
+  if (selected) renderCostTokenDetail(selected, dimension);
+  else if (refs.costTokenDetail) {
+    refs.costTokenDetailTitle.textContent = "Select a row to drill in";
+    refs.costTokenDetail.innerHTML = `<p class="muted-note">Select any ${escapeHtml(labels.header.toLowerCase())} to see a per-model cost and token breakdown.</p>`;
+  }
+}
+
+function costTokenGroupMeta(group, dimension) {
+  if (dimension === "device") {
+    return [group.os_family && group.os_family !== "unknown" ? osFamilyLabel(group.os_family) : "", group.lcp_id, `${group.user_count} users`, `${group.agent_count} agents`].filter(Boolean).join(" | ");
+  }
+  if (dimension === "user") return [`${group.device_count} devices`, `${group.agent_count} agents`, `${group.model_count} models`].join(" | ");
+  if (dimension === "agent") return [`${group.device_count} devices`, `${group.user_count} users`, `${group.model_count} models`].join(" | ");
+  if (dimension === "tenant") return [`${group.device_count} devices`, `${group.user_count} users`, `${group.agent_count} agents`].join(" | ");
+  if (dimension === "model") return [`${group.device_count} devices`, `${group.user_count} users`, group.credit_pools.length ? group.credit_pools[0] : "direct token meter"].join(" | ");
+  if (dimension === "provider") return [`${group.model_count} models`, `${group.agent_count} agents`].join(" | ");
+  return "";
+}
+
+function renderCostTokenCategoryCards(overview) {
+  if (!refs.costTokenCategoryCards) return;
+  const dimensions = ["user", "device", "agent", "tenant", "model", "provider"];
+  refs.costTokenCategoryCards.innerHTML = dimensions.map((dimension) => {
+    const labels = COST_TOKEN_DIMENSION_LABELS[dimension];
+    const groups = (overview.categories && overview.categories[dimension]) || [];
+    const top = groups[0];
+    const active = dimension === app.costTokenDimension ? " active" : "";
+    return `
+      <button type="button" class="cost-token-category-card${active}" data-cost-dimension="${dimension}">
+        <span class="cost-token-category-head">
+          ${iconHtml(dimension === "user" ? "identity" : dimension === "tenant" ? "device" : dimension, "neutral")}
+          <span><strong>${escapeHtml(String(groups.length))}</strong><small>${escapeHtml(labels.card)}</small></span>
+        </span>
+        <span class="cost-token-category-top">${top ? `Top: ${escapeHtml(top.label || top.key)} (${escapeHtml(fmtMoney(top.cost_cents || 0))})` : "No usage yet"}</span>
+      </button>
+    `;
+  }).join("");
+  refs.costTokenCategoryCards.querySelectorAll("[data-cost-dimension]").forEach((button) => {
+    button.addEventListener("click", () => {
+      app.costTokenDimension = button.dataset.costDimension;
+      app.costTokenSelectedKey = null;
+      localStorage.setItem("pollek.cloud.cost_token.dimension", app.costTokenDimension);
+      renderCostTokens();
+    });
+  });
+}
+
+function renderCostTokenDetail(group, dimension) {
+  if (!refs.costTokenDetail) return;
+  const labels = COST_TOKEN_DIMENSION_LABELS[dimension] || COST_TOKEN_DIMENSION_LABELS.user;
+  refs.costTokenDetailTitle.textContent = `${labels.header}: ${group.label || group.key}`;
+  const models = costTokenModelsForGroup(group, dimension);
+  const stats = [
+    ["Total cost", fmtMoney(group.cost_cents || 0)],
+    ["Total tokens", fmtNumber(group.total_tokens || 0)],
+    ["Input tokens", fmtNumber(group.input_tokens || 0)],
+    ["Output tokens", fmtNumber(group.output_tokens || 0)],
+    ["Cached input", fmtNumber(group.cached_input_tokens || 0)],
+    ["Credits", fmtCredits(group.credits || 0)],
+    ["Model calls", fmtNumber(group.calls || 0)],
+    ["Records", `${fmtNumber(group.records || 0)} (${fmtNumber(group.reported_records || 0)} reported / ${fmtNumber(group.estimated_records || 0)} estimated)`],
+    ["Last activity", group.last_activity_at ? fmtTime(group.last_activity_at) : "n/a"]
+  ];
+  refs.costTokenDetail.innerHTML = `
+    <div class="cost-token-detail-stats">
+      ${stats.map(([label, value]) => `<div class="detail-row"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("")}
+    </div>
+    <div class="cost-token-detail-models">
+      <h4>Provider / model breakdown</h4>
+      ${models.length ? models.map((model) => `
+        <div class="cost-token-model-row">
+          <span><strong>${escapeHtml(model.provider)} / ${escapeHtml(model.model)}</strong><small>${escapeHtml(fmtNumber(model.calls))} calls | ${escapeHtml(model.confidence)}</small></span>
+          <span>${escapeHtml(fmtNumber(model.total_tokens))} tokens<br><b>${escapeHtml(fmtMoney(model.cost_cents))}</b></span>
+        </div>
+      `).join("") : `<p class="muted-note">No per-model detail available for this ${escapeHtml(labels.header.toLowerCase())}.</p>`}
+    </div>
+  `;
+}
+
+function costTokenModelsForGroup(group, dimension) {
+  const records = (app.data?.usage_records || []).filter((record) => {
+    if (String(record.metric || "") !== "ai_model_usage" && usageTokenCount(record) === 0 && usageCostCents(record) === 0) return false;
+    const scopeTenant = costTokenScopeTenant();
+    if (scopeTenant && record.tenant_id !== scopeTenant) return false;
+    return costTokenRecordMatchesGroup(record, dimension, group.key);
+  });
+  const models = new Map();
+  for (const record of records) {
+    const provider = recordValue(record, ["provider"], "unknown provider");
+    const model = recordValue(record, ["model"], "unknown model");
+    const key = `${provider}::${model}`;
+    if (!models.has(key)) models.set(key, { provider, model, total_tokens: 0, cost_cents: 0, calls: 0, confidence: recordValue(record, ["confidence", "source"], "reported") });
+    const entry = models.get(key);
+    entry.total_tokens += usageTokenCount(record);
+    entry.cost_cents += usageCostCents(record);
+    entry.calls += Number(recordValue(record, ["call_count", "calls"], 0) || 0);
+  }
+  return [...models.values()].sort((a, b) => b.cost_cents - a.cost_cents || b.total_tokens - a.total_tokens);
+}
+
+function costTokenRecordMatchesGroup(record, dimension, key) {
+  switch (dimension) {
+    case "device": return recordValue(record, ["device_id", "device_name"], "unknown-device") === key;
+    case "user": return recordValue(record, ["user_subject", "user_id"], "unknown-user") === key;
+    case "agent": return recordValue(record, ["agent_id", "entity_id", "object_id"], recordValue(record, ["agent_name", "name"], "unknown-agent")) === key;
+    case "tenant": return recordValue(record, ["tenant_id"], "unknown-tenant") === key;
+    case "model": return `${recordValue(record, ["provider"], "unknown")}::${recordValue(record, ["model"], "unknown")}` === key;
+    case "provider": return recordValue(record, ["provider"], "unknown") === key;
+    default: return false;
+  }
+}
+
+function updateCostTokenDownloadLinks() {
+  const base = costTokenReportBasePath();
+  const dimension = app.costTokenDimension;
+  if (refs.costTokenDownloadCsv) refs.costTokenDownloadCsv.href = `${base}?group_by=${dimension}&format=csv`;
+  if (refs.costTokenDownloadJson) refs.costTokenDownloadJson.href = `${base}?group_by=${dimension}&format=json`;
 }
 
 const entityNavigationGroups = [
@@ -3994,6 +4277,22 @@ refs.addPaymentButton?.addEventListener("click", addPaymentReference);
 refs.refreshInvoicesButton?.addEventListener("click", refreshInvoicePreview);
 refs.billingWebhookButton?.addEventListener("click", sendBillingWebhookTest);
 refs.issueLicenseButton?.addEventListener("click", issueAdminLicense);
+refs.costTokenScope?.addEventListener("change", (event) => {
+  app.costTokenScope = event.target.value === "all" ? "all" : "tenant";
+  app.costTokenSelectedKey = null;
+  localStorage.setItem("pollek.cloud.cost_token.scope", app.costTokenScope);
+  ensureCostTokensLoaded(true);
+});
+
+refs.costTokenDimension?.addEventListener("change", (event) => {
+  app.costTokenDimension = event.target.value;
+  app.costTokenSelectedKey = null;
+  localStorage.setItem("pollek.cloud.cost_token.dimension", app.costTokenDimension);
+  renderCostTokens();
+});
+
+refs.costTokenRefresh?.addEventListener("click", () => ensureCostTokensLoaded(true));
+
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });
   const payload = await response.json();
