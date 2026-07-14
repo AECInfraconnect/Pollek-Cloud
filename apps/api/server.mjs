@@ -2388,10 +2388,48 @@ function isCostTokenRecord(record) {
     || usageFieldNumber(record, ["allocated_cost_cents", "estimated_cost_cents", "cost_cents", "amount_cents", "billed_credits", "credits"]) > 0;
 }
 
-function costTokenRecordsForScope(tenantId = null) {
-  const records = (state.fleet.usageRecords || []).filter(isCostTokenRecord);
-  if (!tenantId) return records;
-  return records.filter((record) => record.tenant_id === tenantId);
+function usageRecordTimestamp(record) {
+  return usageFieldString(record, ["observed_at", "recorded_at", "occurred_at"], "");
+}
+
+// Parse an ISO date/datetime query param. A bare date (YYYY-MM-DD) is treated
+// as the start of that UTC day; the caller decides end-of-range inclusivity.
+function parseRangeBound(value, { endOfDay = false } = {}) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  let iso = raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) iso = endOfDay ? `${raw}T23:59:59.999Z` : `${raw}T00:00:00.000Z`;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function normalizeCostTokenRange(range = {}) {
+  const fromMs = parseRangeBound(range.from, { endOfDay: false });
+  const toMs = parseRangeBound(range.to, { endOfDay: true });
+  return {
+    from: fromMs,
+    to: toMs,
+    from_iso: fromMs === null ? null : new Date(fromMs).toISOString(),
+    to_iso: toMs === null ? null : new Date(toMs).toISOString()
+  };
+}
+
+function recordWithinRange(record, range) {
+  if (range.from === null && range.to === null) return true;
+  const stamp = usageRecordTimestamp(record);
+  const ms = stamp ? Date.parse(stamp) : NaN;
+  if (Number.isNaN(ms)) return range.from === null && range.to === null ? true : false;
+  if (range.from !== null && ms < range.from) return false;
+  if (range.to !== null && ms > range.to) return false;
+  return true;
+}
+
+function costTokenRecordsForScope(tenantId = null, range = null) {
+  let records = (state.fleet.usageRecords || []).filter(isCostTokenRecord);
+  if (tenantId) records = records.filter((record) => record.tenant_id === tenantId);
+  if (range && (range.from !== null || range.to !== null)) records = records.filter((record) => recordWithinRange(record, range));
+  return records;
 }
 
 function tenantDisplayName(tenantId) {
@@ -2573,28 +2611,36 @@ function summarizeCostTokens(records) {
   };
 }
 
-function costTokenReport(tenantId, dimension) {
+function costTokenRangeMeta(range) {
+  return { from: range.from_iso, to: range.to_iso, applied: range.from !== null || range.to !== null };
+}
+
+function costTokenReport(tenantId, dimension, rangeInput = {}) {
   const groupBy = COST_TOKEN_DIMENSIONS.includes(dimension) ? dimension : "device";
   const scope = tenantId || null;
-  const records = costTokenRecordsForScope(scope);
+  const range = normalizeCostTokenRange(rangeInput);
+  const records = costTokenRecordsForScope(scope, range);
   return {
     schema_version: "pollek.cloud.cost-token-report.v1",
     tenant_id: tenantId || "all",
     scope: tenantId ? "tenant" : "all_tenants",
     group_by: groupBy,
+    range: costTokenRangeMeta(range),
     generated_at: nowIso(),
     totals: summarizeCostTokens(records),
     groups: aggregateCostTokens(records, groupBy)
   };
 }
 
-function costTokenOverview(tenantId) {
+function costTokenOverview(tenantId, rangeInput = {}) {
   const scope = tenantId || null;
-  const records = costTokenRecordsForScope(scope);
+  const range = normalizeCostTokenRange(rangeInput);
+  const records = costTokenRecordsForScope(scope, range);
   const overview = {
     schema_version: "pollek.cloud.cost-token-overview.v1",
     tenant_id: tenantId || "all",
     scope: tenantId ? "tenant" : "all_tenants",
+    range: costTokenRangeMeta(range),
     generated_at: nowIso(),
     totals: summarizeCostTokens(records),
     categories: {}
@@ -6665,17 +6711,19 @@ async function handleApi(req, res) {
     return true;
   }
 
+  const costTokenRangeFromQuery = () => ({ from: url.searchParams.get("from"), to: url.searchParams.get("to") });
+
   if (req.method === "GET" && pathname === "/api/reports/cost-tokens/overview") {
     const tenantParam = url.searchParams.get("tenant_id");
     const tenantId = tenantParam && tenantParam !== "all" ? tenantParam : null;
-    sendJson(res, 200, costTokenOverview(tenantId));
+    sendJson(res, 200, costTokenOverview(tenantId, costTokenRangeFromQuery()));
     return true;
   }
 
   if (req.method === "GET" && pathname === "/api/reports/cost-tokens") {
     const tenantParam = url.searchParams.get("tenant_id");
     const tenantId = tenantParam && tenantParam !== "all" ? tenantParam : null;
-    const report = costTokenReport(tenantId, url.searchParams.get("group_by") || "device");
+    const report = costTokenReport(tenantId, url.searchParams.get("group_by") || "device", costTokenRangeFromQuery());
     if ((url.searchParams.get("format") || "json") === "csv") {
       sendText(res, 200, costTokenReportCsv(report), "text/csv");
       return true;
@@ -6686,14 +6734,14 @@ async function handleApi(req, res) {
 
   const tenantCostTokenOverviewMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/reports\/cost-tokens\/overview$/);
   if (req.method === "GET" && tenantCostTokenOverviewMatch) {
-    sendJson(res, 200, costTokenOverview(decodeURIComponent(tenantCostTokenOverviewMatch[1])));
+    sendJson(res, 200, costTokenOverview(decodeURIComponent(tenantCostTokenOverviewMatch[1]), costTokenRangeFromQuery()));
     return true;
   }
 
   const tenantCostTokenReportMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/reports\/cost-tokens$/);
   if (req.method === "GET" && tenantCostTokenReportMatch) {
     const tenantId = decodeURIComponent(tenantCostTokenReportMatch[1]);
-    const report = costTokenReport(tenantId, url.searchParams.get("group_by") || "device");
+    const report = costTokenReport(tenantId, url.searchParams.get("group_by") || "device", costTokenRangeFromQuery());
     if ((url.searchParams.get("format") || "json") === "csv") {
       sendText(res, 200, costTokenReportCsv(report), "text/csv");
       return true;

@@ -115,7 +115,8 @@ The console has a `Cost & Tokens` tab that surfaces the cost and token usage rep
   - `GET /api/reports/cost-tokens/overview` and `GET /v1/tenants/{tenant_id}/reports/cost-tokens/overview` return totals plus all six category breakdowns for the dashboard.
   - `GET /api/reports/cost-tokens?group_by=<dimension>&format=json|csv` and `GET /v1/tenants/{tenant_id}/reports/cost-tokens?group_by=<dimension>&format=json|csv` return a single downloadable report. `group_by` accepts `device`, `user`, `agent`, `tenant`, `model`, or `provider`.
   - Omit `tenant_id` (or pass `tenant_id=all`) on the `/api/reports/cost-tokens*` endpoints for a cross-tenant view.
-- The portal tab shows an overview summary strip, a category summary, a clickable breakdown table that drills into a per-provider/model detail, and CSV/JSON download buttons for the current report.
+- All report and overview endpoints accept optional `from` and `to` query params (ISO date `YYYY-MM-DD` or full timestamp) to bound the reporting window. A bare `from` date starts at 00:00:00 UTC and a bare `to` date is inclusive through 23:59:59.999 UTC. The applied window is echoed back as `range: { from, to, applied }`.
+- The portal tab shows an overview summary strip, a category summary, a clickable breakdown table that drills into a per-provider/model detail, a time-range selector (All time / Today / Last 7 days / Last 30 days / This month / Custom), and CSV/JSON download buttons for the current report and window.
 
 ## Local Pollek Entity Sync
 
