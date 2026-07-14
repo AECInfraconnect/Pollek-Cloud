@@ -958,6 +958,24 @@ test("cost and token reporting aggregates usage by device, user, agent, tenant, 
     const csv = await csvResponse.text();
     assert.match(csv, /group_by,key,label,input_tokens,output_tokens,cached_input_tokens,total_tokens,cost_cents/);
     assert.match(csv, /report-user/);
+
+    // Time-range filtering: the event is dated 2026-07-13; a window that ends
+    // before it must exclude it, and a window covering it must include it.
+    const beforeRange = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=user&from=2026-01-01&to=2026-01-31");
+    assert.equal(beforeRange.response.status, 200);
+    assert.equal(beforeRange.payload.range.applied, true);
+    assert.equal(beforeRange.payload.range.from, "2026-01-01T00:00:00.000Z");
+    assert.equal(beforeRange.payload.range.to, "2026-01-31T23:59:59.999Z");
+    assert.ok(!beforeRange.payload.groups.some((group) => group.key === "corp\\report-user"), "out-of-range window must exclude the event");
+
+    const coveringRange = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=user&from=2026-07-13&to=2026-07-13");
+    const coveringUser = coveringRange.payload.groups.find((group) => group.key === "corp\\report-user");
+    assert.ok(coveringUser, "covering window must include the event");
+    assert.equal(coveringUser.total_tokens, 1400);
+
+    const rangedOverview = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens/overview?from=2026-01-01&to=2026-01-31");
+    assert.equal(rangedOverview.payload.range.applied, true);
+    assert.equal(rangedOverview.payload.totals.total_tokens, 0);
   });
 });
 
@@ -1336,7 +1354,12 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /data-tab-panel="cost_tokens"/);
   assert.match(html, /class="tab" data-tab="cost_tokens"/);
   assert.match(html, /id="costTokenScope"/);
+  assert.match(html, /id="costTokenRange"/);
+  assert.match(html, /id="costTokenFrom"/);
+  assert.match(html, /id="costTokenTo"/);
   assert.match(html, /id="costTokenDimension"/);
+  assert.match(app, /function costTokenRange/);
+  assert.match(app, /function costTokenRangeQuery/);
   assert.match(html, /id="costTokenSummary"/);
   assert.match(html, /id="costTokenRows"/);
   assert.match(html, /id="costTokenCategoryCards"/);

@@ -321,6 +321,16 @@
                     <option value="tenant">Current tenant</option>
                     <option value="all">All tenants</option>
                   </select>
+                  <select id="costTokenRange" aria-label="Report time range">
+                    <option value="all">All time</option>
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                    <option value="month">This month</option>
+                    <option value="custom">Custom range</option>
+                  </select>
+                  <input id="costTokenFrom" type="date" aria-label="Report start date" hidden />
+                  <input id="costTokenTo" type="date" aria-label="Report end date" hidden />
                   <button id="costTokenRefresh" class="secondary-button">Refresh</button>
                 </div>
               </div>

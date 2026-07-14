@@ -24,6 +24,9 @@ const refs = {
   aiUsageSummary: document.querySelector("#aiUsageSummary"),
   aiUsageDeviceList: document.querySelector("#aiUsageDeviceList"),
   costTokenScope: document.querySelector("#costTokenScope"),
+  costTokenRange: document.querySelector("#costTokenRange"),
+  costTokenFrom: document.querySelector("#costTokenFrom"),
+  costTokenTo: document.querySelector("#costTokenTo"),
   costTokenRefresh: document.querySelector("#costTokenRefresh"),
   costTokenScopeNote: document.querySelector("#costTokenScopeNote"),
   costTokenSummary: document.querySelector("#costTokenSummary"),
@@ -157,6 +160,9 @@ const app = {
   selectedTenantId: localStorage.getItem("pollek.cloud.selected_tenant_id") || "local",
   costTokenScope: localStorage.getItem("pollek.cloud.cost_token.scope") || "tenant",
   costTokenDimension: localStorage.getItem("pollek.cloud.cost_token.dimension") || "user",
+  costTokenRangePreset: localStorage.getItem("pollek.cloud.cost_token.range") || "all",
+  costTokenFrom: localStorage.getItem("pollek.cloud.cost_token.from") || "",
+  costTokenTo: localStorage.getItem("pollek.cloud.cost_token.to") || "",
   costTokenSelectedKey: null,
   costTokenOverview: null,
   costTokenLoading: false,
@@ -1164,6 +1170,52 @@ function costTokenScopeTenant() {
   return app.costTokenScope === "all" ? null : selectedTenantId();
 }
 
+function isoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+// Resolve the active preset (or custom inputs) into {from, to} date strings.
+function costTokenRange() {
+  const preset = app.costTokenRangePreset || "all";
+  if (preset === "custom") {
+    return { from: app.costTokenFrom || "", to: app.costTokenTo || "" };
+  }
+  const now = new Date();
+  const today = isoDate(now);
+  if (preset === "today") return { from: today, to: today };
+  if (preset === "7d") {
+    const from = new Date(now);
+    from.setUTCDate(from.getUTCDate() - 6);
+    return { from: isoDate(from), to: today };
+  }
+  if (preset === "30d") {
+    const from = new Date(now);
+    from.setUTCDate(from.getUTCDate() - 29);
+    return { from: isoDate(from), to: today };
+  }
+  if (preset === "month") {
+    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    return { from: isoDate(from), to: today };
+  }
+  return { from: "", to: "" };
+}
+
+function costTokenRangeQuery(prefix = "&") {
+  const { from, to } = costTokenRange();
+  const parts = [];
+  if (from) parts.push(`from=${encodeURIComponent(from)}`);
+  if (to) parts.push(`to=${encodeURIComponent(to)}`);
+  return parts.length ? `${prefix}${parts.join("&")}` : "";
+}
+
+function costTokenRangeLabel() {
+  const preset = app.costTokenRangePreset || "all";
+  if (preset === "all") return "All time";
+  const { from, to } = costTokenRange();
+  if (!from && !to) return "All time";
+  return `${from || "start"} to ${to || "now"}`;
+}
+
 function costTokenReportBasePath() {
   const tenantId = costTokenScopeTenant();
   return tenantId ? `/v1/tenants/${encodePathPart(tenantId)}/reports/cost-tokens` : "/api/reports/cost-tokens";
@@ -1173,9 +1225,10 @@ async function loadCostTokenOverview(options = {}) {
   if (app.costTokenLoading && !options.force) return;
   app.costTokenLoading = true;
   const tenantId = costTokenScopeTenant();
-  const overviewPath = tenantId
+  const overviewBase = tenantId
     ? `/v1/tenants/${encodePathPart(tenantId)}/reports/cost-tokens/overview`
     : "/api/reports/cost-tokens/overview";
+  const overviewPath = `${overviewBase}${costTokenRangeQuery("?")}`;
   try {
     const response = await fetch(overviewPath);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1192,12 +1245,23 @@ function renderCostTokens() {
   if (!refs.costTokenSummary) return;
   if (refs.costTokenScope) refs.costTokenScope.value = app.costTokenScope;
   if (refs.costTokenDimension) refs.costTokenDimension.value = app.costTokenDimension;
+  if (refs.costTokenRange) refs.costTokenRange.value = app.costTokenRangePreset;
+  const customRange = app.costTokenRangePreset === "custom";
+  if (refs.costTokenFrom) {
+    refs.costTokenFrom.hidden = !customRange;
+    refs.costTokenFrom.value = app.costTokenFrom;
+  }
+  if (refs.costTokenTo) {
+    refs.costTokenTo.hidden = !customRange;
+    refs.costTokenTo.value = app.costTokenTo;
+  }
 
   const scopeTenant = costTokenScopeTenant();
   if (refs.costTokenScopeNote) {
-    refs.costTokenScopeNote.textContent = scopeTenant
-      ? `Scope: ${selectedTenantRecord().name} (${scopeTenant}). Cost and token usage reported by Local Pollek control planes.`
-      : "Scope: all tenants. Aggregated cost and token usage across every Local Pollek control plane.";
+    const scopeText = scopeTenant
+      ? `Scope: ${selectedTenantRecord().name} (${scopeTenant}).`
+      : "Scope: all tenants (aggregated across every Local Pollek control plane).";
+    refs.costTokenScopeNote.textContent = `${scopeText} Range: ${costTokenRangeLabel()}. Cost and token usage reported by Local Pollek control planes.`;
   }
 
   const overview = app.costTokenOverview;
@@ -1391,8 +1455,9 @@ function costTokenRecordMatchesGroup(record, dimension, key) {
 function updateCostTokenDownloadLinks() {
   const base = costTokenReportBasePath();
   const dimension = app.costTokenDimension;
-  if (refs.costTokenDownloadCsv) refs.costTokenDownloadCsv.href = `${base}?group_by=${dimension}&format=csv`;
-  if (refs.costTokenDownloadJson) refs.costTokenDownloadJson.href = `${base}?group_by=${dimension}&format=json`;
+  const range = costTokenRangeQuery("&");
+  if (refs.costTokenDownloadCsv) refs.costTokenDownloadCsv.href = `${base}?group_by=${dimension}&format=csv${range}`;
+  if (refs.costTokenDownloadJson) refs.costTokenDownloadJson.href = `${base}?group_by=${dimension}&format=json${range}`;
 }
 
 const entityNavigationGroups = [
@@ -4290,6 +4355,32 @@ refs.costTokenDimension?.addEventListener("change", (event) => {
   localStorage.setItem("pollek.cloud.cost_token.dimension", app.costTokenDimension);
   renderCostTokens();
 });
+
+refs.costTokenRange?.addEventListener("change", (event) => {
+  app.costTokenRangePreset = event.target.value;
+  app.costTokenSelectedKey = null;
+  localStorage.setItem("pollek.cloud.cost_token.range", app.costTokenRangePreset);
+  if (app.costTokenRangePreset !== "custom") {
+    ensureCostTokensLoaded(true);
+  } else {
+    renderCostTokens();
+  }
+});
+
+function applyCustomCostTokenDate(which, value) {
+  if (which === "from") {
+    app.costTokenFrom = value;
+    localStorage.setItem("pollek.cloud.cost_token.from", value);
+  } else {
+    app.costTokenTo = value;
+    localStorage.setItem("pollek.cloud.cost_token.to", value);
+  }
+  app.costTokenSelectedKey = null;
+  ensureCostTokensLoaded(true);
+}
+
+refs.costTokenFrom?.addEventListener("change", (event) => applyCustomCostTokenDate("from", event.target.value));
+refs.costTokenTo?.addEventListener("change", (event) => applyCustomCostTokenDate("to", event.target.value));
 
 refs.costTokenRefresh?.addEventListener("click", () => ensureCostTokensLoaded(true));
 
