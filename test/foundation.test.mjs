@@ -566,6 +566,44 @@ test("api foundation enforces security headers, bounded responses, and body limi
     assert.match(health.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
     assert.ok(health.headers.get("x-pollek-request-id"));
 
+    // The Cloud starts empty; populate real state through the gated ingest
+    // endpoints, then verify bounded-response pagination against it.
+    await api(baseUrl, "/api/entities/ingest", {
+      method: "POST",
+      body: {
+        device_id: "device_pagination_test",
+        lcp_id: "lcp_pagination_test",
+        snapshot: {
+          agents: [
+            { agent_id: "agent_page_1", name: "Pagination Agent 1", trust_level: "trusted" },
+            { agent_id: "agent_page_2", name: "Pagination Agent 2", trust_level: "trusted" },
+            { agent_id: "agent_page_3", name: "Pagination Agent 3", trust_level: "trusted" }
+          ]
+        }
+      }
+    });
+    await api(baseUrl, "/v1/telemetry/batches", {
+      method: "POST",
+      body: {
+        schema_version: "telemetry-batch.v1",
+        tenant_id: "local",
+        device_id: "device_pagination_test",
+        batch_id: "batch_pagination_usage",
+        events: [
+          {
+            schema_version: "telemetry-envelope.v1",
+            event_id: "evt_pagination_usage_1",
+            event_type: "ai_usage_event",
+            timestamp: "2026-07-13T06:00:00Z",
+            tenant_id: "local",
+            device_id: "device_pagination_test",
+            redaction_applied: true,
+            payload: { agent_id: "agent_page_1", user_subject: "corp\\pager", provider: "Anthropic", model: "claude-sonnet-4", tokens: { input_tokens: 10, output_tokens: 5, total_tokens: 15 }, cost: { currency: "USD", total_cost: 0.01 } }
+          }
+        ]
+      }
+    });
+
     const fleet = await api(baseUrl, "/api/fleet?local_entities_limit=2&usage_records_limit=1");
     assert.equal(fleet.response.status, 200);
     assert.equal(fleet.payload.local_entities.length, 2);
@@ -573,6 +611,7 @@ test("api foundation enforces security headers, bounded responses, and body limi
     assert.equal(fleet.payload.response_limits.local_entities.limit, 2);
     assert.equal(fleet.payload.response_limits.local_entities.returned, 2);
     assert.equal(fleet.payload.response_limits.usage_records.limit, 1);
+    assert.ok(fleet.payload.response_limits.local_entities.total >= 3);
 
     const invalidJson = await fetch(`${baseUrl}/api/lcp/usage-ledgers`, {
       method: "POST",
