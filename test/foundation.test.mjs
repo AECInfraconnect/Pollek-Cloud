@@ -1405,9 +1405,13 @@ test("console wires fleet operations controls", async () => {
   assert.match(app, /function ledgerNextAction/);
   assert.match(app, /function renderAiUsageOverview/);
   assert.match(app, /function aiUsageRecords/);
-  assert.match(app, /function syntheticUsageRecords/);
   assert.match(app, /function usageAgentKey/);
   assert.match(app, /function usageModelKey/);
+  // The console must never fabricate cost/token usage on the client: usage is
+  // read only from the Cloud SSOT (real LCP-reported / bridged records).
+  assert.doesNotMatch(app, /function syntheticUsageRecords/);
+  assert.doesNotMatch(app, /estimated_from_lcp_telemetry/);
+  assert.doesNotMatch(app, /function stableNumber/);
   assert.match(app, /agent first/);
   assert.match(app, /Awaiting LCP ledger/);
   assert.match(app, /LCP ledger records/);
