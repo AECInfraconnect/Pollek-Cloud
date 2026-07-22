@@ -696,6 +696,24 @@ test("dev server serves latest LCP compatibility endpoints", async (t) => {
     assert.equal(capability.payload.schema_version, "local-capability-snapshot.v2");
     assert.equal(capability.payload.tenant_id, "local");
 
+    // No bundle exists on an empty Cloud, so bundles/latest is 404 until one is
+    // deployed through the real gated compliance flow (authz tuple + deploy).
+    const noBundleYet = await api(baseUrl, "/v1/tenants/local/devices/device_local_windows/bundles/latest", {
+      method: "POST",
+      body: { installed_revision: "2026.06.29.000" }
+    });
+    assert.equal(noBundleYet.response.status, 404);
+
+    await api(baseUrl, "/api/authz/tuples", {
+      method: "POST",
+      body: { tenant_id: "local", principal: "user:local-dev-security-admin", relation: "admin", object: "tenant:local" }
+    });
+    const deploy = await api(baseUrl, "/api/compliance/policy-bundles/deploy", {
+      method: "POST",
+      body: { tenant_id: "local", bundle_id: "cmp_soc2_gdpr_data_access", approved_by: "local-dev-security-admin", reason: "test bundle deploy" }
+    });
+    assert.equal(deploy.response.status, 201);
+
     const latestBundle = await api(baseUrl, "/v1/tenants/local/devices/device_local_windows/bundles/latest", {
       method: "POST",
       body: { installed_revision: "2026.06.29.000" }
@@ -876,6 +894,43 @@ test("cloud persists full LCP telemetry batches with idempotency, quarantine, an
 
     const persisted = JSON.stringify((await api(baseUrl, "/api/fleet")).payload);
     assert.doesNotMatch(persisted, /sk-should-never-persist/);
+  });
+});
+
+test("cloud boots empty of fabricated fleet data and populates only via real ingest", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    // A freshly booted Cloud must contain no fabricated operational data.
+    const fresh = await api(baseUrl, "/api/fleet");
+    assert.equal(fresh.response.status, 200);
+    assert.equal(fresh.payload.local_control_planes.length, 0);
+    assert.equal(fresh.payload.local_entities.length, 0);
+    assert.equal(fresh.payload.usage_records.length, 0);
+    assert.equal(fresh.payload.summary.local_control_planes, 0);
+    assert.equal(fresh.payload.summary.agents, 0);
+    // The org tree is derived: an empty Cloud shows only the tenant root.
+    assert.equal(fresh.payload.tree.length, 1);
+    assert.equal(fresh.payload.tree[0].type, "tenant");
+
+    // Static product catalogs are present (shipped config, not tenant data).
+    assert.ok(fresh.payload.policy_packs.length >= 1);
+    const plans = await api(baseUrl, "/v1/tenants/local/billing/usage");
+    assert.ok(plans.payload.plan, "billing plan catalog should still be available");
+
+    // Real ingest populates the fleet.
+    await api(baseUrl, "/enroll", {
+      method: "POST",
+      body: { hostname: "REAL-NODE", device_id: "device_real_1", lcp_id: "lcp_real_1", os_family: "linux" }
+    });
+    const afterEnroll = await api(baseUrl, "/api/fleet");
+    assert.equal(afterEnroll.payload.local_control_planes.length, 1);
+    assert.ok(afterEnroll.payload.tree.some((node) => node.type === "lcp" && node.id === "lcp_real_1"));
+
+    await api(baseUrl, "/api/entities/ingest", {
+      method: "POST",
+      body: { device_id: "device_real_1", lcp_id: "lcp_real_1", snapshot: { agents: [{ agent_id: "agent_real_1", name: "Real Agent", trust_level: "trusted" }] } }
+    });
+    const afterEntities = await api(baseUrl, "/api/fleet");
+    assert.ok(afterEntities.payload.local_entities.some((entity) => entity.id.includes("agent_real_1") || entity.name === "Real Agent"));
   });
 });
 
@@ -1172,6 +1227,30 @@ test("admin IAM and billing workflows enforce tenant context and redact secrets"
 
 test("billing usage exposes organization AI token and cost allocation", async (t) => {
   await withDevServer(t, async (baseUrl) => {
+    // AI usage is populated only by real reported usage; bridge one through
+    // telemetry ingest, then verify it flows into the billing usage meters.
+    await api(baseUrl, "/v1/telemetry/batches", {
+      method: "POST",
+      body: {
+        schema_version: "telemetry-batch.v1",
+        tenant_id: "local",
+        device_id: "device_billing_test",
+        batch_id: "batch_billing_usage",
+        events: [
+          {
+            schema_version: "telemetry-envelope.v1",
+            event_id: "evt_billing_usage_1",
+            event_type: "ai_usage_event",
+            timestamp: "2026-07-13T07:00:00Z",
+            tenant_id: "local",
+            device_id: "device_billing_test",
+            redaction_applied: true,
+            payload: { agent_id: "agent_billing", user_subject: "corp\\biller", provider: "Anthropic", model: "claude-sonnet-4", tokens: { input_tokens: 5000, output_tokens: 2000, total_tokens: 7000 }, cost: { currency: "USD", total_cost: 5.5 } }
+          }
+        ]
+      }
+    });
+
     const usage = await api(baseUrl, "/v1/tenants/local/billing/usage");
     assert.equal(usage.response.status, 200);
     assert.ok(usage.payload.summary.ai_model_tokens > 0);
@@ -1186,6 +1265,18 @@ test("billing usage exposes organization AI token and cost allocation", async (t
 
 test("LCP usage ledger ingestion validates agent-first credit allocation", async (t) => {
   await withDevServer(t, async (baseUrl) => {
+    // Usage ledgers are only accepted from a known LCP; register one through the
+    // real enrollment flow first (empty Cloud has no pre-seeded LCP).
+    const unknownLcp = await api(baseUrl, "/v1/tenants/local/lcp/usage-ledgers", {
+      method: "POST",
+      body: { schema_version: "pollek.lcp.usage-ledger.v1", tenant_id: "local", lcp_id: "lcp_local", usage_entries: [{ agent_id: "a", device_id: "d", user_subject: "u", provider: "p", model: "m", total_tokens: 1 }] }
+    });
+    assert.equal(unknownLcp.response.status, 400);
+    await api(baseUrl, "/enroll", {
+      method: "POST",
+      body: { hostname: "DELL-WINDOWS", device_id: "device_local_windows", lcp_id: "lcp_local", os: "windows", os_family: "windows", os_version: "Windows 11 Pro 24H2" }
+    });
+
     const valid = await api(baseUrl, "/v1/tenants/local/lcp/usage-ledgers", {
       method: "POST",
       body: {
@@ -1292,6 +1383,13 @@ test("cross-OS LCP usage ledger fixtures ingest through tenant endpoint", async 
       const servedFixture = await api(baseUrl, `/contracts/fixtures/lcp-usage-ledger/${fixtureName}.json`);
       assert.equal(servedFixture.response.status, 200);
       assert.equal(servedFixture.payload.ledger_id, fixture.ledger_id);
+
+      // Register the reporting LCP through the real enrollment flow so its
+      // ledger is accepted as coming from a known LCP.
+      await api(baseUrl, "/enroll", {
+        method: "POST",
+        body: { hostname: fixture.usage_entries[0].device_name || fixture.usage_entries[0].device_id, device_id: fixture.usage_entries[0].device_id, lcp_id: fixture.lcp_id, os_family: fixture.os_family, os_version: fixture.os_version }
+      });
 
       const result = await api(baseUrl, `/v1/tenants/${fixture.tenant_id}/lcp/usage-ledgers`, {
         method: "POST",
