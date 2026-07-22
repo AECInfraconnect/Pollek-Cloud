@@ -21,9 +21,11 @@ const contractArtifactPaths = new Map([
 ]);
 const stateFilePath = process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
 
-const host = process.env.POLLEK_CLOUD_DEV_HOST || "127.0.0.1";
-const port = Number(process.env.POLLEK_CLOUD_DEV_PORT || 8790);
-const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL || `http://${host}:${port}`;
+const port = Number(process.env.PORT || process.env.POLLEK_CLOUD_DEV_PORT || 8790);
+const host = process.env.POLLEK_CLOUD_DEV_HOST || process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL
+  || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "")
+  || `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`;
 const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
 const maxJsonBodyBytes = Number(process.env.POLLEK_CLOUD_MAX_JSON_BODY_BYTES || 1024 * 1024);
 const maxAuditPayloadBytes = Number(process.env.POLLEK_CLOUD_MAX_AUDIT_PAYLOAD_BYTES || 32 * 1024);

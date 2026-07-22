@@ -183,6 +183,8 @@ Run the release-readiness audit gate with:
 npm run audit:foundation
 ```
 
+Railway deployment topology, variables, and service provisioning steps are documented in `docs/architecture/RAILWAY_DEPLOYMENT.md`.
+
 The local server also exposes production-oriented guard rails that can be tuned before larger load tests:
 
 - `POLLEK_CLOUD_MAX_JSON_BODY_BYTES`: request body limit for JSON and form payloads. Default: `1048576`.

@@ -63,6 +63,22 @@ async function api(baseUrl, pathName, { method = "GET", body, headers = {} } = {
   return { response, payload };
 }
 
+test("railway deployment config is production-ready", async () => {
+  const railway = JSON.parse(await readFile("railway.json", "utf8"));
+  const server = await readFile("apps/api/server.mjs", "utf8");
+  const envExample = await readFile(".env.example", "utf8");
+
+  assert.equal(railway.deploy.startCommand, "npm start");
+  assert.equal(railway.deploy.healthcheckPath, "/health");
+  assert.equal(railway.deploy.restartPolicyType, "ON_FAILURE");
+  assert.match(server, /process.env.PORT/);
+  assert.match(server, /process.env.RAILWAY_PUBLIC_DOMAIN/);
+  assert.ok(server.includes('process.env.PORT ? "0.0.0.0"'));
+  assert.match(envExample, /KEYCLOAK_BASE_URL=/);
+  assert.match(envExample, /OIDC_ISSUER=/);
+  assert.match(envExample, /COSMIAN_KMS_URL=/);
+});
+
 test("contract discovery declares required cloud protocol features", async () => {
   const contract = JSON.parse(await readFile("packages/contracts/pollek-contract.json", "utf8"));
 
