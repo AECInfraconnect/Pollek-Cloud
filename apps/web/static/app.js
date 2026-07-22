@@ -412,11 +412,6 @@ function chipHtml(label, status = "neutral", title = "") {
   return `<span class="mini-chip ${statusClass(status)}" title="${escapeHtml(title || label)}">${escapeHtml(label)}</span>`;
 }
 
-function riskStatus(risk) {
-  if (risk === "high" || risk === "critical") return "bad";
-  if (risk === "medium" || risk === "warning") return "warn";
-  return "ok";
-}
 
 function objectKind(object) {
   return object?.entity_type || object?.type || object?.class || "object";
@@ -773,13 +768,7 @@ function fmtNumber(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-function stableNumber(value) {
-  return Array.from(String(value || "pollek")).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-}
 
-function slugify(value) {
-  return String(value || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "unknown";
-}
 
 function recordValue(record, keys, fallback = "") {
   for (const key of keys) {
@@ -883,57 +872,13 @@ function costBasisLabel(item) {
   return fmtMoney(item.costCents || 0);
 }
 
-function syntheticUsageRecords(tenantId = selectedTenantId()) {
-  const agentEntities = (app.data.local_entities || []).filter((entity) => {
-    const kind = entity.entity_type || entity.class || "";
-    return ["registered_agent", "found_agent", "agent"].includes(kind) || entity.class === "agent";
-  });
-  return agentEntities.map((entity, index) => {
-    const seed = stableNumber(`${entity.id}:${entity.name}:${index}`);
-    const calls = Number(entity.observability?.call_count || 18 + (seed % 42));
-    const inputTokens = calls * (850 + (seed % 550));
-    const outputTokens = calls * (220 + (seed % 240));
-    const totalTokens = inputTokens + outputTokens;
-    const estimatedCostCents = Math.max(1, Math.round(((inputTokens * 0.0000025) + (outputTokens * 0.000010)) * 100));
-    const pooledCreditAgent = /antigravity|claw|openclaw|browser ai/i.test(entity.name || "");
-    const provider = entity.vendor || (entity.status === "found_unregistered" ? "Unknown" : "Observed provider");
-    const model = pooledCreditAgent ? "gemini-2.5-pro-credit" : (entity.model || (entity.status === "found_unregistered" ? "unclassified-ai" : "observed-ai-workload"));
-    const creditPoolId = pooledCreditAgent ? `credit_pool_${slugify(entity.tenant_id || tenantId)}_gemini_agents` : "";
-    return {
-      id: `estimated_usage_${entity.id}`,
-      tenant_id: entity.tenant_id || tenantId,
-      metric: "ai_model_usage",
-      source: "estimated_from_lcp_telemetry",
-      confidence: "estimated",
-      entity_id: entity.id,
-      agent_id: entity.id,
-      agent_name: entity.name || entity.local_object_id || entity.id,
-      device_id: entity.device_id,
-      device_name: entity.device_name || entity.device_id || "Unknown device",
-      os_family: osFamilyForEntity(entity),
-      os_version: lcpForEntity(entity)?.os_version || entity.os_version || "",
-      lcp_id: entity.lcp_id,
-      user_subject: entity.user_subject || "unknown user",
-      provider,
-      model,
-      pricing_model: pooledCreditAgent ? "credit_pool" : "token_metered",
-      billing_pool_id: creditPoolId,
-      allocation_method: pooledCreditAgent ? "agent_proportional_tokens_with_device_scope" : "direct_token_meter",
-      billed_credits: pooledCreditAgent ? Number((estimatedCostCents / 100).toFixed(2)) : 0,
-      allocated_cost_cents: pooledCreditAgent ? estimatedCostCents : undefined,
-      call_count: calls,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      total_tokens: totalTokens,
-      estimated_cost_cents: estimatedCostCents,
-      currency: "USD",
-      recorded_at: entity.observability?.last_event_at || entity.last_seen_at || new Date().toISOString()
-    };
-  });
-}
-
+// Cost and token usage always reflects real records reported by Local Pollek
+// control planes (via LCP usage ledgers or bridged telemetry) as stored in the
+// Cloud SSOT (state.fleet.usageRecords, surfaced through /api/fleet). No values
+// are ever synthesized on the client; an empty result renders an honest
+// "no usage yet" state instead of fabricated numbers.
 function aiUsageRecords(tenantId = selectedTenantId()) {
-  const explicit = filteredByTenant(app.data.usage_records || [], tenantId).filter((record) => {
+  return filteredByTenant(app.data.usage_records || [], tenantId).filter((record) => {
     const metric = String(record.metric || "");
     return metric === "ai_model_usage"
       || metric.includes("token")
@@ -941,7 +886,6 @@ function aiUsageRecords(tenantId = selectedTenantId()) {
       || usageTokenCount(record) > 0
       || usageCostCents(record) > 0;
   });
-  return explicit.length ? explicit : syntheticUsageRecords(tenantId);
 }
 
 function summarizeUsageRecords(records) {

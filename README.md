@@ -4,6 +4,20 @@ Pollek Cloud is the commercial central control plane for Pollek Local Enforcemen
 
 This first local build provides a real local test URL and cloud-protocol endpoints that a Local Control Plane can probe as if it were talking to a hosted Pollek Cloud endpoint.
 
+## Starts Empty, Populated Only by Real Ingest
+
+The Cloud boots with no fabricated operational or fleet data. There are no seeded devices, LCPs, agents, entities, usage records, alarms, accounts, members, or billing accounts, and nothing is ever synthesized on the client. The only pre-populated values are static product catalogs (billing plans, policy packs, compliance bundles, adapter catalog) — the product's own offering, not tenant data.
+
+All operational state is populated exclusively through the real, gated flows, so the console shows exactly what a Local Control Plane / DEK has actually reported:
+
+- `POST /enroll` registers a Local Control Plane into the fleet (the only way an LCP becomes known).
+- `POST /api/entities/ingest` and `POST /v1/tenants/{tenant_id}/registry/sync` populate agents, tools, resources, and relationships.
+- `POST /v1/telemetry/*` and `POST /v1/tenants/{tenant_id}/lcp/usage-ledgers` populate telemetry and cost/token usage (usage ledgers are rejected from an unregistered LCP — the gate is enforced, not bypassed).
+- `POST /api/dev/seed-role-users`, tenant signup, and member/role endpoints create accounts and members on demand.
+- `POST /api/compliance/policy-bundles/deploy` (with an authorization tuple + entitlement) creates policy bundles.
+
+The org tree shown in the console is a live projection of this real state (tenant root + enrolled LCPs + reported agents), not a stored fixture. A fresh Cloud therefore shows an empty fleet until a real LCP/DEK syncs.
+
 ## Local Test URL
 
 ```powershell
