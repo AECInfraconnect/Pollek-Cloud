@@ -205,6 +205,18 @@ See working per-OS fixtures in `packages/contracts/fixtures/lcp-usage-ledger/{wi
 
 A correct minimal happy path (enroll → telemetry `ai_usage_event` → read report) should show the usage in the overview totals and the per-agent breakdown.
 
+### One-command end-to-end smoke test
+
+`scripts/smoke-sync.mjs` drives the whole gated flow (reachability → gate rejection of an unregistered LCP → enroll → entity ingest → telemetry batch → idempotent replay → usage ledger → verify via ingest-status and cost/token reports) and prints PASS/FAIL with a non-zero exit on failure. Point it at any deployment:
+
+```
+node scripts/smoke-sync.mjs https://<your-cloud-host>
+# or
+POLLEK_CLOUD_URL=https://<your-cloud-host> POLLEK_TOKEN=<bearer-if-auth-enabled> npm run smoke:sync
+```
+
+It uses a unique per-run `lcp_id`/`device_id` (`*_claude_smoke_<ts>`) so it will not collide with other testers on a shared instance.
+
 ---
 
 ## 5. Known gaps / not yet built (be honest, develop in the right direction)
