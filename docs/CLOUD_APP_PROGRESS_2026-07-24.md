@@ -64,6 +64,33 @@ transport would violate the roadmap's "no faking" rule. It is handed to Codex/DE
 against the live Cosmian service; until then production bundles are signed by the in-process
 key and we do NOT claim KMS-signed.
 
+## Delivered — boundary-class identity enforcement (every API boundary covered)
+
+Decision (chosen by the owner): **boundary-class**. Each API boundary is now covered by the
+identity mechanism appropriate to it, gated independently (all default off):
+
+- **Machine / DEK-facing** boundaries (`/v1/telemetry/*`, `/v1/metrics`, tenant/device-scoped
+  `/v1/tenants/*`, `/api/entities/ingest|sync`, `/api/lcp/usage-ledgers|change-batches`) →
+  **Keycloak JWT** (`POLLEK_KEYCLOAK_JWT_MODE`), with tenant-claim match.
+- **Human / console-admin** boundaries (everything not machine and not public) → **app
+  session token** (`POLLEK_SESSION_MODE`): `enforce` requires an explicit bearer token that
+  hashes to an active session (401 otherwise), `monitor` audits but allows, `off` = current.
+- **Public** boundaries (health, `/.well-known/pollek-contract`, `/contracts/*`, OAuth/enroll
+  bootstrap, `/v1/auth/*`, signup/invitations, event streams, and the signed `/v1/trust/*`
+  anchors) → always open.
+
+Status surfaces `iam_jwt`, `session_gate`, and `mtls` modes on `GET /api/cloud/status`.
+
+Level reached: **application path implemented + integration-tested** (3 new session-gate
+tests; 50 total pass, 4 PG skip). NOT enabled in production (default off).
+
+### Console-token prerequisite before enabling `POLLEK_SESSION_MODE=enforce`
+Today the console sends its session token on only some calls; many console fetches are
+unauthenticated. Before enforce is turned on, the console must attach `app.currentSessionToken`
+as `Authorization: Bearer` on **every** API call (a front-end follow-up), or those views will
+get 401. This mirrors the other rollouts: enforce only after the prerequisite is in place
+(mTLS→ingress, JWT→LCP tenant_id claim, session→console token on all calls).
+
 ## Explicitly NOT done (unchanged from the hand-off)
 
 - **SPIRE** not deployed — blocked on ADR 0001. `SPIRE_*` vars stay unset.
