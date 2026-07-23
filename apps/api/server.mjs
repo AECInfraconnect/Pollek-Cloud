@@ -5963,6 +5963,43 @@ const mtlsMode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_MTLS_
 // Header carrying the SPIFFE ID verified by a trusted mTLS-terminating ingress. The ingress
 // MUST overwrite/strip this from untrusted client input (documented in the Phase-B hand-off).
 const mtlsIdentityHeader = (process.env.POLLEK_MTLS_IDENTITY_HEADER || "x-pollek-spiffe-id").toLowerCase();
+// Boundary-class identity enforcement for console/admin (human) boundaries. Machine
+// (DEK-facing) boundaries are governed by the Keycloak JWT gate; public boundaries are open.
+// Default off keeps current behavior; enabling requires the console to send its session token
+// on every call (see docs/CLOUD_APP_PROGRESS).
+const sessionMode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_SESSION_MODE || "")
+  ? process.env.POLLEK_SESSION_MODE
+  : "off";
+
+// Public boundaries: never require a human/machine identity (auth bootstrap, discovery,
+// health, event streams, and the signed trust anchors which are safe to read by location).
+function isPublicApiPath(pathname) {
+  const publicExact = new Set([
+    "/health", "/.well-known/pollek-contract", "/contracts/openapi.json", "/api/cloud/status",
+    "/api/persistence/status", "/api/persistence/flush", "/api/contract-hub/drift",
+    "/api/events", "/api/events/replay", "/api/hot-reload/stream", "/api/entities/watch",
+    "/oauth/device_authorization", "/oauth/token", "/enroll",
+    "/v1/signup/tenant", "/v1/invitations/accept",
+    "/v1/auth/login", "/v1/auth/callback", "/v1/auth/logout", "/v1/auth/session"
+  ]);
+  if (publicExact.has(pathname)) return true;
+  if (pathname.startsWith("/contracts/")) return true;
+  // Signed trust anchors are readable by anyone (evidence, not location); the mutating
+  // POST /v1/trust/revocations is admin and handled as a human boundary below.
+  if (pathname.startsWith("/v1/trust/")) return true;
+  return false;
+}
+
+// A valid human session requires an explicit bearer token that hashes to an active session
+// (no dev "any active session" fallback).
+function requestHasValidSession(req) {
+  const auth = String(req.headers.authorization || "");
+  if (!auth.startsWith("Bearer ")) return false;
+  const token = auth.slice("Bearer ".length).trim();
+  if (!token) return false;
+  const hashed = tokenHash(token);
+  return (state.fleet.authSessions || []).some((item) => item.token_hash === hashed && item.status === "active");
+}
 
 function deviceSpiffeId(tenantId, deviceId, agentId = null) {
   const base = `${trustDomain}/tenant/${tenantId}/device/${deviceId}`;
@@ -6149,6 +6186,20 @@ async function handleApi(req, res) {
         return true;
       }
       recordAudit("iam.jwt_warning", "transport", pathname, { problem, expected_tenant_id: expectedTenant || null });
+    }
+  }
+
+  // Boundary-class human identity gate. Console/admin boundaries (everything that is neither a
+  // machine/DEK-facing path nor a public path) require a valid app session when
+  // POLLEK_SESSION_MODE is monitor/enforce. Machine paths are already governed by the JWT gate.
+  if (sessionMode !== "off" && !isMtlsProtectedPath(pathname) && !isPublicApiPath(pathname)) {
+    if (!requestHasValidSession(req)) {
+      if (sessionMode === "enforce") {
+        recordAudit("iam.session_rejected", "transport", pathname, { problem: "session_required" });
+        sendJson(res, 401, { error: "session_required" });
+        return true;
+      }
+      recordAudit("iam.session_warning", "transport", pathname, { problem: "session_required" });
     }
   }
 
@@ -8018,6 +8069,7 @@ async function handleApi(req, res) {
       persistence: runtimePersistenceStatus(),
       security_posture: securityPostureStatus(),
       iam_jwt: keycloak.status(),
+      session_gate: { mode: sessionMode },
       mtls: { mode: mtlsMode, identity_header: mtlsIdentityHeader, trust_domain: trustDomain },
       contract: await contractDiscovery()
     });

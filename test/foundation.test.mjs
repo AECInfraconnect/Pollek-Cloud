@@ -2194,3 +2194,55 @@ test("a revoked retired key is published as revoked, not active", async (t) => {
     assert.equal(entry.status, "revoked");
   });
 });
+
+// --- Boundary-class human identity gate (console/admin session enforcement) ---------------
+
+async function mintSessionToken(baseUrl) {
+  const signup = await api(baseUrl, "/v1/signup/tenant", {
+    method: "POST",
+    body: { organization_name: "Acme Test Org", admin_email: "admin@acme.test" }
+  });
+  assert.ok(signup.response.status === 200 || signup.response.status === 201, `signup mints a session (status ${signup.response.status})`);
+  return signup.payload.session.access_token;
+}
+
+test("session enforce: console/admin boundary needs a valid session; public + machine paths are exempt", async (t) => {
+  await withDevServer(t, { POLLEK_SESSION_MODE: "enforce" }, async (baseUrl) => {
+    // Human boundary without a session -> 401.
+    const noSession = await api(baseUrl, "/api/fleet");
+    assert.equal(noSession.response.status, 401);
+    assert.equal(noSession.payload.error, "session_required");
+
+    // Public boundaries stay open (health, signed trust anchor, discovery).
+    assert.equal((await api(baseUrl, "/health")).response.status, 200);
+    assert.equal((await api(baseUrl, "/v1/trust/policy")).response.status, 200);
+    assert.equal((await api(baseUrl, "/.well-known/pollek-contract")).response.status, 200);
+
+    // A valid session token lets the console boundary through.
+    const token = await mintSessionToken(baseUrl);
+    const withSession = await api(baseUrl, "/api/fleet", { headers: { authorization: `Bearer ${token}` } });
+    assert.equal(withSession.response.status, 200);
+
+    // Machine (DEK-facing) boundary is governed by the JWT gate, not the session gate:
+    // no session token, but the session gate must NOT reject it with session_required.
+    const machine = await api(baseUrl, "/v1/tenants/local/telemetry/events", { method: "POST", body: { schema_version: "telemetry-envelope.v1" } });
+    assert.notEqual(machine.payload?.error, "session_required");
+  });
+});
+
+test("session monitor: missing session is allowed (fail-open); status surfaces the mode", async (t) => {
+  await withDevServer(t, { POLLEK_SESSION_MODE: "monitor" }, async (baseUrl) => {
+    const res = await api(baseUrl, "/api/fleet");
+    assert.equal(res.response.status, 200, "monitor does not fail closed");
+    const status = await api(baseUrl, "/api/cloud/status");
+    assert.equal(status.payload.session_gate.mode, "monitor");
+  });
+});
+
+test("session gate is off by default (status reports off, console boundary open)", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const status = await api(baseUrl, "/api/cloud/status");
+    assert.equal(status.payload.session_gate.mode, "off");
+    assert.equal((await api(baseUrl, "/api/fleet")).response.status, 200);
+  });
+});
