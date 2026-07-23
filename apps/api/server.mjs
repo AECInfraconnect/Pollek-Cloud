@@ -6898,7 +6898,7 @@ async function handleApi(req, res) {
     // subsequent gated traffic (usage ledgers, telemetry, registry sync) is
     // recognized as coming from a known LCP. This is the only way an LCP enters
     // the fleet; nothing is pre-seeded.
-    registerEnrolledLcp(device, body);
+    const lcp = registerEnrolledLcp(device, body);
     recordEvent({
       event_id: `evt_${crypto.randomUUID()}`,
       tenant_id: tenantId,
@@ -6907,12 +6907,15 @@ async function handleApi(req, res) {
       severity: "info",
       payload: device
     });
-    addTask("device_enrollment", "completed", `Enrolled ${device.hostname}`, { device_id: deviceId });
+    addTask("device_enrollment", "completed", `Enrolled ${device.hostname}`, { device_id: deviceId, lcp_id: lcp.id });
     const bundle = spiffeBundleStatus();
     sendJson(res, 200, {
       join_token: `join_${crypto.randomUUID()}`,
       tenant_id: tenantId,
       device_id: deviceId,
+      // Echo the registered LCP id so the DEK sync client sees the exact id the fleet gate
+      // recognizes (addresses the LCP_CLOUD_SYNC_RUNBOOK "lcp_id: null" note).
+      lcp_id: lcp.id,
       spiffe_id: device.spiffe_id,
       trust_domain: trustDomain,
       // SPIRE bootstrap comes from real env config; null until SPIRE Server is provisioned

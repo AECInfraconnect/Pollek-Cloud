@@ -2139,3 +2139,20 @@ test("JWT status is surfaced (off by default) on /api/cloud/status", async (t) =
     assert.equal(res.payload.mtls.mode, "off");
   });
 });
+
+// --- Enroll echoes the registered LCP id (DEK runbook alignment) --------------------------
+
+test("enroll echoes the registered lcp_id back to the sync client", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const res = await api(baseUrl, "/enroll", {
+      method: "POST",
+      body: { hostname: "wallet-linux", os: "linux", device_id: "device_wallet", lcp_id: "lcp_wallet" }
+    });
+    assert.equal(res.response.status, 200);
+    assert.equal(res.payload.lcp_id, "lcp_wallet");
+    assert.equal(res.payload.device_id, "device_wallet");
+    // The echoed lcp_id is the id the fleet gate recognizes.
+    const fleet = await api(baseUrl, "/api/fleet");
+    assert.ok((fleet.payload.local_control_planes || []).some((lcp) => lcp.id === "lcp_wallet"));
+  });
+});
