@@ -1,6 +1,6 @@
 # Pollek Cloud — System Development Direction
 
-**Status:** working draft v0.1 · **Owner:** Cloud team · **Date:** July 2026
+**Status:** working draft v0.2 (DEK/LCP roadmap aligned) · **Owner:** Cloud team · **Date:** July 2026
 **Purpose:** a single, honest reference that (A) captures the original design idea from the founding documents, (B) adds deep research against current real-world standards, (C) states what the current system actually is, (D) analyzes the gap, and (E) proposes a phased development direction that also lands the DEK/LCP integration roadmap.
 
 > This document is written to be truthful about scope. Where the current system does **not** yet implement something in the original vision, it says so plainly. It is a map for building forward in the right direction — not a claim that the vision is already built.
@@ -111,6 +111,8 @@ Pollek Cloud today (`apps/api/server.mjs`, ~8.5k lines) is a **dependency-light 
 
 ## Part E — Proposed development direction (phased, buildable)
 
+> **Re-prioritized by the DEK/LCP roadmap — see Part F4.** The phases below remain the buildable menu, but the *near-term order* is now driven by what the Rust DEK/LCP roadmap blocks on: **trust-spine emission + mTLS/SVID first**, and the Cloud is **not** the PDP (the DEK runs the multi-PDP). Read Part F4 for the authoritative sequence.
+
 Design rules carried from A1 + Part B, to hold at every phase:
 1. **Contract-first.** Every new capability lands as a Contract Hub artifact (schema + OpenAPI + SDK) before/with the server code; drift gate stays green.
 2. **Boots empty; real gated ingest only.** No fabricated data, ever (already enforced by tests).
@@ -152,15 +154,50 @@ Cloud endpoints to build (Phase 1). All asset downloads require Bearer token; al
 
 > Mapping note: our current `/enroll` (LCP registration) and hot-reload **dispatch stub** are the seams to extend. `/enroll` should also mint the per-node webhook secret and register the node's webhook receiver URL/port (DEK 8443 / SEK 8444; health 9090/9091).
 
-### F2. Alignment with the *new* DEK/LCP roadmap — **PENDING**
+### F2. Reconciliation with the DEK/LCP forward roadmap (received)
 
-This section is intentionally open. When the new DEK/LCP roadmap document arrives, we will:
-- reconcile terminology (DEK/SEK/LCP vs Cloud LCP) and versioning (current guide = DEK/SEK v0.4.0);
-- map each new DEK/LCP capability to the Cloud phase that must support it (and re-order Part E if the roadmap changes priorities);
-- lock the concrete contract deltas (new events, asset types, schemas) into Contract Hub artifacts;
-- add acceptance tests (extending `scripts/smoke-sync.mjs`) proving each new sync path end-to-end.
+The DEK/LCP forward roadmap (`POLLEK_FORWARD_ROADMAP_FROM_ORIGINAL_VISION.md`) is authoritative for the **enforcement side** and changes three of our earlier assumptions. Reconciled honestly:
 
-**Ready for the DEK/LCP roadmap document.**
+1. **The Node "Enterprise AI Policy Engine" SRS was a *superseded prototype*.** The DEK/LCP is now a **Rust platform** (embedded Wasmtime, SQLite, 70+ `dek-*` crates) and already realises most enforcement breadth. → Our Part A2/A3 (Node/Drizzle/microservices) is the *early vision*, not the target for the enforcement kernel. **Pollek Cloud (this repo) remains the SaaS control-plane / trust-spine coordinator and stays Node — it is a different concern from the Rust enforcement kernel and does not need a rewrite.** The founding **thesis** (EAIPE — enforce across every environment, SPIFFE identity foundation, signed-bundle supply chain) still holds fully.
+2. **Two non-negotiable security principles** the Cloud must serve, not just the DEK:
+   - *"Runtime trusts evidence, not location"* — a bundle activates only after the **full Trust Policy Gate** (signature + provenance + SBOM + test-pass attestation + signer allowlist + revocation + generation monotonicity + tenant/target match). The registry is *storage, not root of trust*.
+   - *"Compiler never holds signing keys"* — hermetic compile; signing out-of-band via HSM/KMS + 2-person approval.
+3. **Integration model shifts from webhook-push toward pull + Contract Hub + Trust Gate + mTLS/SVID.** The A4 webhook-push lanes (config/PII/NER, DEK/SEK v0.4.0) and this roadmap's pull/desired-state model are **complementary, not contradictory**: A4 is the *delivery mechanism* for some artifact lanes; this roadmap says unify **all** artifact types (policy + definitions + config + signature) under **one activation/trust gate** (roadmap gap #8). The current Cloud already leans pull (`bundles/latest`, contract discovery, telemetry batch pull-push, dispatch). → **Primary model: pull + Contract Hub version negotiation + desired-state reconcile, hardened by the Trust Policy Gate; webhook-push lanes remain a supported secondary mechanism.**
+
+**North star (adopted):** Pollek = *the fleet policy control plane and trust spine for AI agents* — a vendor-neutral orchestrator that treats OpenShell, eBPF, Envoy/ext_authz, MCP-proxy, and the DEK's own PEPs as interchangeable enforcement backends, unified by one Trust Policy Gate, one SPIFFE identity fabric, and one signed-bundle supply chain. (Market framing: "OpenShell secures the *agent* — Pollek governs the *fleet*.")
+
+### F3. DEK/LCP phase → Cloud-side work it depends on
+
+The DEK/LCP owns the enforcement crates; the Cloud must provide the counterpart surfaces. "Blocking" = the DEK roadmap explicitly waits on the Cloud.
+
+| DEK/LCP phase | DEK-side (theirs) | **Cloud-side work (ours)** | Blocking? | Current Cloud state |
+|---|---|---|---|---|
+| **A — Trust spine** | `dek-trust-gate` single choke point; provenance/SBOM/attestation *consumption* | **Emit** signed bundles *including data.json*, SLSA provenance, CycloneDX SBOM, test-pass attestation; publish **signer allowlist + revocation list**; carry **generation/monotonicity + tenant/target** metadata; distribute `trust-policy.yaml`; **Trust & Provenance dashboard** (per-bundle gate results) | Partial-blocking (gate can verify only what Cloud emits) | ⚠️ ed25519 sign/verify + manifest/artifact + signing ledger only; no provenance/SBOM/attestation/allowlist/revocation |
+| **B — Identity + transport** | mTLS via SVID; JWT-SVID as OAuth client assertion (`private_key_jwt`); SVID renewal | **Require client certs (mTLS)** on the DEK↔Cloud transport; accept **JWT-SVID as OAuth client assertion**; distribute **SPIFFE trust bundle**; Workload Identity page (live renewal) | **Blocking** ("needs the Cloud side to require client certs"; "live Cloud handshake pending Cloud side") | ❌ auth "planned", loopback open; no mTLS, no JWT-SVID acceptance |
+| **C — Fleet control plane** | Etag/revision pull loop + desired-state reconcile; Relay client | **Desired-state / "newest bundle you can run" via Contract Hub** (Etag/revision negotiation); **Enterprise Relay mode** package (runtime registry + bundle cache + desired-state mirror + audit ingestor + local kill-broker); **Fleet dashboard** (version-skew, per-device trust-gate status, drift, kill-switch state) | Partial-blocking | ⚠️ `bundles/latest` + contract discovery + entity watch + cost/token exist; no revision negotiation, no Relay, no fleet-trust dashboard |
+| **D — Enforcement reach** | OpenShell PEP adapter; deepen OS PEPs; Shell/File/Clipboard guards | Model **OpenShell as an enforcement backend** in the capability/entity model; **ingest OCSF events** into the Observe Plane; represent PEP coverage per device | Non-blocking (DEK-led) | ⚠️ entity/capability model exists; no OCSF ingest, no OpenShell backend type |
+| **E — Safety + operability** | kill-switch client; SIEM emit; staged auto-update; red-team drills | **Emergency kill-switch dispatch** (Cloud push + Relay broadcast + air-gap lockfile; signed unlock; <1s propagation tracking); **SIEM forwarding transports** (Splunk HEC / syslog / Elastic / Kafka / webhook); **staged rollout + rollback slot + version pin** | Partial-blocking | ⚠️ hot-reload/config dispatch (real HTTP) + rollout-plan records + break-glass exist; no kill-switch semantics, no SIEM transports |
+
+### F4. Revised Cloud priorities (supersedes Part E ordering)
+
+Because the DEK/LCP roadmap orders by **security leverage first** and explicitly waits on the Cloud for identity/transport and trust-spine emission, the Cloud's near-term order is re-set to match:
+
+1. **Cloud-Phase 1 = Trust-spine emission + Trust & Provenance dashboard** (serves DEK Phase A; the #1 principle). Extend the existing bundle signing: emit provenance + SBOM + attestation, sign including `data.json`, publish signer-allowlist + revocation endpoints, add generation/tenant/target metadata, distribute `trust-policy.yaml`, surface a Trust & Provenance page.
+2. **Cloud-Phase 2 = mTLS/SVID transport + JWT-SVID acceptance** (serves DEK Phase B — **the explicit blocker**). Require client certs on ingest/dispatch, accept JWT-SVID (`private_key_jwt`), distribute the SPIFFE trust bundle, Workload Identity page.
+3. **Cloud-Phase 3 = Fleet control plane** (serves DEK Phase C): desired-state/revision negotiation via Contract Hub, Fleet dashboard (version-skew / per-device trust-gate / drift / kill-switch), then Enterprise Relay mode package.
+4. **Cloud-Phase 4 = Safety/operability** (serves DEK Phase E): first-class kill-switch dispatch + signed unlock + propagation tracking; SIEM forwarding transports; staged rollout/rollback/pin.
+5. **Cloud-Phase 5 = Enforcement-reach support** (serves DEK Phase D): OpenShell-as-backend modeling + OCSF event ingest.
+6. **Policy IR + PDP + Postgres scale-out** (original Part E Phases 2/5) move *later* — the Rust DEK already runs the multi-PDP (`dek-decision`/`dek-cedar`/`dek-opa-wasm`/`dek-openfga`), so the Cloud's job is **authoring + distribution + trust + fleet**, not runtime decisioning. This is a real course-correction from Part E: **the Cloud is not the PDP; the DEK is.** Cloud focuses on the trust spine, identity, fleet orchestration, authoring/compilation, and evidence.
+
+> Net change vs Part E: the webhook hot-reload pipeline (old "Phase 1") is **demoted** to a secondary mechanism; **Trust-spine emission + mTLS/SVID become the top Cloud priorities** because the DEK roadmap blocks on them.
+
+### F5. Concrete next deliverables + contract artifacts + tests
+
+- **Contract Hub additions:** `trust-policy.schema.json` (require_* flags), `bundle-provenance.schema.json` (SLSA-style), `sbom` reference (CycloneDX), `signer-allowlist` + `revocation-list` endpoints, `spiffe-trust-bundle` distribution endpoint, kill-switch + desired-state (Etag/revision) endpoints — each added to `pollek-contract.json` + OpenAPI + SDK with the drift gate green.
+- **Acceptance tests (extend `test/foundation.test.mjs` + `scripts/smoke-sync.mjs`):** sign a bundle → publish provenance/SBOM/attestation → assert a DEK-style gate would accept it, and that a tampered/wrong-tenant/revoked/downgraded bundle is rejected (mirrors SRS §26 red-team vectors); mTLS handshake self-test; desired-state "newest bundle you can run" negotiation; kill-switch propagation record.
+- **Recommended immediate increment:** **Cloud-Phase 1, step 1** — emit signed bundle provenance + a `trust-policy.yaml` + signer-allowlist/revocation endpoints, and a Trust & Provenance read view. It is fully buildable and verifiable on one box, retroactively hardens every hot-reload lane already shipped, and directly unblocks `dek-trust-gate` (DEK Phase A1).
+
+**Alignment complete — ready to start Cloud-Phase 1 on your go.**
 
 ---
 
