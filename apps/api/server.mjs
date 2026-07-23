@@ -5918,8 +5918,127 @@ async function contractDiscovery() {
   };
 }
 
-function devSpiffeId({ tenantId, siteId = "site_local_lab", deviceId, lcpId = "lcp_local" }) {
-  return `spiffe://local.pollek.cloud/tenant/${tenantId}/site/${siteId}/device/${deviceId}/lcp/${lcpId}`;
+// --- Cloud-Phase-2 mTLS / SVID relying-party -----------------------------------------------
+// SPIFFE identities follow the DEK-locked SAN scheme:
+//   spiffe://<trust_domain>/tenant/<tenant_id>/device/<device_id>[/agent/<agent_id>]
+// `trustDomain` is the deployment identifier (default spiffe://pollek.io) and is NOT a URL;
+// reachable URLs use publicUrl (the Railway domain).
+const spireServerAddress = process.env.SPIRE_SERVER_ADDRESS || null;
+const spireServerPort = Number(process.env.SPIRE_SERVER_PORT || 8081);
+// mTLS enforcement stance for DEK-facing endpoints: off (dev, bearer only) -> monitor
+// (observe + record mismatches, still allow) -> enforce (fail-closed at the identity layer).
+const mtlsMode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_MTLS_MODE || "")
+  ? process.env.POLLEK_MTLS_MODE
+  : "off";
+// Header carrying the SPIFFE ID verified by a trusted mTLS-terminating ingress. The ingress
+// MUST overwrite/strip this from untrusted client input (documented in the Phase-B hand-off).
+const mtlsIdentityHeader = (process.env.POLLEK_MTLS_IDENTITY_HEADER || "x-pollek-spiffe-id").toLowerCase();
+
+function deviceSpiffeId(tenantId, deviceId, agentId = null) {
+  const base = `${trustDomain}/tenant/${tenantId}/device/${deviceId}`;
+  return agentId ? `${base}/agent/${agentId}` : base;
+}
+
+// Parse a SPIFFE ID into its components. Walks the path as key/value pairs so it accepts the
+// DEK scheme and tolerates extra segments (site/lcp) without breaking.
+function parseSpiffeId(uri) {
+  if (typeof uri !== "string" || !uri.startsWith("spiffe://")) return null;
+  const withoutScheme = uri.slice("spiffe://".length);
+  const slash = withoutScheme.indexOf("/");
+  if (slash < 0) return null;
+  const trust = `spiffe://${withoutScheme.slice(0, slash)}`;
+  const segments = withoutScheme.slice(slash + 1).split("/").filter(Boolean);
+  const parsed = { trust_domain: trust, tenant_id: null, device_id: null, agent_id: null };
+  for (let i = 0; i + 1 < segments.length; i += 2) {
+    const key = segments[i];
+    const value = decodeURIComponent(segments[i + 1]);
+    if (key === "tenant") parsed.tenant_id = value;
+    else if (key === "device") parsed.device_id = value;
+    else if (key === "agent") parsed.agent_id = value;
+  }
+  return parsed;
+}
+
+// Extract the SPIFFE ID a request presents: the trusted ingress identity header first, then an
+// Envoy-style XFCC header (URI=spiffe://...). Returns the raw SPIFFE URI string or null.
+function requestSpiffeId(req) {
+  const direct = req.headers[mtlsIdentityHeader];
+  if (typeof direct === "string" && direct.startsWith("spiffe://")) return direct.trim();
+  const xfcc = req.headers["x-forwarded-client-cert"];
+  if (typeof xfcc === "string") {
+    const match = xfcc.match(/URI=(spiffe:\/\/[^;,\s]+)/i);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// DEK-facing paths that require an established identity once mTLS is enforced. /enroll is
+// intentionally excluded: a device enrolls in order to obtain its SVID (chicken-and-egg).
+function isMtlsProtectedPath(pathname) {
+  if (pathname === "/enroll") return false;
+  return /^\/v1\/telemetry\//.test(pathname)
+    || /^\/v1\/metrics$/.test(pathname)
+    || /^\/v1\/tenants\/[^/]+\/(telemetry|registry|discovery|lcp|logs|bundles|browser-extension|capability-snapshot)/.test(pathname)
+    || /^\/v1\/tenants\/[^/]+\/devices\/[^/]+\//.test(pathname)
+    || /^\/api\/(entities\/(ingest|sync)|lcp\/(usage-ledgers|change-batches))$/.test(pathname);
+}
+
+// Enforce the mTLS/SVID stance for a request. Returns { allowed, rejection } — when not
+// allowed, rejection = { status, body } for the caller to send. Off mode always allows.
+function evaluateMtls(req, pathname, expectedTenantId) {
+  if (mtlsMode === "off" || !isMtlsProtectedPath(pathname)) return { allowed: true, mode: mtlsMode, enforced: false };
+  const spiffeUri = requestSpiffeId(req);
+  const parsed = spiffeUri ? parseSpiffeId(spiffeUri) : null;
+  const tenantMatches = Boolean(parsed && expectedTenantId && parsed.tenant_id === expectedTenantId);
+  const identityPresent = Boolean(parsed && parsed.tenant_id && parsed.device_id);
+  const problem = !identityPresent
+    ? "svid_required"
+    : (expectedTenantId && !tenantMatches ? "svid_tenant_mismatch" : null);
+  if (!problem) return { allowed: true, mode: mtlsMode, enforced: true, spiffe_id: spiffeUri, parsed };
+  if (mtlsMode === "monitor") {
+    recordAudit("mtls.identity_warning", "transport", pathname, {
+      problem, presented_spiffe_id: spiffeUri || null, expected_tenant_id: expectedTenantId || null, mode: "monitor"
+    });
+    return { allowed: true, mode: "monitor", enforced: true, warning: problem, spiffe_id: spiffeUri, parsed };
+  }
+  const status = problem === "svid_required" ? 401 : 403;
+  recordAudit("mtls.identity_rejected", "transport", pathname, {
+    problem, presented_spiffe_id: spiffeUri || null, expected_tenant_id: expectedTenantId || null, mode: "enforce"
+  });
+  return {
+    allowed: false,
+    mode: "enforce",
+    rejection: { status, body: { error: problem, expected_tenant_id: expectedTenantId || null, trust_domain: trustDomain } }
+  };
+}
+
+// The SPIFFE trust bundle Cloud serves to relying parties. Real bundle comes from SPIRE via
+// env (inline PEM or a file path); until provisioned the endpoint reports a pending state
+// rather than a fabricated bundle.
+function spiffeBundleStatus() {
+  const inline = process.env.SPIRE_TRUST_BUNDLE || null;
+  let bundlePem = inline;
+  if (!bundlePem && process.env.SPIRE_TRUST_BUNDLE_PATH) {
+    try {
+      bundlePem = readFileSync(process.env.SPIRE_TRUST_BUNDLE_PATH, "utf8");
+    } catch {
+      bundlePem = null;
+    }
+  }
+  const configured = Boolean(bundlePem);
+  return {
+    schema_version: "pollek.trust.spiffe-bundle.v1",
+    trust_domain: trustDomain,
+    status: configured ? "configured" : "pending_spire_provisioning",
+    spire_server: spireServerAddress ? { address: spireServerAddress, port: spireServerPort } : null,
+    mtls_mode: mtlsMode,
+    trust_bundle_pem: bundlePem || null
+  };
+}
+
+// Retained name used by /enroll: build the enrolling device's SPIFFE ID under the DEK scheme.
+function devSpiffeId({ tenantId, deviceId }) {
+  return deviceSpiffeId(tenantId, deviceId);
 }
 
 function parsePath(req) {
@@ -5952,6 +6071,21 @@ async function handleApi(req, res) {
     res.writeHead(204, jsonHeaders);
     res.end();
     return true;
+  }
+
+  // Cloud-Phase-2 mTLS/SVID identity gate for DEK-facing endpoints. No-op when
+  // POLLEK_MTLS_MODE=off (dev default), so bearer-auth traffic is unaffected until a trusted
+  // mTLS-terminating ingress is in front (Phase B). Tenant match uses the path/header tenant.
+  if (mtlsMode !== "off") {
+    const tenantInPath = pathname.match(/^\/v1\/tenants\/([^/]+)\//);
+    const expectedTenant = tenantInPath
+      ? decodeURIComponent(tenantInPath[1])
+      : (typeof req.headers["x-pollek-tenant-id"] === "string" ? req.headers["x-pollek-tenant-id"] : null);
+    const decision = evaluateMtls(req, pathname, expectedTenant);
+    if (!decision.allowed) {
+      sendJson(res, decision.rejection.status, decision.rejection.body);
+      return true;
+    }
   }
 
   if (req.method === "GET" && (pathname === "/api/events" || pathname === "/api/hot-reload/stream")) {
@@ -6739,14 +6873,21 @@ async function handleApi(req, res) {
       payload: device
     });
     addTask("device_enrollment", "completed", `Enrolled ${device.hostname}`, { device_id: deviceId });
+    const bundle = spiffeBundleStatus();
     sendJson(res, 200, {
       join_token: `join_${crypto.randomUUID()}`,
-      spire_endpoint: "spire://local-dev-spire:8081",
-      trust_bundle_pem: "-----BEGIN CERTIFICATE-----\nLOCALDEVTRUSTBUNDLE\n-----END CERTIFICATE-----\n",
-      pinned_bundle_public_key: "local-dev-bundle-public-key",
       tenant_id: tenantId,
       device_id: deviceId,
       spiffe_id: device.spiffe_id,
+      trust_domain: trustDomain,
+      // SPIRE bootstrap comes from real env config; null until SPIRE Server is provisioned
+      // on Railway (Phase B), rather than a fabricated endpoint/bundle.
+      spire_server_address: spireServerAddress,
+      spire_server_port: spireServerAddress ? spireServerPort : null,
+      spiffe_bundle_url: `${publicUrl}/v1/trust/spiffe-bundle`,
+      trust_bundle_status: bundle.status,
+      trust_bundle_pem: bundle.trust_bundle_pem,
+      mtls_mode: mtlsMode,
       cloud_url: publicUrl
     });
     return true;
@@ -8096,6 +8237,11 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && pathname === "/v1/trust/revocations") {
     sendJson(res, 200, revocationListDocument());
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/v1/trust/spiffe-bundle") {
+    sendJson(res, 200, spiffeBundleStatus());
     return true;
   }
 

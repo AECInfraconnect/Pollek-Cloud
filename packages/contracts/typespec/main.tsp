@@ -158,6 +158,9 @@ model OfflineLicenseRequest {
 @route("/v1/trust/revocations")
 @post op addRevocation(@body request: Record<unknown>): unknown;
 
+@route("/v1/trust/spiffe-bundle")
+@get op getSpiffeBundle(): unknown;
+
 @route("/api/trust/provenance")
 @get op getTrustProvenance(): unknown;
 

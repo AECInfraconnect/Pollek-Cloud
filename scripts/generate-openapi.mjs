@@ -97,6 +97,7 @@ const PATH_METHODS = {
   "/v1/trust/policy": ["get"],
   "/v1/trust/signer-allowlist": ["get"],
   "/v1/trust/revocations": ["get", "post"],
+  "/v1/trust/spiffe-bundle": ["get"],
   "/api/trust/provenance": ["get"],
   "/api/policy/providers": ["get"],
   "/api/policy/assist": ["post"],
