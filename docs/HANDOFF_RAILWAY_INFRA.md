@@ -34,6 +34,21 @@ Copy everything from "PROMPT FOR CODEX" onward and give it to Codex.
 - **Boots empty:** Cloud fabricates no operational data. Do not seed tenants,
   devices, or bundles. Real data arrives only through gated enrollment/sync.
 
+## Current Railway inventory (observed 2026-07-23)
+
+In the `Pollek-Cloud` project, `production` environment:
+- **Pollek-Cloud** (GitHub deploy) - `pollek-cloud-production.up.railway.app` - Online.
+- **pollek-cosmian-kms** - `pollek-cosmian-kms-production.up.railway.app` - Online
+  (currently a **public** URL; Task A2 locks it to private networking).
+- **keycloak** - `keycloak-production-a39c.up.railway.app` - Online.
+- **Postgres** (with `postgres-volume`) and **postgres** (with `postgres-volume-mrIW`)
+  - two instances Online. One backs Keycloak; confirm which is free for Pollek Cloud.
+- **No SPIRE server yet** (Task C adds it).
+
+The Cloud app has just been wired (in code) to persist to Postgres with tenant-scoped
+RLS when `DATABASE_URL` is set; until you link a database it runs on an in-container
+file snapshot that is **lost on every redeploy**. Task 0 is therefore the acute fix.
+
 ---
 
 # PROMPT FOR CODEX
@@ -46,6 +61,39 @@ correct guardrails front end to back end. Work task by task; each task lists
 concrete acceptance criteria. Never put secrets in the repo — set them as
 Railway service variables. Report back the values Pollek Cloud needs (as
 secrets) plus a short runbook.
+
+## Task 0 — Postgres persistence + RLS (do this first)
+
+The Cloud app now speaks Postgres: when `DATABASE_URL` is set it runs the migrations in
+`packages/db/migrations/` at boot and write-throughs its runtime state into a
+tenant-partitioned `runtime_items` table with row-level security. Without a database it
+falls back to an ephemeral in-container file, so **enrolled tenants/devices and the
+revocation epoch are lost on every redeploy today.** Fix that:
+
+1. **Link a Postgres to Pollek Cloud.** Use one of the two Postgres instances (confirm which
+   is not Keycloak's) or provision a dedicated one. Set `DATABASE_URL` on the Pollek-Cloud
+   service.
+2. **Connect as a NON-SUPERUSER role — this is mandatory for RLS to work.** Postgres
+   **bypasses RLS for superusers and (without FORCE) for table owners**. Railway's default
+   `DATABASE_URL` user is a superuser, which would silently disable tenant isolation. Create a
+   dedicated login role (e.g. `pollek_app`, `NOSUPERUSER`) with `USAGE` on the schema and
+   `SELECT/INSERT/UPDATE/DELETE` on its tables (and default privileges for future tables), and
+   point `DATABASE_URL` at that role. The runtime store also sets `FORCE ROW LEVEL SECURITY`
+   so even the owner is subject to the policy.
+3. **Do not enable `POLLEK_CLOUD_PERSISTENCE=disabled`** in production.
+4. A persistent volume for the old JSON snapshot is **no longer needed** once Postgres is
+   linked (Postgres is the durable store). Keep automated Postgres backups instead.
+
+Acceptance (verified locally against Postgres 16 already; reproduce on Railway):
+- After linking, `GET /api/persistence/status` shows `status.mode: "postgres"`,
+  `load_status: "loaded"`, and the migrations tracked in `schema_migrations`.
+- Deploy a bundle through the gated compliance flow, add a revocation, **redeploy the Cloud
+  service**, and confirm the bundle and revocation epoch survive (they are read back from
+  `runtime_items`).
+- Connected as the non-superuser role, a session with `SET app.tenant_id = '<tenant>'` sees
+  only that tenant's rows plus shared `__system__` rows; an unscoped session sees no tenant
+  data (fail-closed). (The Cloud team's `test/postgres.test.mjs` asserts exactly this against
+  `PG_TEST_URL` + a non-superuser `PG_TEST_APP_URL`.)
 
 ## Task A — Cosmian KMS: real signing keys (highest priority)
 
@@ -149,9 +197,8 @@ Acceptance:
    (pass-through or forward the verified identity). Public HTTPS for the console.
 3. **Secrets:** every credential (KMS token, Keycloak client secrets, DB creds)
    is a Railway service variable, never in the repo or logs.
-4. **State durability:** Pollek Cloud persists a JSON state snapshot
-   (`POLLEK_CLOUD_STATE_FILE`). Put it on a **persistent volume** so restarts do
-   not lose enrolled tenants/devices; include it in backups.
+4. **State durability:** handled by Postgres once Task 0 is done (the durable store is
+   `runtime_items`, not a file). Ensure automated Postgres backups; no app volume needed.
 5. **Health checks & limits:** wire `/health` as the Railway healthcheck; set
    sane memory/CPU limits and restart policy.
 6. **Egress:** confirm outbound access Pollek Cloud needs (Keycloak JWKS, KMS,
@@ -186,15 +233,21 @@ the app today:
 | `PORT` / `HOST` | listen address (Railway sets `PORT`) |
 | `RAILWAY_PUBLIC_DOMAIN` | used to derive the public URL if `POLLEK_CLOUD_PUBLIC_URL` is unset |
 | `POLLEK_CLOUD_PUBLIC_URL` | canonical external URL (token endpoint / manifest URLs) |
-| `POLLEK_CLOUD_STATE_FILE` | path to the state snapshot (put on a volume) |
+| `DATABASE_URL` | Postgres connection. **Must be a NON-SUPERUSER role** or RLS is bypassed. When set, Cloud migrates + persists to Postgres; when unset it uses the ephemeral file. |
+| `PGSSLMODE` | set `disable` only for private-network/no-TLS Postgres; otherwise leave default (TLS) |
+| `POLLEK_CLOUD_PG_POOL_MAX` | max pool connections (default 8) |
+| `POLLEK_CLOUD_STATE_FILE` | file-snapshot path used only when `DATABASE_URL` is unset (dev/test) |
 | `POLLEK_CLOUD_PERSISTENCE` | persistence mode (`disabled` turns it off — do not disable in prod) |
 | `POLLEK_TRUST_DOMAIN` | SPIFFE trust domain; set to `spiffe://pollek.io` |
 | `POLLEK_CLOUD_CONTROL_SIGNING_KEY` | control-envelope signing secret (move to KMS-backed) |
 | `NODE_ENV` | set `production` (disables verbose error exposure) |
 | `POLLEK_CLOUD_RATE_WINDOW_MS`, `POLLEK_CLOUD_RATE_MAX` | rate limiting |
 
-New variables to provision (names proposed; confirm with Cloud team before
-depending on them — the app integration for these is Cloud-side follow-up):
+The repo's `.env.example` is the canonical starting set and already lists `DATABASE_URL`,
+`KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `OIDC_ISSUER`, `COSMIAN_KMS_URL`,
+and `COSMIAN_KMS_KEY_ID`. Prefer those names; the rows below are additions/clarifications
+(names proposed; confirm with the Cloud team before depending on them — their app integration
+is Cloud-side follow-up):
 
 | Variable | Purpose |
 |---|---|
@@ -216,10 +269,11 @@ depending on them — the app integration for these is Cloud-side follow-up):
 
 ## What stays on the Pollek Cloud (app) side — for awareness, not your task
 
-The Cloud team will: swap the in-process ed25519 key for a Cosmian KMS signing
-adapter; add SVID/JWT-SVID verification middleware (Phase 2); and add the
-Keycloak token verification path. You provision the services + variables; we wire
-the code, contract-first.
+Already done in the app: Postgres persistence + tenant-scoped RLS runtime store (Task 0 is
+just linking a database + non-superuser role). Still Cloud-side follow-up: swap the in-process
+ed25519 key for a Cosmian KMS signing adapter; add SVID/JWT-SVID verification middleware
+(Phase 2); and add the Keycloak token verification path. You provision the services +
+variables; we wire the remaining code, contract-first.
 
 ## Deliverables to return
 
