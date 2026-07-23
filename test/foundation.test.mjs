@@ -579,7 +579,10 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /function buildPolicyCitations/);
   assert.match(server, /function createPolicyFixtures/);
   assert.match(server, /crypto\.sign\(null, Buffer\.from\(payload\), bundleSigningKeyPair\.privateKey\)/);
-  assert.match(server, /crypto\.verify\(null, Buffer\.from\(payload\), key/);
+  // Bundle verification is real ed25519: pinned-key path plus the signer key-set (rotation
+  // overlap) path delegated to signer.verifyAgainstKeys.
+  assert.match(server, /crypto\.verify\(null, Buffer\.from\(payload\), signature\.public_key_pem/);
+  assert.match(server, /signer\.verifyAgainstKeys\(payload, sig, overlapKeys\)/);
   assert.doesNotMatch(server, /dev-placeholder/);
   assert.match(server, /async function pollLcpEntityWatch/);
   assert.match(server, /function ingestLcpChangeBatch/);
@@ -2154,5 +2157,40 @@ test("enroll echoes the registered lcp_id back to the sync client", async (t) =>
     // The echoed lcp_id is the id the fleet gate recognizes.
     const fleet = await api(baseUrl, "/api/fleet");
     assert.ok((fleet.payload.local_control_planes || []).some((lcp) => lcp.id === "lcp_wallet"));
+  });
+});
+
+// --- Signer rotation overlap surfaced in the trust spine ---------------------------------
+
+test("signer-allowlist publishes a retired key as an active overlap signer", async (t) => {
+  // A previous signing key still inside its rotation-overlap window.
+  const { publicKey } = crypto.generateKeyPairSync("ed25519");
+  const retiredRaw = publicKey.export({ format: "jwk" }).x;
+  const retiredKeyid = `pollek-cloud-ed25519-${crypto.createHash("sha256").update(Buffer.from(retiredRaw, "base64url")).digest("hex").slice(0, 16)}`;
+
+  await withDevServer(t, { POLLEK_TRUST_RETIRED_PUBKEYS: retiredRaw }, async (baseUrl) => {
+    const res = await api(baseUrl, "/v1/trust/signer-allowlist");
+    assert.equal(res.response.status, 200);
+    const entry = res.payload.signers.find((s) => s.keyid === retiredKeyid);
+    assert.ok(entry, "retired key appears in the allowlist");
+    assert.equal(entry.status, "active");
+    assert.equal(entry.previous_version, true);
+    assert.equal(entry.public_key.raw_base64url, retiredRaw);
+    // The active current signer is still present and distinct.
+    assert.ok(res.payload.signers.some((s) => s.status === "active" && !s.previous_version));
+  });
+});
+
+test("a revoked retired key is published as revoked, not active", async (t) => {
+  const { publicKey } = crypto.generateKeyPairSync("ed25519");
+  const retiredRaw = publicKey.export({ format: "jwk" }).x;
+  const retiredKeyid = `pollek-cloud-ed25519-${crypto.createHash("sha256").update(Buffer.from(retiredRaw, "base64url")).digest("hex").slice(0, 16)}`;
+
+  await withDevServer(t, { POLLEK_TRUST_RETIRED_PUBKEYS: retiredRaw }, async (baseUrl) => {
+    await api(baseUrl, "/v1/trust/revocations", { method: "POST", body: { revoked_key_ids: [retiredKeyid], reason: "rotation retirement" } });
+    const res = await api(baseUrl, "/v1/trust/signer-allowlist");
+    const entry = res.payload.signers.find((s) => s.keyid === retiredKeyid);
+    assert.ok(entry);
+    assert.equal(entry.status, "revoked");
   });
 });

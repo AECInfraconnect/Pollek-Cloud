@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import * as db from "./db.mjs";
 import * as keycloak from "./keycloak.mjs";
+import * as signer from "./signer.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
@@ -2103,6 +2104,16 @@ function signTrustDocument(unsigned) {
   };
 }
 
+// Verification key set = the current signing key plus any previous keys still inside their
+// rotation-overlap window (POLLEK_TRUST_RETIRED_PUBKEYS). Lets a document signed just before a
+// rotation stay valid during overlap.
+function verificationKeyEntries() {
+  return [
+    { keyid: bundleSigningKeyId(), key: bundleSigningKeyPair.publicKey },
+    ...signer.retiredVerificationKeys()
+  ];
+}
+
 function verifyTrustDocument(signed) {
   if (!signed || typeof signed !== "object") return { status: "invalid", reason: "not_an_object", signature_count: 0 };
   const { signatures, ...unsigned } = signed;
@@ -2110,14 +2121,10 @@ function verifyTrustDocument(signed) {
     return { status: "unsigned", reason: "no_signatures", signature_count: 0 };
   }
   const payload = Buffer.from(stableJson(unsigned));
+  const keys = verificationKeyEntries();
   const results = signatures.map((entry) => {
-    try {
-      const ok = Boolean(entry?.sig)
-        && crypto.verify(null, payload, bundleSigningKeyPair.publicKey, Buffer.from(entry.sig, "base64url"));
-      return { keyid: entry?.keyid || null, valid: ok };
-    } catch (error) {
-      return { keyid: entry?.keyid || null, valid: false, error: error instanceof Error ? error.message : String(error) };
-    }
+    const matchedKeyid = entry?.sig ? signer.verifyAgainstKeys(payload, entry.sig, keys) : null;
+    return { keyid: entry?.keyid || null, valid: Boolean(matchedKeyid), verified_by: matchedKeyid };
   });
   return {
     status: results.every((item) => item.valid) ? "valid" : "invalid",
@@ -2181,8 +2188,21 @@ function unsignedSignerAllowlist() {
       purposes: ["bundle", "trust_policy", "revocation", "signer_allowlist"]
     }
   ];
+  // Rotation overlap: previous signing keys still in their overlap window stay published as
+  // active (unless revoked) so bundles signed just before a rotation remain verifiable.
+  for (const retired of signer.retiredVerificationKeys()) {
+    if (retired.keyid === activeKeyId) continue;
+    signers.push({
+      keyid: retired.keyid,
+      alg: "ed25519",
+      status: revoked.has(retired.keyid) ? "revoked" : "active",
+      previous_version: true,
+      public_key: { raw_base64url: retired.raw_base64url },
+      purposes: ["bundle", "trust_policy", "revocation", "signer_allowlist"]
+    });
+  }
   for (const keyid of revoked) {
-    if (keyid === activeKeyId) continue;
+    if (keyid === activeKeyId || signers.some((s) => s.keyid === keyid)) continue;
     signers.push({ keyid, alg: "ed25519", status: "revoked", public_key: { raw_base64url: "" }, purposes: [] });
   }
   return {
@@ -2488,12 +2508,19 @@ function verifyPolicyBundle(bundle, manifest = unsignedPolicyBundleManifest(bund
   const payload = stableJson(manifest);
   const payloadHash = sha256(payload);
   const signatures = normalizePolicyBundleSignatures(bundle);
+  const overlapKeys = verificationKeyEntries();
   const results = signatures.map((signature) => {
     const sig = signature.sig || signature.signature;
     const payloadHashMatches = signature.payload_hash === payloadHash;
     try {
-      const key = signature.public_key_pem || bundleSigningKeyPair.publicKey;
-      const verified = Boolean(sig) && crypto.verify(null, Buffer.from(payload), key, Buffer.from(sig || "", "base64url"));
+      // Prefer a pinned public_key_pem if present; otherwise accept the current signing key or
+      // any key still inside its rotation-overlap window.
+      let verified = false;
+      if (signature.public_key_pem) {
+        verified = Boolean(sig) && crypto.verify(null, Buffer.from(payload), signature.public_key_pem, Buffer.from(sig || "", "base64url"));
+      } else {
+        verified = Boolean(sig) && Boolean(signer.verifyAgainstKeys(payload, sig, overlapKeys));
+      }
       return {
         id: signature.id || null,
         key_id: signature.key_id || null,
@@ -2543,7 +2570,9 @@ function upsertPolicyBundleSignature(record) {
 
 function signPolicyBundle(bundle, approvalRecord = defaultApprovalRecordForBundle(bundle), options = {}) {
   if (!bundle) throw new Error("policy_bundle_required");
-  if (!approvalRecord || approvalRecord.status !== "approved") throw new Error("approved_record_required");
+  // Centralized production-signing gate (AGENTS.md rule 6): no bundle is signed without an
+  // approved approval record carrying an approver.
+  signer.enforceApprovalRecord(approvalRecord);
   const tenantId = approvalRecord.tenant_id || bundleTenantId(bundle);
   bundle.tenant_id = tenantId;
   bundle.approval_record = approvalRecord;
@@ -8379,6 +8408,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
+signer.assertBackendSupported();
 await loadRuntimeState();
 ensureRuntimeBackfills();
 scheduleRuntimePersist("runtime.backfill");
