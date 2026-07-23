@@ -127,8 +127,8 @@
       "direction": "cloud_to_local",
       "requires_oauth": true,
       "requires_spiffe": false,
-      "paths": ["/v1/trust/policy", "/v1/trust/signer-allowlist", "/v1/trust/revocations"],
-      "purpose": "Cloud publishes the trust spine consumed by dek-trust-gate: the cloud-authored trust-policy, the signer allowlist, and the signed revocation list. Runtime trusts evidence, not location.",
+      "paths": ["/v1/trust/policy", "/v1/trust/signer-allowlist", "/v1/trust/revocations", "/v1/trust/spiffe-bundle"],
+      "purpose": "Cloud publishes the trust spine consumed by dek-trust-gate: the cloud-authored trust-policy, the signer allowlist, the signed revocation list, and the SPIFFE trust bundle for the mTLS/SVID relying party. Runtime trusts evidence, not location.",
       "controls": ["ed25519_detached_signatures", "signer_allowlist_pinning", "monotonic_revocation_epoch", "monotonic_policy_version", "cloud_authored_trust_policy_max_strictness", "deny_list_semantics"]
     },
     "pollek.cloud.trust_admin": {

@@ -53,7 +53,9 @@ async function waitForJson(url, options = {}, attempts = 80) {
   throw lastError || new Error(`Timed out waiting for ${url}`);
 }
 
-async function withDevServer(t, callback) {
+async function withDevServer(t, callbackOrEnv, maybeCallback) {
+  const extraEnv = typeof callbackOrEnv === "object" ? callbackOrEnv : {};
+  const callback = typeof callbackOrEnv === "function" ? callbackOrEnv : maybeCallback;
   const stateDir = await mkdtemp(path.join(tmpdir(), "pollek-cloud-test-"));
   const stateFile = path.join(stateDir, "state.json");
   const port = 19000 + Math.floor(Math.random() * 3000);
@@ -63,7 +65,8 @@ async function withDevServer(t, callback) {
       ...process.env,
       POLLEK_CLOUD_DEV_PORT: String(port),
       POLLEK_CLOUD_STATE_FILE: stateFile,
-      POLLEK_LCP_WATCH_ENABLED: "false"
+      POLLEK_LCP_WATCH_ENABLED: "false",
+      ...extraEnv
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -1910,5 +1913,99 @@ test("contract hub serves the new trust-spine schema artifacts", async (t) => {
       assert.equal(res.response.status, 200, `${artifactPath} should be served`);
       assert.ok(res.payload.$id.includes(artifactPath.split("/").pop()));
     }
+  });
+});
+
+// --- Cloud-Phase-2 mTLS / SVID relying-party --------------------------------------------
+
+test("enroll returns DEK-scheme SPIFFE id and real (env-driven) SPIRE bootstrap", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const res = await api(baseUrl, "/enroll", { method: "POST", body: { hostname: "lcp-a", os: "linux" } });
+    assert.equal(res.response.status, 200);
+    // DEK-locked SAN scheme, default trust domain, no legacy site/lcp segments.
+    assert.match(res.payload.spiffe_id, /^spiffe:\/\/pollek\.io\/tenant\/local\/device\/dev_[a-f0-9]+$/);
+    assert.equal(res.payload.trust_domain, "spiffe://pollek.io");
+    // Not provisioned yet -> honest nulls / pending, not a fabricated bundle.
+    assert.equal(res.payload.spire_server_address, null);
+    assert.equal(res.payload.trust_bundle_status, "pending_spire_provisioning");
+    assert.equal(res.payload.trust_bundle_pem, null);
+    assert.ok(res.payload.spiffe_bundle_url.endsWith("/v1/trust/spiffe-bundle"));
+  });
+});
+
+test("spiffe-bundle endpoint reports pending until SPIRE provides a bundle", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const res = await api(baseUrl, "/v1/trust/spiffe-bundle");
+    assert.equal(res.response.status, 200);
+    assert.equal(res.payload.schema_version, "pollek.trust.spiffe-bundle.v1");
+    assert.equal(res.payload.trust_domain, "spiffe://pollek.io");
+    assert.equal(res.payload.status, "pending_spire_provisioning");
+    assert.equal(res.payload.trust_bundle_pem, null);
+  });
+});
+
+test("spiffe-bundle serves the configured bundle and SPIRE coordinates from env", async (t) => {
+  const pem = "-----BEGIN CERTIFICATE-----\nMIITESTBUNDLE\n-----END CERTIFICATE-----\n";
+  await withDevServer(t, {
+    SPIRE_TRUST_BUNDLE: pem,
+    SPIRE_SERVER_ADDRESS: "spire.internal",
+    SPIRE_SERVER_PORT: "8081"
+  }, async (baseUrl) => {
+    const res = await api(baseUrl, "/v1/trust/spiffe-bundle");
+    assert.equal(res.payload.status, "configured");
+    assert.equal(res.payload.trust_bundle_pem, pem);
+    assert.deepEqual(res.payload.spire_server, { address: "spire.internal", port: 8081 });
+  });
+});
+
+test("mTLS enforce mode fails closed without an SVID and rejects a tenant mismatch", async (t) => {
+  await withDevServer(t, { POLLEK_MTLS_MODE: "enforce" }, async (baseUrl) => {
+    const protectedPath = "/v1/tenants/local/telemetry/events";
+    // No SVID header -> 401 (fail closed).
+    const missing = await api(baseUrl, protectedPath, { method: "POST", body: { schema_version: "telemetry-envelope.v1" } });
+    assert.equal(missing.response.status, 401);
+    assert.equal(missing.payload.error, "svid_required");
+
+    // SVID for a different tenant -> 403.
+    const mismatch = await api(baseUrl, protectedPath, {
+      method: "POST",
+      body: { schema_version: "telemetry-envelope.v1" },
+      headers: { "x-pollek-spiffe-id": "spiffe://pollek.io/tenant/other/device/d1" }
+    });
+    assert.equal(mismatch.response.status, 403);
+    assert.equal(mismatch.payload.error, "svid_tenant_mismatch");
+
+    // Matching tenant SVID -> passes the identity gate (not 401/403).
+    const ok = await api(baseUrl, protectedPath, {
+      method: "POST",
+      body: { schema_version: "telemetry-envelope.v1", event_id: "e1", event_type: "test.v1", tenant_id: "local", device_id: "d1", timestamp: new Date().toISOString(), payload: {} },
+      headers: { "x-pollek-spiffe-id": "spiffe://pollek.io/tenant/local/device/d1" }
+    });
+    assert.ok(ok.response.status !== 401 && ok.response.status !== 403, `identity gate passed (status ${ok.response.status})`);
+
+    // Enrollment is exempt (chicken-and-egg): a device enrolls to obtain its SVID.
+    const enroll = await api(baseUrl, "/enroll", { method: "POST", body: { hostname: "lcp-b" } });
+    assert.equal(enroll.response.status, 200);
+  });
+});
+
+test("mTLS enforce accepts the Envoy XFCC header form", async (t) => {
+  await withDevServer(t, { POLLEK_MTLS_MODE: "enforce" }, async (baseUrl) => {
+    const ok = await api(baseUrl, "/v1/tenants/local/telemetry/events", {
+      method: "POST",
+      body: { schema_version: "telemetry-envelope.v1", event_id: "e2", event_type: "test.v1", tenant_id: "local", device_id: "d2", timestamp: new Date().toISOString(), payload: {} },
+      headers: { "x-forwarded-client-cert": 'By=spiffe://pollek.io/cloud;URI=spiffe://pollek.io/tenant/local/device/d2;Hash=abc' }
+    });
+    assert.ok(ok.response.status !== 401 && ok.response.status !== 403);
+  });
+});
+
+test("mTLS monitor mode allows missing SVID but records a warning; off mode is unaffected", async (t) => {
+  await withDevServer(t, { POLLEK_MTLS_MODE: "monitor" }, async (baseUrl) => {
+    const res = await api(baseUrl, "/v1/tenants/local/telemetry/events", {
+      method: "POST",
+      body: { schema_version: "telemetry-envelope.v1", event_id: "e3", event_type: "test.v1", tenant_id: "local", device_id: "d3", timestamp: new Date().toISOString(), payload: {} }
+    });
+    assert.ok(res.response.status !== 401 && res.response.status !== 403, "monitor mode does not fail closed");
   });
 });

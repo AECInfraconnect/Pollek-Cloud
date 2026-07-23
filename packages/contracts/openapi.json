@@ -8534,6 +8534,56 @@
         "x-pollek-enterprise-only": false,
         "x-pollek-tenant-scoped": false
       }
+    },
+    "/v1/trust/spiffe-bundle": {
+      "get": {
+        "tags": [
+          "pollek.cloud.trust_spine"
+        ],
+        "summary": "Pollek Cloud GET /v1/trust/spiffe-bundle",
+        "operationId": "getV1TrustSpiffeBundle",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.trust_spine"
+        ],
+        "x-pollek-direction": [
+          "cloud_to_local"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
     }
   },
   "components": {
