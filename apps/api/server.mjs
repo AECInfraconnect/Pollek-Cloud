@@ -4,6 +4,7 @@ import { createReadStream, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import * as db from "./db.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
@@ -744,6 +745,28 @@ async function loadRuntimeState() {
     persistence.load_status = "disabled";
     return;
   }
+  if (db.isEnabled()) {
+    persistence.mode = "postgres";
+    persistence.file_path = null;
+    try {
+      const migration = await db.migrate();
+      persistence.migrations_applied = migration.ran;
+      const snapshot = await db.loadSnapshot();
+      if (snapshot) {
+        applyRuntimeStateSnapshot(snapshot);
+        persistence.loaded = true;
+        persistence.load_status = "loaded";
+        persistence.last_loaded_at = new Date().toISOString();
+      } else {
+        persistence.load_status = "seeded";
+      }
+      persistence.last_error = null;
+    } catch (error) {
+      persistence.load_status = "load_failed";
+      persistence.last_error = error instanceof Error ? error.message : String(error);
+    }
+    return;
+  }
   try {
     const snapshot = JSON.parse(await readFile(stateFilePath, "utf8"));
     applyRuntimeStateSnapshot(snapshot);
@@ -765,6 +788,19 @@ async function loadRuntimeState() {
 
 async function persistRuntimeState(reason = "manual") {
   if (!persistence.enabled) return runtimePersistenceStatus();
+  if (db.isEnabled()) {
+    try {
+      const snapshot = runtimeStateSnapshot();
+      await db.persistSnapshot(snapshot, persistedFleetKeys);
+      persistence.last_saved_at = snapshot.saved_at;
+      persistence.last_reason = reason;
+      persistence.save_count += 1;
+      persistence.last_error = null;
+    } catch (error) {
+      persistence.last_error = error instanceof Error ? error.message : String(error);
+    }
+    return runtimePersistenceStatus();
+  }
   try {
     const snapshot = runtimeStateSnapshot();
     const payload = JSON.stringify(snapshot, null, 2);
