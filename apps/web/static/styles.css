@@ -1325,6 +1325,30 @@ h3 {
   line-height: 1.45;
 }
 
+.revoke-control {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) minmax(140px, 2fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.revoke-control input,
+.revoke-control select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0 9px;
+}
+
+@media (max-width: 900px) {
+  .revoke-control {
+    grid-template-columns: 1fr;
+  }
+}
+
 .filter-row input,
 .filter-row select,
 .inline-panel,

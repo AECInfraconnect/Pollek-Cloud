@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
@@ -10,6 +10,11 @@ const rootDir = path.resolve(__dirname, "../..");
 const webDir = path.join(rootDir, "apps/web/static");
 const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
 const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
+// Single source of truth for contract-derived constants (version, etc.). The contract JSON
+// is the authority; nothing else hardcodes the version.
+const contractDocument = JSON.parse(readFileSync(contractPath, "utf8"));
+const cloudVersion = contractDocument.cloud_version;
+const contractVersion = contractDocument.contract_version;
 const contractArtifactPaths = new Map([
   ["/contracts/events.schema.json", path.join(rootDir, "packages/contracts/events.schema.json")],
   ["/contracts/bundle-manifest.schema.json", path.join(rootDir, "packages/contracts/bundle-manifest.schema.json")],
@@ -689,7 +694,7 @@ function runtimeStateSnapshot() {
   return {
     schema_version: "pollek.cloud.runtime-state-snapshot.v1",
     saved_at: new Date().toISOString(),
-    cloud_version: "0.1.0-dev",
+    cloud_version: cloudVersion,
     tenant: state.tenant,
     devices: mapToEntries(state.devices),
     events: state.events,
@@ -2034,7 +2039,6 @@ function kmsHealth() {
 // One SPIFFE trust domain per Cloud deployment (DEK alignment §1). Tenant lives in the SVID
 // path, not the trust domain.
 const trustDomain = process.env.POLLEK_TRUST_DOMAIN || "spiffe://pollek.io";
-const cloudVersion = "0.1.0-dev";
 
 // Stable ed25519 signer identity. The keyid is the fingerprint of the raw 32-byte public key
 // so it matches signatures[].keyid on the DEK side (ed25519-dalek verify_strict over the raw
@@ -3023,7 +3027,7 @@ function openEventStream(req, res, channel) {
     client_id: client.id,
     channel,
     cloud_url: publicUrl,
-    contract_version: "2026.06.29",
+    contract_version: contractVersion,
     last_event_id: lastEventId || null,
     replay_window_events: eventStreamReplayWindow,
     connected_at: new Date().toISOString()
@@ -5611,7 +5615,7 @@ function connectionUpdatePayload({ lcp, action, bundle, body = {} }) {
     device_id: lcp.device_id,
     pdp_endpoint: publicUrl,
     cloud_url: publicUrl,
-    contract_version: "2026.06.29",
+    contract_version: contractVersion,
     auth_method: "spiffe-oauth-mtls-required",
     status: "configured",
     manual_override_enabled: false,
@@ -6733,7 +6737,7 @@ async function handleApi(req, res) {
           tenant_id: "local",
           device_id: "local",
           pdp_endpoint: publicUrl,
-          contract_version: "2026.06.29",
+          contract_version: contractVersion,
           auth_method: "spiffe-oauth-mtls-dev",
           status: "configured",
           manual_override_enabled: false,
@@ -7110,7 +7114,7 @@ async function handleApi(req, res) {
       schema_version: "pollek.cloud.connection-update-page.v1",
       tenant_id: tenantId,
       cloud_url: publicUrl,
-      contract_version: "2026.06.29",
+      contract_version: contractVersion,
       profiles,
       entitlements: state.tenant.entitlements,
       enterprise_features: {

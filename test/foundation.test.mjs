@@ -1483,8 +1483,8 @@ test("console wires fleet operations controls", async () => {
   const html = await readFile("apps/web/static/index.html", "utf8");
   const css = await readFile("apps/web/static/styles.css", "utf8");
 
-  assert.match(html, /styles\.css\?v=20260630-os-fixtures/);
-  assert.match(html, /app\.js\?v=20260630-os-fixtures/);
+  assert.match(html, /styles\.css\?v=20260723-trust-spine/);
+  assert.match(html, /app\.js\?v=20260723-trust-spine/);
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="appShell"/);
@@ -1507,6 +1507,17 @@ test("console wires fleet operations controls", async () => {
   assert.doesNotMatch(html, /class="tab" data-tab="administration"/);
   assert.match(html, /id="bundleStatusCenterList"/);
   assert.match(html, /id="bundleDeliveryList"/);
+  assert.match(html, /class="tab" data-tab="trust"/);
+  assert.match(html, /data-tab-panel="trust"/);
+  assert.match(html, /id="trustBundleList"/);
+  assert.match(html, /id="trustSignerList"/);
+  assert.match(html, /id="trustRevocationList"/);
+  assert.match(html, /id="trustRevokeButton"/);
+  assert.match(app, /function renderTrust\(/);
+  assert.match(app, /function loadTrustView\(/);
+  assert.match(app, /function submitRevocation\(/);
+  assert.match(app, /\/api\/trust\/provenance/);
+  assert.match(app, /if \(nextTab === "trust"\) ensureTrustLoaded\(\);/);
   assert.match(html, /id="objectSettingsList"/);
   assert.match(html, /id="contractSettingsList"/);
   assert.match(html, /id="signupTenantButton"/);
