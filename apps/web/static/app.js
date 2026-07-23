@@ -107,6 +107,16 @@ const refs = {
   integrationHealthList: document.querySelector("#integrationHealthList"),
   bundleStatusCenterList: document.querySelector("#bundleStatusCenterList"),
   bundleDeliveryList: document.querySelector("#bundleDeliveryList"),
+  trustScopeNote: document.querySelector("#trustScopeNote"),
+  trustPolicySummary: document.querySelector("#trustPolicySummary"),
+  trustSignerList: document.querySelector("#trustSignerList"),
+  trustRevocationList: document.querySelector("#trustRevocationList"),
+  trustBundleList: document.querySelector("#trustBundleList"),
+  trustRefreshButton: document.querySelector("#trustRefreshButton"),
+  trustRevokeKind: document.querySelector("#trustRevokeKind"),
+  trustRevokeValue: document.querySelector("#trustRevokeValue"),
+  trustRevokeReason: document.querySelector("#trustRevokeReason"),
+  trustRevokeButton: document.querySelector("#trustRevokeButton"),
   objectSettingsList: document.querySelector("#objectSettingsList"),
   contractSettingsList: document.querySelector("#contractSettingsList"),
   tenantSwitcher: document.querySelector("#tenantSwitcher"),
@@ -166,6 +176,8 @@ const app = {
   costTokenSelectedKey: null,
   costTokenOverview: null,
   costTokenLoading: false,
+  trustView: null,
+  trustLoading: false,
   currentSessionId: sessionStorage.getItem("pollek.cloud.current_session_id") || "",
   currentSessionToken: sessionStorage.getItem("pollek.cloud.current_session_token") || "",
   lastInvitationToken: sessionStorage.getItem("pollek.cloud.last_invitation_token") || "",
@@ -568,6 +580,7 @@ function setActiveTab(tabName, options = {}) {
   }
 
   if (nextTab === "cost_tokens") ensureCostTokensLoaded();
+  if (nextTab === "trust") ensureTrustLoaded();
 }
 
 function ensureCostTokensLoaded(force = false) {
@@ -667,6 +680,7 @@ function render() {
   renderComplianceWorkspace();
   renderAudit();
   renderBundleStatusCenter();
+  renderTrust();
   renderSettingsWorkspace();
   renderAdministrationWorkspace();
   setActiveTab(app.activeTab, { updateHash: false });
@@ -3053,6 +3067,177 @@ function renderBundleStatusCenter() {
   }
 }
 
+// Trust spine view. Reads the single authoritative endpoint (/api/trust/provenance), which
+// aggregates the signed trust-policy, signer allowlist, revocation list, and per-bundle
+// provenance/SBOM/attestation. No client-side fabrication, no seed fallback.
+async function loadTrustView(options = {}) {
+  if (app.trustLoading && !options.force) return;
+  app.trustLoading = true;
+  try {
+    const response = await fetch("/api/trust/provenance");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    app.trustView = await response.json();
+  } catch (error) {
+    app.trustView = { error: String(error) };
+  } finally {
+    app.trustLoading = false;
+    renderTrust();
+  }
+}
+
+function ensureTrustLoaded(force = false) {
+  if (force || !app.trustView || app.trustView.error) loadTrustView({ force });
+  else renderTrust();
+}
+
+async function submitRevocation() {
+  const kind = refs.trustRevokeKind ? refs.trustRevokeKind.value : "revoked_revisions";
+  const value = refs.trustRevokeValue ? refs.trustRevokeValue.value.trim() : "";
+  const reason = refs.trustRevokeReason ? refs.trustRevokeReason.value.trim() : "";
+  if (!value) {
+    if (refs.trustRevokeValue) refs.trustRevokeValue.focus();
+    return;
+  }
+  const body = { [kind]: [value] };
+  if (reason) body.reason = reason;
+  if (refs.trustRevokeButton) refs.trustRevokeButton.disabled = true;
+  try {
+    const response = await fetch("/v1/trust/revocations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    if (refs.trustRevokeValue) refs.trustRevokeValue.value = "";
+    if (refs.trustRevokeReason) refs.trustRevokeReason.value = "";
+    await loadTrustView({ force: true });
+  } catch (error) {
+    if (refs.trustRevocationList) {
+      refs.trustRevocationList.innerHTML = `<div class="detail-row trace-row bad"><span><strong>Revocation failed</strong><small>${escapeHtml(String(error))}</small></span></div>`;
+    }
+  } finally {
+    if (refs.trustRevokeButton) refs.trustRevokeButton.disabled = false;
+  }
+}
+
+function trustVerificationStatusClass(status) {
+  if (status === "valid") return "ok";
+  if (status === "unsigned") return "warn";
+  return "bad";
+}
+
+function renderTrust() {
+  if (!refs.trustBundleList) return;
+  const view = app.trustView;
+
+  if (!view || view.error) {
+    const message = view && view.error ? `Unable to load trust spine: ${escapeHtml(view.error)}` : "Loading trust spine...";
+    if (refs.trustScopeNote) refs.trustScopeNote.textContent = message;
+    if (refs.trustPolicySummary) refs.trustPolicySummary.innerHTML = "";
+    if (refs.trustSignerList) refs.trustSignerList.innerHTML = "";
+    if (refs.trustRevocationList) refs.trustRevocationList.innerHTML = "";
+    refs.trustBundleList.innerHTML = `<div class="detail-row trace-row"><span><small>${message}</small></span></div>`;
+    return;
+  }
+
+  const policy = view.trust_policy || {};
+  const requirements = policy.requirements || {};
+  const revocations = view.revocations || {};
+  const allowlist = view.signer_allowlist || {};
+
+  if (refs.trustScopeNote) {
+    refs.trustScopeNote.textContent = `Trust domain: ${view.trust_domain || "unknown"}. Active signer: ${view.signer_key_id || "none"}. `
+      + `${view.bundle_count || 0} signed bundle(s), revocation epoch ${revocations.revocation_epoch ?? 0}. `
+      + "All documents below are ed25519-signed and served from the single trust-spine source.";
+  }
+
+  if (refs.trustPolicySummary) {
+    const activeRequirements = Object.keys(requirements).filter((key) => requirements[key] === true).length;
+    const cards = [
+      { value: policy.policy_version != null ? `v${policy.policy_version}` : "-", label: "Trust policy version", status: policy.signatures && policy.signatures.length ? "ok" : "bad" },
+      { value: String(activeRequirements), label: "require_* flags enforced", status: "ok" },
+      { value: `L${requirements.require_slsa_level ?? 0}`, label: "Min SLSA level", status: "ok" },
+      { value: String(revocations.revocation_epoch ?? 0), label: "Revocation epoch", status: (revocations.revoked_revisions || []).length || (revocations.revoked_key_ids || []).length || (revocations.revoked_bundle_digests || []).length ? "warn" : "neutral" }
+    ];
+    refs.trustPolicySummary.innerHTML = cards.map((card) => `
+      <div class="usage-total-card ${statusClass(card.status)}">
+        <span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.label)}</small></span>
+      </div>
+    `).join("");
+  }
+
+  if (refs.trustSignerList) {
+    refs.trustSignerList.innerHTML = "";
+    const signers = allowlist.signers || [];
+    if (!signers.length) {
+      refs.trustSignerList.innerHTML = `<div class="detail-row trace-row"><span><small>No signer keys published.</small></span></div>`;
+    }
+    for (const signer of signers) {
+      const row = document.createElement("div");
+      row.className = `detail-row trace-row ${statusClass(signer.status === "active" ? "ok" : "bad")}`;
+      row.innerHTML = `
+        <span>
+          <strong>${escapeHtml(signer.keyid || "unknown-key")}</strong>
+          <small>${escapeHtml(signer.alg || "ed25519")} | ${escapeHtml(signer.status || "unknown")} | purposes: ${escapeHtml((signer.purposes || []).join(", ") || "none")}</small>
+        </span>
+      `;
+      refs.trustSignerList.append(row);
+    }
+  }
+
+  if (refs.trustRevocationList) {
+    refs.trustRevocationList.innerHTML = "";
+    const rows = [
+      ...(revocations.revoked_revisions || []).map((value) => ({ type: "revision", value })),
+      ...(revocations.revoked_bundle_digests || []).map((value) => ({ type: "bundle digest", value })),
+      ...(revocations.revoked_key_ids || []).map((value) => ({ type: "signer keyid", value }))
+    ];
+    if (!rows.length) {
+      refs.trustRevocationList.innerHTML = `<div class="detail-row trace-row ok"><span><strong>No revocations</strong><small>Epoch ${escapeHtml(String(revocations.revocation_epoch ?? 0))} | deny-list is empty</small></span></div>`;
+    }
+    for (const item of rows) {
+      const row = document.createElement("div");
+      row.className = "detail-row trace-row bad";
+      row.innerHTML = `
+        <span>
+          <strong>${escapeHtml(item.value)}</strong>
+          <small>revoked ${escapeHtml(item.type)} | epoch ${escapeHtml(String(revocations.revocation_epoch ?? 0))}</small>
+        </span>
+      `;
+      refs.trustRevocationList.append(row);
+    }
+  }
+
+  refs.trustBundleList.innerHTML = "";
+  const bundles = view.bundles || [];
+  if (!bundles.length) {
+    refs.trustBundleList.innerHTML = `<div class="detail-row trace-row"><span><strong>No signed bundles yet</strong><small>Deploy a policy bundle through the gated compliance flow to see its provenance here.</small></span></div>`;
+  }
+  for (const bundle of bundles) {
+    const row = document.createElement("div");
+    row.className = `detail-row trace-row ${trustVerificationStatusClass(bundle.verification_status)}`;
+    row.innerHTML = `
+      <span>
+        <strong>${escapeHtml(bundle.bundle_id || "bundle")}</strong>
+        <small>${escapeHtml(bundle.tenant_id || "")} | rev ${escapeHtml(bundle.revision || "?")} | gen ${escapeHtml(String(bundle.generation ?? "?"))} | ${escapeHtml(bundle.verification_status || "unsigned")}</small>
+      </span>
+      <code>${escapeHtml(JSON.stringify({
+        signed_fields: bundle.signed_fields,
+        slsa_level: bundle.provenance && bundle.provenance.slsa_level,
+        materials: bundle.provenance && bundle.provenance.materials,
+        attestation: bundle.attestation,
+        data_sha256: bundle.data_sha256,
+        sbom_sha256: bundle.sbom_sha256,
+        signatures: bundle.signatures
+      }, null, 2))}</code>
+    `;
+    refs.trustBundleList.append(row);
+  }
+}
+
 function renderSettingsWorkspace() {
   if (!refs.objectSettingsList) return;
   refs.objectSettingsList.innerHTML = "";
@@ -4327,6 +4512,12 @@ refs.costTokenFrom?.addEventListener("change", (event) => applyCustomCostTokenDa
 refs.costTokenTo?.addEventListener("change", (event) => applyCustomCostTokenDate("to", event.target.value));
 
 refs.costTokenRefresh?.addEventListener("click", () => ensureCostTokensLoaded(true));
+
+refs.trustRefreshButton?.addEventListener("click", () => ensureTrustLoaded(true));
+refs.trustRevokeButton?.addEventListener("click", () => submitRevocation());
+refs.trustRevokeValue?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") submitRevocation();
+});
 
 refs.probeVisibleButton.addEventListener("click", async () => {
   const response = await fetch("/api/fleet/probe-visible", { method: "POST" });

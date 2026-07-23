@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pollek Cloud Console</title>
-    <link rel="stylesheet" href="/styles.css?v=20260630-os-fixtures" />
+    <link rel="stylesheet" href="/styles.css?v=20260723-trust-spine" />
   </head>
   <body>
     <div id="appShell" class="app-shell">
@@ -105,6 +105,7 @@
           <button class="tab" data-tab="timeline" role="tab" id="tab-timeline" aria-controls="panel-timeline" aria-selected="false">Activity</button>
           <button class="tab" data-tab="alarms" role="tab" id="tab-alarms" aria-controls="panel-alarms" aria-selected="false">Alerts</button>
           <button class="tab" data-tab="bundle_status" role="tab" id="tab-bundle_status" aria-controls="panel-bundle_status" aria-selected="false">Bundle Status</button>
+          <button class="tab" data-tab="trust" role="tab" id="tab-trust" aria-controls="panel-trust" aria-selected="false">Trust</button>
           <button class="tab" data-tab="compliance" role="tab" id="tab-compliance" aria-controls="panel-compliance" aria-selected="false">Compliance</button>
           <button class="tab" data-tab="audit" role="tab" id="tab-audit" aria-controls="panel-audit" aria-selected="false">Audit</button>
           <button class="tab" data-tab="settings" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false">Settings</button>
@@ -579,6 +580,59 @@
               </div>
             </div>
 
+            <div class="tab-panel" data-tab-panel="trust" id="panel-trust" role="tabpanel" aria-labelledby="tab-trust" hidden>
+              <div class="pane-header">
+                <div>
+                  <p class="eyebrow">Trust Spine</p>
+                  <h3>Provenance, SBOM, Attestation, Signer Allowlist, Revocations</h3>
+                </div>
+                <div class="table-tools">
+                  <button id="trustRefreshButton" class="secondary-button" type="button">Refresh</button>
+                </div>
+              </div>
+              <p id="trustScopeNote" class="muted-note"></p>
+              <div class="usage-summary-strip" id="trustPolicySummary" aria-label="Trust policy posture"></div>
+              <div class="split-panel">
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Signer Allowlist</p>
+                      <h3>Trusted Signing Keys</h3>
+                    </div>
+                  </div>
+                  <div id="trustSignerList" class="detail-list"></div>
+                </section>
+                <section class="inline-panel">
+                  <div class="pane-header compact">
+                    <div>
+                      <p class="eyebrow">Revocation List</p>
+                      <h3>Signed Deny-List (Monotonic Epoch)</h3>
+                    </div>
+                  </div>
+                  <div class="revoke-control">
+                    <select id="trustRevokeKind" aria-label="Revocation target type">
+                      <option value="revoked_revisions">Bundle revision</option>
+                      <option value="revoked_bundle_digests">Bundle digest (sha256)</option>
+                      <option value="revoked_key_ids">Signer keyid</option>
+                    </select>
+                    <input id="trustRevokeValue" type="text" placeholder="Value to revoke" aria-label="Value to revoke" />
+                    <input id="trustRevokeReason" type="text" placeholder="Reason (optional)" aria-label="Revocation reason" />
+                    <button id="trustRevokeButton" class="primary-button" type="button">Revoke</button>
+                  </div>
+                  <div id="trustRevocationList" class="detail-list"></div>
+                </section>
+              </div>
+              <section class="inline-panel">
+                <div class="pane-header compact">
+                  <div>
+                    <p class="eyebrow">Signed Bundles</p>
+                    <h3>Per-Bundle Provenance and Verification</h3>
+                  </div>
+                </div>
+                <div id="trustBundleList" class="detail-list"></div>
+              </section>
+            </div>
+
             <div class="tab-panel" data-tab-panel="settings" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
               <div class="pane-header">
                 <div>
@@ -826,6 +880,6 @@
         </div>
       </main>
     </div>
-    <script src="/app.js?v=20260630-os-fixtures" type="module"></script>
+    <script src="/app.js?v=20260723-trust-spine" type="module"></script>
   </body>
 </html>
