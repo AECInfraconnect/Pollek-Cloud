@@ -1,6 +1,6 @@
 {
   "schema_version": "pollek-cloud-contract-discovery.v1",
-  "contract_version": "2026.07.13",
+  "contract_version": "2026.07.23",
   "cloud_version": "0.1.0-dev",
   "minimum_local_enforcement_kit": "1.0.0-beta.1",
   "source_compatibility_target": "1.0.0-beta.10",
@@ -12,7 +12,11 @@
     "events": "/contracts/events.schema.json",
     "bundle_manifest": "/contracts/bundle-manifest.schema.json",
     "telemetry_envelope": "/contracts/telemetry-envelope.schema.json",
-    "lcp_usage_ledger": "/contracts/lcp-usage-ledger.schema.json"
+    "lcp_usage_ledger": "/contracts/lcp-usage-ledger.schema.json",
+    "bundle_provenance": "/contracts/bundle-provenance.schema.json",
+    "trust_policy": "/contracts/trust-policy.schema.json",
+    "revocation_list": "/contracts/revocation-list.schema.json",
+    "signer_allowlist": "/contracts/signer-allowlist.schema.json"
   },
   "interfaces": {
     "pollek.cloud.enrollment": {
@@ -99,7 +103,7 @@
       "direction": "local_to_cloud",
       "requires_oauth": false,
       "requires_spiffe": false,
-      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json", "/contracts/fixtures/lcp-usage-ledger/windows.json", "/contracts/fixtures/lcp-usage-ledger/macos.json", "/contracts/fixtures/lcp-usage-ledger/linux.json", "/api/contract-hub/drift"],
+      "paths": ["/.well-known/pollek-contract", "/contracts/openapi.json", "/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json", "/contracts/bundle-provenance.schema.json", "/contracts/trust-policy.schema.json", "/contracts/revocation-list.schema.json", "/contracts/signer-allowlist.schema.json", "/contracts/fixtures/lcp-usage-ledger/windows.json", "/contracts/fixtures/lcp-usage-ledger/macos.json", "/contracts/fixtures/lcp-usage-ledger/linux.json", "/api/contract-hub/drift"],
       "purpose": "Contract Hub publishes machine-readable cloud protocol artifacts and drift status for Local Pollek compatibility checks."
     },
     "pollek.cloud.policy_bundle": {
@@ -108,7 +112,7 @@
       "requires_oauth": true,
       "requires_spiffe": true,
       "paths": ["/v1/tenants/{tenant_id}/bundles/latest", "/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest", "/v1/policy-bundles/{bundle_id}/manifest", "/v1/policy-bundles/{bundle_id}/artifact"],
-      "controls": ["signed_manifest", "content_addressed_artifact", "immutable_cache", "artifact_hash"]
+      "controls": ["signed_manifest", "content_addressed_artifact", "immutable_cache", "artifact_hash", "signed_data_json", "slsa_provenance", "cyclonedx_sbom", "test_pass_attestation", "monotonic_generation", "tenant_target_match", "ed25519_detached_signatures"]
     },
     "pollek.cloud.policy_bundle_signing": {
       "direction": "cloud_admin",
@@ -118,6 +122,22 @@
       "human_approval_required": true,
       "paths": ["/api/policy-bundles/{bundle_id}/sign", "/api/policy-bundles/{bundle_id}/verify"],
       "controls": ["approval_record_required", "ed25519_signature", "payload_hash", "public_key_pinning", "audit_event", "task_record"]
+    },
+    "pollek.cloud.trust_spine": {
+      "direction": "cloud_to_local",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "paths": ["/v1/trust/policy", "/v1/trust/signer-allowlist", "/v1/trust/revocations"],
+      "purpose": "Cloud publishes the trust spine consumed by dek-trust-gate: the cloud-authored trust-policy, the signer allowlist, and the signed revocation list. Runtime trusts evidence, not location.",
+      "controls": ["ed25519_detached_signatures", "signer_allowlist_pinning", "monotonic_revocation_epoch", "monotonic_policy_version", "cloud_authored_trust_policy_max_strictness", "deny_list_semantics"]
+    },
+    "pollek.cloud.trust_admin": {
+      "direction": "cloud_admin",
+      "requires_oauth": true,
+      "requires_spiffe": false,
+      "paths": ["/v1/trust/revocations", "/api/trust/provenance"],
+      "purpose": "Cloud operators add revocations (monotonic epoch bump, signed) and read the emitted provenance/SBOM/attestation for the Trust & Provenance dashboard.",
+      "controls": ["ed25519_detached_signatures", "monotonic_revocation_epoch", "audit_event", "task_record", "dual_control_unlock_planned"]
     },
     "pollek.cloud.policy_authoring": {
       "direction": "cloud_admin",
@@ -272,6 +292,16 @@
     "metered_billing_seat_device": true,
     "offline_license": true,
     "kms_abstraction": true,
-    "billing_webhook_idempotency": true
+    "billing_webhook_idempotency": true,
+    "trust_spine_emission": true,
+    "signed_bundle_data_json": true,
+    "slsa_provenance_emission": true,
+    "cyclonedx_sbom_emission": true,
+    "test_pass_attestation": true,
+    "monotonic_bundle_generation": true,
+    "signer_allowlist_endpoint": true,
+    "signed_revocation_list": true,
+    "cloud_authored_trust_policy": true,
+    "trust_provenance_dashboard": true
   }
 }

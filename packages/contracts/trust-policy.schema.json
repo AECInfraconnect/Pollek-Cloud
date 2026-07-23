@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pollek.cloud/trust-policy.schema.json",
+  "title": "Pollek Trust Policy",
+  "description": "Cloud-authored trust policy consumed by dek-trust-gate. Cloud authors and distributes this document; the DEK may only make it STRICTER (effective = max(cloud, local) on every require_* flag). A spoofed or compromised Cloud push therefore cannot lower the gate.",
+  "type": "object",
+  "required": ["schema_version", "policy_version", "issued_at", "requirements", "signatures"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "pollek.trust.trust-policy.v1"
+    },
+    "policy_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic version. The gate rejects a policy older than the one it already holds."
+    },
+    "trust_domain": {
+      "type": "string",
+      "description": "SPIFFE trust domain this policy applies to (default spiffe://pollek.io). One trust domain per Cloud deployment; tenant lives in the SVID path."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "require_* gate flags. Local override is additive-strictness only.",
+      "properties": {
+        "require_signature": { "type": "boolean" },
+        "require_signed_data": { "type": "boolean", "description": "Require the signature to cover data.json, not just policy.wasm." },
+        "require_provenance": { "type": "boolean" },
+        "require_slsa_level": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "require_sbom": { "type": "boolean" },
+        "sbom_formats": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["cyclonedx", "spdx"] },
+          "uniqueItems": true
+        },
+        "require_test_attestation": { "type": "boolean" },
+        "require_signer_in_allowlist": { "type": "boolean" },
+        "require_tenant_match": { "type": "boolean" },
+        "require_generation_monotonic": { "type": "boolean" },
+        "signature_algorithms": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["ed25519"] },
+          "uniqueItems": true
+        }
+      }
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "refresh_interval_seconds": { "type": "integer", "minimum": 1, "description": "Target pull cadence for the revocation list (default 300)." },
+        "max_staleness_seconds": { "type": "integer", "minimum": 1, "description": "Revocation data older than this is fail-closed for new activations (default 3600)." },
+        "semantics": { "type": "string", "enum": ["deny_list"] }
+      }
+    },
+    "kill_switch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "propagation_target_seconds": { "type": "number", "minimum": 0 },
+        "modes": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["deny_all", "deny_high_risk"] },
+          "uniqueItems": true
+        },
+        "unlock_requires_dual_control": { "type": "boolean" }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/detachedSignature" }
+    }
+  },
+  "$defs": {
+    "detachedSignature": {
+      "type": "object",
+      "required": ["keyid", "sig"],
+      "additionalProperties": true,
+      "properties": {
+        "keyid": { "type": "string", "minLength": 1 },
+        "sig": { "type": "string", "minLength": 32, "description": "base64url ed25519 detached signature over the canonical unsigned document." },
+        "alg": { "type": "string", "enum": ["ed25519"] }
+      }
+    }
+  }
+}

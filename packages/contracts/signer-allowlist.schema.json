@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pollek.cloud/signer-allowlist.schema.json",
+  "title": "Pollek Signer Allowlist",
+  "description": "Signed set of trusted signer keys. dek-trust-gate accepts a bundle signature only when its keyid resolves to an active (non-revoked) entry here. Rotation merges only when signed by an already-trusted key (rogue-key-injection guard).",
+  "type": "object",
+  "required": ["schema_version", "allowlist_epoch", "issued_at", "signers", "signatures"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "pollek.trust.signer-allowlist.v1"
+    },
+    "allowlist_epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic counter; the gate rejects an allowlist older than the one it already holds."
+    },
+    "trust_domain": {
+      "type": "string"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "signers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["keyid", "alg", "status", "public_key"],
+        "additionalProperties": true,
+        "properties": {
+          "keyid": { "type": "string", "minLength": 1, "description": "Stable id; matches signatures[].keyid on bundles/trust docs." },
+          "alg": { "type": "string", "enum": ["ed25519"] },
+          "status": { "type": "string", "enum": ["active", "revoked"] },
+          "public_key": {
+            "type": "object",
+            "required": ["raw_base64url"],
+            "additionalProperties": true,
+            "properties": {
+              "raw_base64url": { "type": "string", "minLength": 32, "description": "Raw 32-byte ed25519 public key (base64url) for ed25519-dalek verify_strict." },
+              "pem": { "type": "string", "description": "SPKI PEM form for convenience." }
+            }
+          },
+          "purposes": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["bundle", "trust_policy", "revocation", "signer_allowlist", "kill_switch"] },
+            "uniqueItems": true
+          },
+          "not_before": { "type": "string", "format": "date-time" },
+          "not_after": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["keyid", "sig"],
+        "additionalProperties": true,
+        "properties": {
+          "keyid": { "type": "string", "minLength": 1 },
+          "sig": { "type": "string", "minLength": 32 },
+          "alg": { "type": "string", "enum": ["ed25519"] }
+        }
+      }
+    }
+  }
+}

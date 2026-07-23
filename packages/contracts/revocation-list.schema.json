@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pollek.cloud/revocation-list.schema.json",
+  "title": "Pollek Revocation List",
+  "description": "Signed deny-list consumed by dek-trust-gate. Monotonic revocation_epoch prevents replay of an older (shorter) list. Signed by a currently-trusted key on the same chain-of-trust as key rotation.",
+  "type": "object",
+  "required": ["schema_version", "revocation_epoch", "issued_at", "revoked_key_ids", "revoked_bundle_digests", "revoked_revisions", "signatures"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "pollek.trust.revocation-list.v1"
+    },
+    "revocation_epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic counter. The gate rejects a list whose epoch is lower than the one it already holds."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revoked_key_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "revoked_bundle_digests": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^(sha256:)?[a-f0-9]{64}$" },
+      "uniqueItems": true
+    },
+    "revoked_revisions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["keyid", "sig"],
+        "additionalProperties": true,
+        "properties": {
+          "keyid": { "type": "string", "minLength": 1 },
+          "sig": { "type": "string", "minLength": 32 },
+          "alg": { "type": "string", "enum": ["ed25519"] }
+        }
+      }
+    }
+  }
+}
