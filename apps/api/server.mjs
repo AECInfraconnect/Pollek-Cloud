@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import * as db from "./db.mjs";
+import * as keycloak from "./keycloak.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
@@ -6088,6 +6089,40 @@ async function handleApi(req, res) {
     }
   }
 
+  // Cloud-side Keycloak bearer verification + tenant-context enforcement for DEK-facing
+  // boundaries. Config-gated (POLLEK_KEYCLOAK_JWT_MODE, default off). A JWT-shaped bearer is
+  // verified against the realm JWKS (RS256, iss/aud/exp) and its tenant claim must match the
+  // request tenant; enforce fails closed (401 invalid/missing, 403 tenant mismatch), monitor
+  // audits but allows. Opaque/dev/session tokens are left to their existing handling.
+  if (keycloak.isEnabled() && isMtlsProtectedPath(pathname)) {
+    const cfg = keycloak.config();
+    const authHeader = String(req.headers.authorization || "");
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
+    const looksJwt = bearer.split(".").length === 3;
+    const tenantInPath = pathname.match(/^\/v1\/tenants\/([^/]+)\//);
+    const expectedTenant = tenantInPath
+      ? decodeURIComponent(tenantInPath[1])
+      : (typeof req.headers["x-pollek-tenant-id"] === "string" ? req.headers["x-pollek-tenant-id"] : null);
+    let problem = null;
+    if (looksJwt) {
+      const verified = await keycloak.verifyToken(bearer, cfg);
+      if (!verified.valid) problem = `jwt_${verified.reason}`;
+      else if (expectedTenant && !verified.tenant_id) problem = "jwt_missing_tenant_claim";
+      else if (expectedTenant && verified.tenant_id !== expectedTenant) problem = "jwt_tenant_mismatch";
+    } else if (cfg.mode === "enforce") {
+      problem = bearer ? "jwt_not_a_jwt" : "jwt_required";
+    }
+    if (problem) {
+      if (cfg.mode === "enforce") {
+        const status = problem === "jwt_tenant_mismatch" ? 403 : 401;
+        recordAudit("iam.jwt_rejected", "transport", pathname, { problem, expected_tenant_id: expectedTenant || null });
+        sendJson(res, status, { error: problem, expected_tenant_id: expectedTenant || null });
+        return true;
+      }
+      recordAudit("iam.jwt_warning", "transport", pathname, { problem, expected_tenant_id: expectedTenant || null });
+    }
+  }
+
   if (req.method === "GET" && (pathname === "/api/events" || pathname === "/api/hot-reload/stream")) {
     openEventStream(req, res, pathname === "/api/hot-reload/stream" ? "hot-reload" : "contract-hub");
     return true;
@@ -7950,6 +7985,8 @@ async function handleApi(req, res) {
       },
       persistence: runtimePersistenceStatus(),
       security_posture: securityPostureStatus(),
+      iam_jwt: keycloak.status(),
+      mtls: { mode: mtlsMode, identity_header: mtlsIdentityHeader, trust_domain: trustDomain },
       contract: await contractDiscovery()
     });
     return true;
