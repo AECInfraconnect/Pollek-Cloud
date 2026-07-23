@@ -133,6 +133,34 @@ model OfflineLicenseRequest {
 @route("/contracts/lcp-usage-ledger.schema.json")
 @get op getLcpUsageLedgerSchema(): unknown;
 
+@route("/contracts/bundle-provenance.schema.json")
+@get op getBundleProvenanceSchema(): unknown;
+
+@route("/contracts/trust-policy.schema.json")
+@get op getTrustPolicySchema(): unknown;
+
+@route("/contracts/revocation-list.schema.json")
+@get op getRevocationListSchema(): unknown;
+
+@route("/contracts/signer-allowlist.schema.json")
+@get op getSignerAllowlistSchema(): unknown;
+
+// Cloud-Phase-1 trust spine consumed by dek-trust-gate.
+@route("/v1/trust/policy")
+@get op getTrustPolicy(): unknown;
+
+@route("/v1/trust/signer-allowlist")
+@get op getSignerAllowlist(): unknown;
+
+@route("/v1/trust/revocations")
+@get op getRevocationList(): unknown;
+
+@route("/v1/trust/revocations")
+@post op addRevocation(@body request: Record<unknown>): unknown;
+
+@route("/api/trust/provenance")
+@get op getTrustProvenance(): unknown;
+
 @route("/v1/telemetry/batches")
 @post op ingestTelemetryBatch(@body request: Record<unknown>): unknown;
 

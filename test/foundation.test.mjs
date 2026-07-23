@@ -1,9 +1,41 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+// Canonical JSON must match the server's stableJson (recursive key sort, arrays in order)
+// so the DEK relying-party can reconstruct the exact signed bytes for ed25519 verification.
+function stableJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+}
+
+// Build an ed25519 public key from the raw 32-byte key (base64url) published in the signer
+// allowlist — the same input the DEK's ed25519-dalek verify_strict consumes.
+function ed25519KeyFromRawB64(rawB64) {
+  return crypto.createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: rawB64 }, format: "jwk" });
+}
+
+function verifyDetached(unsignedObject, sigB64Url, publicKey) {
+  return crypto.verify(null, Buffer.from(stableJson(unsignedObject)), publicKey, Buffer.from(sigB64Url, "base64url"));
+}
+
+// Strip the fields the server appends on top of the signed manifest to recover the exact
+// unsigned bytes the signature covers.
+function unsignedFromServedManifest(manifest) {
+  const { payload_hash, signatures, verification, signing_action, ...unsigned } = manifest;
+  return unsigned;
+}
+
+// Strip the detached signatures[] to recover the signed body of a trust document.
+function unsignedTrustBody(doc) {
+  const { signatures, ...unsigned } = doc;
+  return unsigned;
+}
 
 async function waitForJson(url, options = {}, attempts = 80) {
   let lastError = null;
@@ -314,7 +346,7 @@ test("typespec source and sdk artifact cover core Contract Hub APIs", async () =
   assert.match(typespec, /op listRegistryAgents/);
   assert.match(typespec, /op listDiscoveryCandidates/);
   assert.match(sdk, /export class PollekCloudClient/);
-  assert.match(sdk, /POLLEK_CONTRACT_VERSION = "2026\.07\.13"/);
+  assert.match(sdk, /POLLEK_CONTRACT_VERSION = "2026\.07\.23"/);
   assert.match(sdk, /replayEvents/);
   assert.match(sdk, /checkAuthorization/);
   assert.match(sdk, /signupTenant/);
@@ -1677,4 +1709,195 @@ test("static console assets stay ascii-only", async () => {
     const content = await readFile(file, "utf8");
     assert.equal([...content].every((char) => char.charCodeAt(0) <= 127), true, `${file} contains non-ascii characters`);
   }
+});
+
+// --- Cloud-Phase-1 trust spine (DEK/LCP alignment) ---------------------------------------
+
+async function deployRealBundle(baseUrl) {
+  await api(baseUrl, "/api/authz/tuples", {
+    method: "POST",
+    body: { tenant_id: "local", principal: "user:local-dev-security-admin", relation: "admin", object: "tenant:local" }
+  });
+  const deploy = await api(baseUrl, "/api/compliance/policy-bundles/deploy", {
+    method: "POST",
+    body: { tenant_id: "local", bundle_id: "cmp_soc2_gdpr_data_access", approved_by: "local-dev-security-admin", reason: "phase-1 trust spine test" }
+  });
+  assert.equal(deploy.response.status, 201);
+  const bundleId = deploy.payload?.bundle?.id || deploy.payload?.policy_bundle?.id;
+  assert.ok(bundleId, "deploy returned a bundle id");
+  return bundleId;
+}
+
+test("cloud emits provenance, SBOM and attestation signed inside the bundle (incl data.json)", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const bundleId = await deployRealBundle(baseUrl);
+    const manifestRes = await api(baseUrl, `/v1/policy-bundles/${encodeURIComponent(bundleId)}/manifest`);
+    assert.equal(manifestRes.response.status, 200);
+    const manifest = manifestRes.payload;
+
+    // Signed content covers policy.wasm AND data.json.
+    assert.deepEqual(manifest.signed_fields, ["policy.wasm", "data.json"]);
+    assert.ok(typeof manifest.data === "object" && manifest.data !== null);
+    assert.match(manifest.data_sha256, /^[a-f0-9]{64}$/);
+
+    // Monotonic generation assigned.
+    assert.equal(Number.isInteger(manifest.generation), true);
+    assert.ok(manifest.generation >= 1);
+
+    // SLSA-style provenance (Build L2) with a data.json material.
+    assert.equal(manifest.provenance.schema_version, "pollek.trust.bundle-provenance.v1");
+    assert.equal(manifest.provenance.slsa_level, 2);
+    assert.ok(manifest.provenance.builder.id.startsWith("https://pollek.cloud/builders/"));
+    assert.ok(manifest.provenance.materials.some((m) => m.uri.endsWith("/data.json")));
+
+    // CycloneDX SBOM, non-empty.
+    assert.equal(manifest.sbom.bomFormat, "CycloneDX");
+    assert.ok(Array.isArray(manifest.sbom.components) && manifest.sbom.components.length > 0);
+    assert.match(manifest.sbom_sha256, /^[a-f0-9]{64}$/);
+
+    // Test-pass attestation.
+    assert.equal(manifest.attestation.predicate.result, "passed");
+    assert.equal(manifest.attestation.predicate.failures, 0);
+
+    // Cloud's own verification is valid and carries a keyid.
+    assert.equal(manifest.verification.status, "valid");
+    assert.ok(manifest.signatures.length >= 1);
+    assert.ok(manifest.signatures[0].keyid && manifest.signatures[0].keyid.startsWith("pollek-cloud-ed25519-"));
+  });
+});
+
+test("emitted bundle signature verifies against the published signer allowlist key", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const bundleId = await deployRealBundle(baseUrl);
+    const manifest = (await api(baseUrl, `/v1/policy-bundles/${encodeURIComponent(bundleId)}/manifest`)).payload;
+    const allowlist = (await api(baseUrl, "/v1/trust/signer-allowlist")).payload;
+
+    const signature = manifest.signatures[0];
+    const signer = allowlist.signers.find((s) => s.keyid === signature.keyid);
+    assert.ok(signer, "manifest signer is present in the allowlist");
+    assert.equal(signer.status, "active");
+
+    const pubKey = ed25519KeyFromRawB64(signer.public_key.raw_base64url);
+    const unsigned = unsignedFromServedManifest(manifest);
+
+    // Genuine signature verifies over the exact reconstructed bytes.
+    assert.equal(verifyDetached(unsigned, signature.sig, pubKey), true);
+
+    // Red-team: tampered data.json breaks the signature (poisoned-data / tamper vector).
+    const tampered = { ...unsigned, data: { ...unsigned.data, injected: "malicious" } };
+    assert.equal(verifyDetached(tampered, signature.sig, pubKey), false);
+
+    // Red-team: wrong tenant breaks the signature (wrong-tenant vector).
+    const wrongTenant = { ...unsigned, tenant_id: "attacker" };
+    assert.equal(verifyDetached(wrongTenant, signature.sig, pubKey), false);
+
+    // Red-team: generation downgrade breaks the signature (downgrade vector).
+    const downgraded = { ...unsigned, generation: 0 };
+    assert.equal(verifyDetached(downgraded, signature.sig, pubKey), false);
+  });
+});
+
+test("cloud serves a signed, verifiable trust-policy with max-strictness requirements", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const policyRes = await api(baseUrl, "/v1/trust/policy");
+    assert.equal(policyRes.response.status, 200);
+    const policy = policyRes.payload;
+
+    assert.equal(policy.schema_version, "pollek.trust.trust-policy.v1");
+    assert.equal(policy.trust_domain, "spiffe://pollek.io");
+    assert.equal(policy.requirements.require_signed_data, true);
+    assert.equal(policy.requirements.require_provenance, true);
+    assert.equal(policy.requirements.require_sbom, true);
+    assert.equal(policy.requirements.require_signer_in_allowlist, true);
+    assert.equal(policy.requirements.require_tenant_match, true);
+    assert.deepEqual(policy.requirements.signature_algorithms, ["ed25519"]);
+    assert.equal(policy.revocation.semantics, "deny_list");
+
+    // Signed and verifiable against the allowlist key.
+    const allowlist = (await api(baseUrl, "/v1/trust/signer-allowlist")).payload;
+    const sig = policy.signatures[0];
+    const signer = allowlist.signers.find((s) => s.keyid === sig.keyid);
+    const pubKey = ed25519KeyFromRawB64(signer.public_key.raw_base64url);
+    assert.equal(verifyDetached(unsignedTrustBody(policy), sig.sig, pubKey), true);
+
+    // Red-team: a weakened trust policy no longer verifies (a spoofed push cannot lower the gate).
+    const weakened = unsignedTrustBody(policy);
+    weakened.requirements = { ...weakened.requirements, require_signature: false };
+    assert.equal(verifyDetached(weakened, sig.sig, pubKey), false);
+  });
+});
+
+test("revocation list is signed, monotonic, and rejects empty targets", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const initial = (await api(baseUrl, "/v1/trust/revocations")).payload;
+    assert.equal(initial.schema_version, "pollek.trust.revocation-list.v1");
+    assert.equal(initial.revocation_epoch, 0);
+
+    // Empty revocation is rejected.
+    const empty = await api(baseUrl, "/v1/trust/revocations", { method: "POST", body: {} });
+    assert.equal(empty.response.status, 400);
+
+    // Revoke a bundle revision -> epoch bumps to 1.
+    const first = await api(baseUrl, "/v1/trust/revocations", {
+      method: "POST",
+      body: { revoked_revisions: ["2026.06.29.001"], reason: "compromised revision" }
+    });
+    assert.equal(first.response.status, 201);
+    assert.equal(first.payload.revocation_epoch, 1);
+    assert.ok(first.payload.revoked_revisions.includes("2026.06.29.001"));
+
+    // Revoke a key -> epoch bumps to 2 (monotonic, cannot replay an older list).
+    const second = await api(baseUrl, "/v1/trust/revocations", {
+      method: "POST",
+      body: { revoked_key_ids: ["pollek-cloud-ed25519-deadbeefdeadbeef"] }
+    });
+    assert.equal(second.payload.revocation_epoch, 2);
+    assert.ok(second.payload.revocation_epoch > first.payload.revocation_epoch);
+
+    // The served list is signed and verifiable.
+    const list = (await api(baseUrl, "/v1/trust/revocations")).payload;
+    const allowlist = (await api(baseUrl, "/v1/trust/signer-allowlist")).payload;
+    const sig = list.signatures[0];
+    const signer = allowlist.signers.find((s) => s.keyid === sig.keyid);
+    const pubKey = ed25519KeyFromRawB64(signer.public_key.raw_base64url);
+    assert.equal(verifyDetached(unsignedTrustBody(list), sig.sig, pubKey), true);
+
+    // Red-team: shrinking the deny-list (replay an older/shorter list) breaks the signature.
+    const shrunk = unsignedTrustBody(list);
+    shrunk.revoked_revisions = [];
+    assert.equal(verifyDetached(shrunk, sig.sig, pubKey), false);
+  });
+});
+
+test("trust provenance dashboard view aggregates signed evidence per bundle", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const bundleId = await deployRealBundle(baseUrl);
+    const view = (await api(baseUrl, "/api/trust/provenance")).payload;
+    assert.equal(view.schema_version, "pollek.cloud.trust-provenance-view.v1");
+    assert.equal(view.trust_domain, "spiffe://pollek.io");
+    assert.ok(view.signer_key_id.startsWith("pollek-cloud-ed25519-"));
+    assert.ok(view.bundle_count >= 1);
+    const entry = view.bundles.find((b) => b.bundle_id === bundleId);
+    assert.ok(entry, "deployed bundle appears in the provenance view");
+    assert.equal(entry.verification_status, "valid");
+    assert.equal(entry.provenance.slsa_level, 2);
+    assert.equal(entry.attestation.result, "passed");
+    assert.ok(view.trust_policy.signatures.length >= 1);
+    assert.ok(view.signer_allowlist.signers.length >= 1);
+  });
+});
+
+test("contract hub serves the new trust-spine schema artifacts", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    for (const artifactPath of [
+      "/contracts/bundle-provenance.schema.json",
+      "/contracts/trust-policy.schema.json",
+      "/contracts/revocation-list.schema.json",
+      "/contracts/signer-allowlist.schema.json"
+    ]) {
+      const res = await api(baseUrl, artifactPath);
+      assert.equal(res.response.status, 200, `${artifactPath} should be served`);
+      assert.ok(res.payload.$id.includes(artifactPath.split("/").pop()));
+    }
+  });
 });

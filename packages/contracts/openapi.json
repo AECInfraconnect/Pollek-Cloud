@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Pollek Cloud Contract Hub API",
-    "version": "2026.07.13",
+    "version": "2026.07.23",
     "description": "Local development OpenAPI artifact generated from the Contract Hub discovery contract."
   },
   "servers": [
@@ -2922,6 +2922,56 @@
         "x-pollek-tenant-scoped": false
       }
     },
+    "/api/trust/provenance": {
+      "get": {
+        "tags": [
+          "pollek.cloud.trust_admin"
+        ],
+        "summary": "Pollek Cloud GET /api/trust/provenance",
+        "operationId": "getApiTrustProvenance",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.trust_admin"
+        ],
+        "x-pollek-direction": [
+          "cloud_admin"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
     "/api/trust/scopes": {
       "get": {
         "tags": [
@@ -2979,6 +3029,51 @@
         ],
         "summary": "Pollek Cloud GET /contracts/bundle-manifest.schema.json",
         "operationId": "getContractsBundleManifestSchemaJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/contracts/bundle-provenance.schema.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/bundle-provenance.schema.json",
+        "operationId": "getContractsBundleProvenanceSchemaJson",
         "responses": {
           "200": {
             "description": "Successful local development response",
@@ -3287,6 +3382,96 @@
         "x-pollek-tenant-scoped": false
       }
     },
+    "/contracts/revocation-list.schema.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/revocation-list.schema.json",
+        "operationId": "getContractsRevocationListSchemaJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/contracts/signer-allowlist.schema.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/signer-allowlist.schema.json",
+        "operationId": "getContractsSignerAllowlistSchemaJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
     "/contracts/telemetry-envelope.schema.json": {
       "get": {
         "tags": [
@@ -3294,6 +3479,51 @@
         ],
         "summary": "Pollek Cloud GET /contracts/telemetry-envelope.schema.json",
         "operationId": "getContractsTelemetryEnvelopeSchemaJson",
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "x-pollek-direction": [
+          "local_to_cloud"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/contracts/trust-policy.schema.json": {
+      "get": {
+        "tags": [
+          "pollek.cloud.contract_artifacts"
+        ],
+        "summary": "Pollek Cloud GET /contracts/trust-policy.schema.json",
+        "operationId": "getContractsTrustPolicySchemaJson",
         "responses": {
           "200": {
             "description": "Successful local development response",
@@ -8089,6 +8319,221 @@
         "x-pollek-enterprise-only": false,
         "x-pollek-tenant-scoped": false
       }
+    },
+    "/v1/trust/policy": {
+      "get": {
+        "tags": [
+          "pollek.cloud.trust_spine"
+        ],
+        "summary": "Pollek Cloud GET /v1/trust/policy",
+        "operationId": "getV1TrustPolicy",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.trust_spine"
+        ],
+        "x-pollek-direction": [
+          "cloud_to_local"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/trust/revocations": {
+      "get": {
+        "tags": [
+          "pollek.cloud.trust_spine",
+          "pollek.cloud.trust_admin"
+        ],
+        "summary": "Pollek Cloud GET /v1/trust/revocations",
+        "operationId": "getV1TrustRevocations",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.trust_spine",
+          "pollek.cloud.trust_admin"
+        ],
+        "x-pollek-direction": [
+          "cloud_to_local",
+          "cloud_admin"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      },
+      "post": {
+        "tags": [
+          "pollek.cloud.trust_spine",
+          "pollek.cloud.trust_admin"
+        ],
+        "summary": "Pollek Cloud POST /v1/trust/revocations",
+        "operationId": "postV1TrustRevocations",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.trust_spine",
+          "pollek.cloud.trust_admin"
+        ],
+        "x-pollek-direction": [
+          "cloud_to_local",
+          "cloud_admin"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
+    },
+    "/v1/trust/signer-allowlist": {
+      "get": {
+        "tags": [
+          "pollek.cloud.trust_spine"
+        ],
+        "summary": "Pollek Cloud GET /v1/trust/signer-allowlist",
+        "operationId": "getV1TrustSignerAllowlist",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful local development response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted for asynchronous processing"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Tenant entitlement or authorization denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          }
+        },
+        "x-pollek-interfaces": [
+          "pollek.cloud.trust_spine"
+        ],
+        "x-pollek-direction": [
+          "cloud_to_local"
+        ],
+        "x-pollek-enterprise-only": false,
+        "x-pollek-tenant-scoped": false
+      }
     }
   },
   "components": {
@@ -8104,7 +8549,7 @@
       }
     }
   },
-  "x-pollek-contract-version": "2026.07.13",
+  "x-pollek-contract-version": "2026.07.23",
   "x-pollek-schema-version": "pollek-cloud-contract-discovery.v1",
   "x-pollek-generated-from": "packages/contracts/pollek-contract.json"
 }
