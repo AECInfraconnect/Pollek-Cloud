@@ -40,6 +40,30 @@ bundles/boundaries are not yet Keycloak-enforced.
   the two SPIRE topologies, decision drivers, and what ratification must nail down. Decision is
   for Cloud + DEK owners; nothing is provisioned.
 
+## Delivered — signer abstraction + rotation overlap (partial of next action #6)
+
+`apps/api/signer.mjs` + wiring. This is the part of the Cosmian adapter that is real and
+testable **without** a live KMS:
+- **Key-version overlap (rotation):** previous signing keys still inside their overlap window
+  (`POLLEK_TRUST_RETIRED_PUBKEYS`) are published as `active` (unless revoked) in the signer
+  allowlist and accepted by trust-document and policy-bundle verification, so a bundle signed
+  just before a rotation stays valid during overlap. Revoked overlap keys publish as `revoked`.
+- **Public-key verification** consolidated in `verifyAgainstKeys` (real ed25519).
+- **Approval-record enforcement** centralized (`enforceApprovalRecord`, AGENTS.md rule 6) in
+  the bundle signing path.
+- **Honest backend gate:** `POLLEK_SIGNER_BACKEND` other than `local` **fails loudly at
+  startup** rather than signing with the in-process key and mislabeling it KMS-backed.
+
+Level reached: **application path implemented + integration/unit-tested** (6 signer unit tests +
+2 allowlist overlap HTTP tests; 47 total pass, 4 PG skip).
+
+**Still open in #6 (blocked on external inputs):** the **Cosmian KMS transport** (KMIP
+JSON-TTLV detached sign/verify) is deliberately NOT implemented — its docs were unreachable
+(403) and there is no live KMS in this environment to validate against. Shipping a guessed
+transport would violate the roadmap's "no faking" rule. It is handed to Codex/DEK to validate
+against the live Cosmian service; until then production bundles are signed by the in-process
+key and we do NOT claim KMS-signed.
+
 ## Explicitly NOT done (unchanged from the hand-off)
 
 - **SPIRE** not deployed — blocked on ADR 0001. `SPIRE_*` vars stay unset.
