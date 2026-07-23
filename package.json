@@ -12,7 +12,7 @@
     "start": "node apps/api/server.mjs",
     "test:lcp": "node scripts/test-lcp-connection.mjs",
     "smoke:sync": "node scripts/smoke-sync.mjs",
-    "audit:foundation": "node --check apps/api/server.mjs && node --check apps/api/db.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test",
+    "audit:foundation": "node --check apps/api/server.mjs && node --check apps/api/db.mjs && node --check apps/api/keycloak.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {

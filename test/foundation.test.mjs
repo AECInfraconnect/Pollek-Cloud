@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import http from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -2007,5 +2008,134 @@ test("mTLS monitor mode allows missing SVID but records a warning; off mode is u
       body: { schema_version: "telemetry-envelope.v1", event_id: "e3", event_type: "test.v1", tenant_id: "local", device_id: "d3", timestamp: new Date().toISOString(), payload: {} }
     });
     assert.ok(res.response.status !== 401 && res.response.status !== 403, "monitor mode does not fail closed");
+  });
+});
+
+// --- Cloud Keycloak JWT verification + tenant enforcement --------------------------------
+
+// Local RSA signer + JWKS server so we exercise real RS256 verification (no live Keycloak).
+function makeJwtHarness() {
+  const kid = "test-key-1";
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const jwk = { ...publicKey.export({ format: "jwk" }), kid, alg: "RS256", use: "sig" };
+  const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const mint = (claims, { key = privateKey, header = {} } = {}) => {
+    const h = b64({ alg: "RS256", typ: "JWT", kid, ...header });
+    const p = b64(claims);
+    const sig = crypto.sign("RSA-SHA256", Buffer.from(`${h}.${p}`), key).toString("base64url");
+    return `${h}.${p}.${sig}`;
+  };
+  return { jwk, mint, privateKey };
+}
+
+async function withJwksServer(t, jwk) {
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ keys: [jwk] }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  return `http://127.0.0.1:${port}/certs`;
+}
+
+const ISSUER = "https://keycloak.test/realms/pollek";
+const AUDIENCE = "pollek-cloud-api";
+const PROTECTED = "/v1/tenants/local/telemetry/events";
+
+function jwtEnv(jwksUrl, mode) {
+  return {
+    POLLEK_KEYCLOAK_JWT_MODE: mode,
+    KEYCLOAK_JWKS_URL: jwksUrl,
+    KEYCLOAK_ISSUER_URL: ISSUER,
+    KEYCLOAK_EXPECTED_AUDIENCE: AUDIENCE,
+    KEYCLOAK_TENANT_CLAIM: "tenant_id"
+  };
+}
+
+function baseClaims(overrides = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  return { iss: ISSUER, aud: AUDIENCE, sub: "device-1", tenant_id: "local", iat: now, exp: now + 300, ...overrides };
+}
+
+test("JWT enforce: valid same-tenant token passes the identity gate", async (t) => {
+  const h = makeJwtHarness();
+  const jwksUrl = await withJwksServer(t, h.jwk);
+  await withDevServer(t, jwtEnv(jwksUrl, "enforce"), async (baseUrl) => {
+    const token = h.mint(baseClaims());
+    const res = await api(baseUrl, PROTECTED, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: { schema_version: "telemetry-envelope.v1", event_id: "e1", event_type: "t.v1", tenant_id: "local", device_id: "d1", timestamp: new Date().toISOString(), payload: {} }
+    });
+    assert.ok(res.response.status !== 401 && res.response.status !== 403, `passed gate (status ${res.response.status})`);
+  });
+});
+
+test("JWT enforce: cross-tenant bearer replay is rejected with 403", async (t) => {
+  const h = makeJwtHarness();
+  const jwksUrl = await withJwksServer(t, h.jwk);
+  await withDevServer(t, jwtEnv(jwksUrl, "enforce"), async (baseUrl) => {
+    // A valid token for tenant "other" replayed against tenant "local"'s path.
+    const token = h.mint(baseClaims({ tenant_id: "other" }));
+    const res = await api(baseUrl, PROTECTED, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: { schema_version: "telemetry-envelope.v1" }
+    });
+    assert.equal(res.response.status, 403);
+    assert.equal(res.payload.error, "jwt_tenant_mismatch");
+  });
+});
+
+test("JWT enforce: missing, expired, wrong-audience, wrong-issuer, and bad-signature tokens are 401", async (t) => {
+  const h = makeJwtHarness();
+  const other = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const jwksUrl = await withJwksServer(t, h.jwk);
+  await withDevServer(t, jwtEnv(jwksUrl, "enforce"), async (baseUrl) => {
+    const post = (headers) => api(baseUrl, PROTECTED, { method: "POST", headers, body: { schema_version: "telemetry-envelope.v1" } });
+
+    const missing = await post({});
+    assert.equal(missing.response.status, 401);
+    assert.equal(missing.payload.error, "jwt_required");
+
+    const expired = await post({ authorization: `Bearer ${h.mint(baseClaims({ exp: Math.floor(Date.now() / 1000) - 10 }))}` });
+    assert.equal(expired.response.status, 401);
+    assert.equal(expired.payload.error, "jwt_expired");
+
+    const wrongAud = await post({ authorization: `Bearer ${h.mint(baseClaims({ aud: "someone-else" }))}` });
+    assert.equal(wrongAud.response.status, 401);
+    assert.equal(wrongAud.payload.error, "jwt_audience_mismatch");
+
+    const wrongIss = await post({ authorization: `Bearer ${h.mint(baseClaims({ iss: "https://evil.test/realms/x" }))}` });
+    assert.equal(wrongIss.response.status, 401);
+    assert.equal(wrongIss.payload.error, "jwt_issuer_mismatch");
+
+    // Signed by a key whose kid is not in the JWKS -> unknown_kid (bad signature chain).
+    const forged = h.mint(baseClaims(), { key: other.privateKey });
+    const badSig = await post({ authorization: `Bearer ${forged}` });
+    assert.equal(badSig.response.status, 401);
+    assert.equal(badSig.payload.error, "jwt_bad_signature");
+  });
+});
+
+test("JWT monitor: invalid token is allowed (fail-open) for observation", async (t) => {
+  const h = makeJwtHarness();
+  const jwksUrl = await withJwksServer(t, h.jwk);
+  await withDevServer(t, jwtEnv(jwksUrl, "monitor"), async (baseUrl) => {
+    const res = await api(baseUrl, PROTECTED, {
+      method: "POST",
+      body: { schema_version: "telemetry-envelope.v1", event_id: "m1", event_type: "t.v1", tenant_id: "local", device_id: "d1", timestamp: new Date().toISOString(), payload: {} }
+    });
+    assert.ok(res.response.status !== 401 && res.response.status !== 403, "monitor does not fail closed");
+  });
+});
+
+test("JWT status is surfaced (off by default) on /api/cloud/status", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const res = await api(baseUrl, "/api/cloud/status");
+    assert.equal(res.response.status, 200);
+    assert.equal(res.payload.iam_jwt.mode, "off");
+    assert.equal(res.payload.mtls.mode, "off");
   });
 });
