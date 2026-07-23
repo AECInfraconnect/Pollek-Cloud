@@ -1490,8 +1490,8 @@ test("console wires fleet operations controls", async () => {
   const html = await readFile("apps/web/static/index.html", "utf8");
   const css = await readFile("apps/web/static/styles.css", "utf8");
 
-  assert.match(html, /styles\.css\?v=20260723-trust-spine/);
-  assert.match(html, /app\.js\?v=20260723-trust-spine/);
+  assert.match(html, /styles\.css\?v=20260724-session-auth/);
+  assert.match(html, /app\.js\?v=20260724-session-auth/);
   assert.match(html, /id="rolloutButton"/);
   assert.match(html, /id="evidenceButton"/);
   assert.match(html, /id="appShell"/);
@@ -1520,6 +1520,9 @@ test("console wires fleet operations controls", async () => {
   assert.match(html, /id="trustSignerList"/);
   assert.match(html, /id="trustRevocationList"/);
   assert.match(html, /id="trustRevokeButton"/);
+  assert.match(app, /function authFetch\(/);
+  assert.match(app, /await authFetch\("\/api\/fleet"\)/);
+  assert.doesNotMatch(app, /await fetch\("\/api\/fleet"\)/);
   assert.match(app, /function renderTrust\(/);
   assert.match(app, /function loadTrustView\(/);
   assert.match(app, /function submitRevocation\(/);
@@ -2119,6 +2122,19 @@ test("JWT enforce: missing, expired, wrong-audience, wrong-issuer, and bad-signa
     const badSig = await post({ authorization: `Bearer ${forged}` });
     assert.equal(badSig.response.status, 401);
     assert.equal(badSig.payload.error, "jwt_bad_signature");
+
+    // Fail closed on a missing exp (Codex security-gate follow-up): a token with no exp has
+    // no enforceable lifetime and must be rejected.
+    const noExp = baseClaims();
+    delete noExp.exp;
+    const missingExp = await post({ authorization: `Bearer ${h.mint(noExp)}` });
+    assert.equal(missingExp.response.status, 401);
+    assert.equal(missingExp.payload.error, "jwt_missing_exp");
+
+    // Fail closed on a non-numeric exp.
+    const nonNumericExp = await post({ authorization: `Bearer ${h.mint(baseClaims({ exp: "2099-01-01" }))}` });
+    assert.equal(nonNumericExp.response.status, 401);
+    assert.equal(nonNumericExp.payload.error, "jwt_missing_exp");
   });
 });
 

@@ -595,7 +595,7 @@ function ensureCostTokensLoaded(force = false) {
 
 async function refresh() {
   try {
-    const response = await fetch("/api/fleet");
+    const response = await authFetch("/api/fleet");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     app.data = await response.json();
     if (!app.latestPolicyDraftId && app.data.policy_drafts?.length) {
@@ -1188,7 +1188,7 @@ async function loadCostTokenOverview(options = {}) {
     : "/api/reports/cost-tokens/overview";
   const overviewPath = `${overviewBase}${costTokenRangeQuery("?")}`;
   try {
-    const response = await fetch(overviewPath);
+    const response = await authFetch(overviewPath);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     app.costTokenOverview = await response.json();
   } catch (error) {
@@ -3074,7 +3074,7 @@ async function loadTrustView(options = {}) {
   if (app.trustLoading && !options.force) return;
   app.trustLoading = true;
   try {
-    const response = await fetch("/api/trust/provenance");
+    const response = await authFetch("/api/trust/provenance");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     app.trustView = await response.json();
   } catch (error) {
@@ -3102,7 +3102,7 @@ async function submitRevocation() {
   if (reason) body.reason = reason;
   if (refs.trustRevokeButton) refs.trustRevokeButton.disabled = true;
   try {
-    const response = await fetch("/v1/trust/revocations", {
+    const response = await authFetch("/v1/trust/revocations", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body)
@@ -3597,7 +3597,7 @@ async function runProbe(lcpUrl) {
   refs.probeButton.textContent = "Running";
   refs.probeResult.textContent = "Probing Local Control Plane through Cloud protocol paths...";
   try {
-    const response = await fetch("/api/lcp/probe", {
+    const response = await authFetch("/api/lcp/probe", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -3618,6 +3618,16 @@ async function runProbe(lcpUrl) {
     refs.probeButton.disabled = false;
     refs.probeButton.textContent = "Run";
   }
+}
+
+// Attach the console session token to every API call so the console keeps working when
+// POLLEK_SESSION_MODE is set to enforce (human/console boundaries require a valid session).
+function authFetch(url, options = {}) {
+  const headers = {
+    ...(options.headers || {}),
+    ...(app.currentSessionToken ? { authorization: `Bearer ${app.currentSessionToken}` } : {})
+  };
+  return fetch(url, { ...options, headers });
 }
 
 async function requestJson(url, { method = "GET", body, headers = {} } = {}) {
@@ -4169,7 +4179,7 @@ async function queryTelemetry() {
   params.set("severity", refs.telemetrySeverity.value);
   if (refs.telemetryType.value) params.set("type", refs.telemetryType.value);
   if (refs.telemetrySearch.value) params.set("q", refs.telemetrySearch.value);
-  const response = await fetch(`/api/telemetry/query?${params}`);
+  const response = await authFetch(`/api/telemetry/query?${params}`);
   const payload = await response.json();
   app.telemetryResults = payload.events || [];
   renderTelemetryExplorer();
@@ -4520,7 +4530,7 @@ refs.trustRevokeValue?.addEventListener("keydown", (event) => {
 });
 
 refs.probeVisibleButton.addEventListener("click", async () => {
-  const response = await fetch("/api/fleet/probe-visible", { method: "POST" });
+  const response = await authFetch("/api/fleet/probe-visible", { method: "POST" });
   const payload = await response.json();
   const lcpUrl = payload.next_action?.body?.lcpUrl || refs.lcpUrl.value;
   refs.lcpUrl.value = lcpUrl;

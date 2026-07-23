@@ -84,12 +84,21 @@ Status surfaces `iam_jwt`, `session_gate`, and `mtls` modes on `GET /api/cloud/s
 Level reached: **application path implemented + integration-tested** (3 new session-gate
 tests; 50 total pass, 4 PG skip). NOT enabled in production (default off).
 
-### Console-token prerequisite before enabling `POLLEK_SESSION_MODE=enforce`
-Today the console sends its session token on only some calls; many console fetches are
-unauthenticated. Before enforce is turned on, the console must attach `app.currentSessionToken`
-as `Authorization: Bearer` on **every** API call (a front-end follow-up), or those views will
-get 401. This mirrors the other rollouts: enforce only after the prerequisite is in place
-(mTLS→ingress, JWT→LCP tenant_id claim, session→console token on all calls).
+### Console-token prerequisite — DONE
+The console now attaches its session token on **every** API call: all fetches route through a
+single `authFetch` wrapper (and the existing `requestJson` path) that injects
+`Authorization: Bearer <app.currentSessionToken>` when present. So enabling
+`POLLEK_SESSION_MODE=enforce` no longer 401s the console. (Asset cache-busting version bumped
+so browsers load the new bundle.) Turning enforce on in production is now safe from the
+console's side; it remains a deliberate Railway env change.
+
+## Delivered — Codex security-gate follow-up (JWT exp fail-closed)
+
+Per `docs/HANDOFF_CODEX_RAILWAY_SECURITY_GATES_2026-07-24.md` (Cloud application team item):
+`apps/api/keycloak.mjs` now **fails closed on a missing or non-numeric `exp`** (reason
+`missing_exp`), not just an expired numeric one, and `nbf` must be numeric when present.
+Negative tests added for both the missing and non-numeric `exp` cases. This satisfies JWT
+rollout acceptance item 5 before any production enforcement.
 
 ## Explicitly NOT done (unchanged from the hand-off)
 
