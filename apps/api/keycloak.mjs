@@ -103,8 +103,11 @@ export async function verifyToken(token, cfg = config()) {
   if (!verified) return { valid: false, reason: "bad_signature" };
 
   const now = Math.floor(Date.now() / 1000);
-  if (typeof payload.exp === "number" && payload.exp < now) return { valid: false, reason: "expired" };
-  if (typeof payload.nbf === "number" && payload.nbf > now + 60) return { valid: false, reason: "not_yet_valid" };
+  // Fail closed on a missing or non-numeric expiry: a token without a valid numeric `exp`
+  // has no enforceable lifetime and must never be accepted before production enforcement.
+  if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) return { valid: false, reason: "missing_exp" };
+  if (payload.exp < now) return { valid: false, reason: "expired" };
+  if (payload.nbf !== undefined && (typeof payload.nbf !== "number" || payload.nbf > now + 60)) return { valid: false, reason: "not_yet_valid" };
   if (cfg.issuer && payload.iss !== cfg.issuer) return { valid: false, reason: "issuer_mismatch" };
   if (cfg.audience) {
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
