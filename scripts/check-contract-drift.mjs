@@ -36,9 +36,12 @@ const expectedSdkText = sdkSource(contract);
 if (missing.length || extra.length || currentText !== expectedText || sdkText !== expectedSdkText) {
   console.error("Contract drift detected.");
   if (missing.length) console.error(`Missing OpenAPI paths: ${missing.join(", ")}`);
-  if (extra.length) console.error(`OpenAPI paths not declared by Contract Hub: ${extra.join(", ")}`);
+  if (extra.length)
+    console.error(`OpenAPI paths not declared by Contract Hub: ${extra.join(", ")}`);
   if (currentText !== expectedText) {
-    console.error("OpenAPI artifact is not generated from packages/contracts/pollek-contract.json.");
+    console.error(
+      "OpenAPI artifact is not generated from packages/contracts/pollek-contract.json."
+    );
     console.error("Run: npm run contracts:openapi");
   }
   if (sdkText !== expectedSdkText) {

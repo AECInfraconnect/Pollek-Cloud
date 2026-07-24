@@ -202,7 +202,11 @@ function escapeHtml(value) {
 }
 
 function safeDomId(prefix, value) {
-  return `${prefix}-${String(value || "item").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80)}`;
+  return `${prefix}-${String(value || "item")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)}`;
 }
 
 function fmtTime(value) {
@@ -217,9 +221,45 @@ function fmtMoney(cents, currency = "USD") {
 
 function statusClass(status) {
   if (["ok", "bad", "warn", "neutral"].includes(status)) return status;
-  if (["connected", "active", "available", "registered", "published", "enforcing", "observed", "configured", "ready", "completed", "healthy", "issued", "accepted"].includes(status)) return "ok";
-  if (["offline", "critical", "failed", "untrusted", "denied", "deny"].includes(status)) return "bad";
-  if (["degraded", "unknown", "stale", "found_unregistered", "needs_secret", "planned", "designed", "waiting_for_lcp", "warning", "pending_approval", "warn", "trialing", "preview", "pending"].includes(status)) return "warn";
+  if (
+    [
+      "connected",
+      "active",
+      "available",
+      "registered",
+      "published",
+      "enforcing",
+      "observed",
+      "configured",
+      "ready",
+      "completed",
+      "healthy",
+      "issued",
+      "accepted"
+    ].includes(status)
+  )
+    return "ok";
+  if (["offline", "critical", "failed", "untrusted", "denied", "deny"].includes(status))
+    return "bad";
+  if (
+    [
+      "degraded",
+      "unknown",
+      "stale",
+      "found_unregistered",
+      "needs_secret",
+      "planned",
+      "designed",
+      "waiting_for_lcp",
+      "warning",
+      "pending_approval",
+      "warn",
+      "trialing",
+      "preview",
+      "pending"
+    ].includes(status)
+  )
+    return "warn";
   return "neutral";
 }
 
@@ -233,7 +273,9 @@ function tenantPath(pathTemplate, tenantId = selectedTenantId()) {
 
 function availableRoles() {
   const roles = Object.keys(app.data?.authorization_model?.roles || {});
-  return roles.length ? roles : ["admin", "security_admin", "iam_admin", "billing_admin", "operator", "viewer"];
+  return roles.length
+    ? roles
+    : ["admin", "security_admin", "iam_admin", "billing_admin", "operator", "viewer"];
 }
 
 function roleLabel(role) {
@@ -241,7 +283,15 @@ function roleLabel(role) {
 }
 
 function tenantCatalog() {
-  if (!app.data) return [{ tenant_id: "local", name: "Local Lab Tenant", deployment_mode: "private-cloud-dev", status: "active" }];
+  if (!app.data)
+    return [
+      {
+        tenant_id: "local",
+        name: "Local Lab Tenant",
+        deployment_mode: "private-cloud-dev",
+        status: "active"
+      }
+    ];
   const tenants = new Map();
   const addTenant = (tenantId, patch = {}) => {
     if (!tenantId) return;
@@ -255,7 +305,10 @@ function tenantCatalog() {
       ...patch
     });
   };
-  addTenant("local", { name: app.data.tenant?.name || "Local Lab Tenant", deployment_mode: app.data.tenant?.mode || "private-cloud-dev" });
+  addTenant("local", {
+    name: app.data.tenant?.name || "Local Lab Tenant",
+    deployment_mode: app.data.tenant?.mode || "private-cloud-dev"
+  });
   for (const account of app.data.billing_accounts || []) {
     addTenant(account.tenant_id, {
       name: account.organization_name || account.tenant_id,
@@ -265,7 +318,8 @@ function tenantCatalog() {
     });
   }
   for (const member of app.data.tenant_members || []) addTenant(member.tenant_id);
-  for (const subscription of app.data.subscriptions || []) addTenant(subscription.tenant_id, { status: subscription.status });
+  for (const subscription of app.data.subscriptions || [])
+    addTenant(subscription.tenant_id, { status: subscription.status });
   for (const lcp of app.data.local_control_planes || []) addTenant(lcp.tenant_id);
   return [...tenants.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -282,7 +336,12 @@ function selectedTenantId() {
 
 function selectedTenantRecord() {
   const tenantId = selectedTenantId();
-  return tenantCatalog().find((tenant) => tenant.tenant_id === tenantId) || { tenant_id: tenantId, name: tenantId };
+  return (
+    tenantCatalog().find((tenant) => tenant.tenant_id === tenantId) || {
+      tenant_id: tenantId,
+      name: tenantId
+    }
+  );
 }
 
 function setSelectedTenant(tenantId) {
@@ -305,7 +364,9 @@ function accountById(accountId) {
 }
 
 function tenantAdminMember(tenantId = selectedTenantId()) {
-  const members = filteredByTenant(app.data?.tenant_members, tenantId).filter((member) => member.status === "active");
+  const members = filteredByTenant(app.data?.tenant_members, tenantId).filter(
+    (member) => member.status === "active"
+  );
   return members.find((member) => (member.roles || []).includes("admin")) || members[0] || null;
 }
 
@@ -318,8 +379,10 @@ function tenantPrincipal(tenantId = selectedTenantId()) {
 }
 
 function activePlanId(tenantId = selectedTenantId()) {
-  const subscription = (app.data?.subscriptions || []).find((item) => item.tenant_id === tenantId && ["active", "trialing"].includes(item.status))
-    || (app.data?.subscriptions || []).find((item) => item.tenant_id === tenantId);
+  const subscription =
+    (app.data?.subscriptions || []).find(
+      (item) => item.tenant_id === tenantId && ["active", "trialing"].includes(item.status)
+    ) || (app.data?.subscriptions || []).find((item) => item.tenant_id === tenantId);
   return subscription?.plan_id || "";
 }
 
@@ -365,53 +428,83 @@ const kindLabels = {
 };
 
 function normalizeKind(kind) {
-  return String(kind || "object").replaceAll("_", "-").replace(/[^a-z0-9-]/gi, "").toLowerCase() || "object";
+  return (
+    String(kind || "object")
+      .replaceAll("_", "-")
+      .replace(/[^a-z0-9-]/gi, "")
+      .toLowerCase() || "object"
+  );
 }
 
 const iconSvgs = {
-  tenant: '<path d="M4 21V5l8-3 8 3v16"/><path d="M9 21v-6h6v6"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M16 12h.01"/>',
+  tenant:
+    '<path d="M4 21V5l8-3 8 3v16"/><path d="M9 21v-6h6v6"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M16 12h.01"/>',
   site: '<path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/>',
-  device_group: '<path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M16 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M3 21v-2a5 5 0 0 1 5-5h0a5 5 0 0 1 5 5v2"/><path d="M13 14h3a5 5 0 0 1 5 5v2"/>',
+  device_group:
+    '<path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M16 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M3 21v-2a5 5 0 0 1 5-5h0a5 5 0 0 1 5 5v2"/><path d="M13 14h3a5 5 0 0 1 5 5v2"/>',
   device: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   lcp: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01M12 10v4"/>',
-  agent: '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M8.5 13h.01M15.5 13h.01M9 18l-2 3M15 18l2 3"/>',
-  registered_agent: '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M9 13h.01M15 13h.01M9.5 16.2l1.7 1.6 3.6-3.9"/>',
-  found_agent: '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M9 13h.01M15 13h.01"/><circle cx="17.5" cy="6.5" r="2.5"/><path d="m19.4 8.4 1.8 1.8"/>',
-  policy: '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-5"/>',
-  policy_bundle: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4"/><path d="m4 17 8 4 8-4"/>',
-  enforcement: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="m9.5 15 2 2 3.5-4"/>',
-  observability: '<path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="3"/>',
+  agent:
+    '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M8.5 13h.01M15.5 13h.01M9 18l-2 3M15 18l2 3"/>',
+  registered_agent:
+    '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M9 13h.01M15 13h.01M9.5 16.2l1.7 1.6 3.6-3.9"/>',
+  found_agent:
+    '<rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 8V4M9 4h6M9 13h.01M15 13h.01"/><circle cx="17.5" cy="6.5" r="2.5"/><path d="m19.4 8.4 1.8 1.8"/>',
+  policy:
+    '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-5"/>',
+  policy_bundle:
+    '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4"/><path d="m4 17 8 4 8-4"/>',
+  enforcement:
+    '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="m9.5 15 2 2 3.5-4"/>',
+  observability:
+    '<path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="3"/>',
   resource: '<path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
   telemetry: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
-  identity: '<circle cx="8" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 5-5h2"/><path d="M14 15l2 2 5-5"/><path d="M16 17v4h4"/>',
-  spiffe: '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="M9 12h6M12 9v6"/>',
+  identity:
+    '<circle cx="8" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 5-5h2"/><path d="M14 15l2 2 5-5"/><path d="M16 17v4h4"/>',
+  spiffe:
+    '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="M9 12h6M12 9v6"/>',
   oidc: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 3"/>',
-  rollout: '<path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 10"/><path d="M4 15a8 8 0 0 0 13.7 3.7L20 14"/>',
+  rollout:
+    '<path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 10"/><path d="M4 15a8 8 0 0 0 13.7 3.7L20 14"/>',
   wasm: '<path d="M5 5h14v14H5V5Z"/><path d="M8 9h8M8 13h8M8 17h4"/>',
   alarm: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
   task: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/>',
-  integration: '<path d="M8 8V4M16 8V4"/><path d="M7 8h10v5a5 5 0 0 1-10 0V8Z"/><path d="M12 18v3M9 21h6"/>',
+  integration:
+    '<path d="M8 8V4M16 8V4"/><path d="M7 8h10v5a5 5 0 0 1-10 0V8Z"/><path d="M12 18v3M9 21h6"/>',
   account: '<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>',
   idp: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12h8M12 8v8"/><circle cx="17" cy="7" r="1.5"/>',
-  billing: '<path d="M4 7h16v10H4V7Z"/><path d="M4 11h16"/><path d="M8 15h3"/><path d="M16 15h.01"/>',
+  billing:
+    '<path d="M4 7h16v10H4V7Z"/><path d="M4 11h16"/><path d="M8 15h3"/><path d="M16 15h.01"/>',
   invoice: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
   license: '<path d="M6 4h12v16H6V4Z"/><path d="M9 9h6M9 13h6"/><path d="m10 17 1.3 1.3L15 15"/>',
   kms: '<circle cx="7.5" cy="14.5" r="3.5"/><path d="M10 12l8-8 2 2-8 8"/><path d="M16 6l2 2"/>',
   otlp: '<path d="M4 16V8l8-4 8 4v8l-8 4-8-4Z"/><path d="M8 10h8M8 14h5"/>',
   siem: '<path d="M4 5h16v14H4V5Z"/><path d="M8 9h8M8 13h5M8 17h3"/>',
-  compliance: '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m8.5 12 2.5 2.5 5-5"/>',
-  sandbox: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="M12 12 4.4 7.7M12 12l7.6-4.3M12 12v8.5"/>',
-  breakglass: '<path d="M7 11V8a5 5 0 0 1 9.5-2.2"/><rect x="5" y="11" width="14" height="10" rx="2"/><path d="m9 17 6-3M9 14l6 3"/>',
+  compliance:
+    '<path d="M12 3 5 6v5c0 4.8 3 8.4 7 10 4-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m8.5 12 2.5 2.5 5-5"/>',
+  sandbox:
+    '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="M12 12 4.4 7.7M12 12l7.6-4.3M12 12v8.5"/>',
+  breakglass:
+    '<path d="M7 11V8a5 5 0 0 1 9.5-2.2"/><rect x="5" y="11" width="14" height="10" rx="2"/><path d="m9 17 6-3M9 14l6 3"/>',
   entity_group: '<path d="M4 5h6l2 2h8v12H4V5Z"/><path d="M8 11h8M8 15h5"/>',
   object: '<path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="M4 7l8 4 8-4M12 11v10"/>'
 };
 
 function kindLabel(kind) {
-  return kindLabels[kind] || kindLabels[String(kind || "").replaceAll("-", "_")] || String(kind || "Object").replaceAll("_", " ");
+  return (
+    kindLabels[kind] ||
+    kindLabels[String(kind || "").replaceAll("-", "_")] ||
+    String(kind || "Object").replaceAll("_", " ")
+  );
 }
 
 function iconSvg(kind) {
-  const key = String(kind || "object").replaceAll("-", "_").replace(/[^a-z0-9_]/gi, "").toLowerCase() || "object";
+  const key =
+    String(kind || "object")
+      .replaceAll("-", "_")
+      .replace(/[^a-z0-9_]/gi, "")
+      .toLowerCase() || "object";
   const normalizedKey = normalizeKind(kind).replaceAll("-", "_");
   return iconSvgs[key] || iconSvgs[normalizedKey] || iconSvgs.object;
 }
@@ -424,44 +517,66 @@ function chipHtml(label, status = "neutral", title = "") {
   return `<span class="mini-chip ${statusClass(status)}" title="${escapeHtml(title || label)}">${escapeHtml(label)}</span>`;
 }
 
-
 function objectKind(object) {
   return object?.entity_type || object?.type || object?.class || "object";
 }
 
 function entitiesForLcp(lcp) {
-  return (app.data.local_entities || []).filter((entity) => (
-    entity.lcp_id === lcp.id || entity.device_id === lcp.device_id || entity.device_name === lcp.device_name
-  ));
+  return (app.data.local_entities || []).filter(
+    (entity) =>
+      entity.lcp_id === lcp.id ||
+      entity.device_id === lcp.device_id ||
+      entity.device_name === lcp.device_name
+  );
 }
 
 function alarmsForObject(id) {
-  return (app.data.alarms || []).filter((alarm) => alarm.state === "open" && (alarm.object_id === id || alarm.payload?.object_id === id));
+  return (app.data.alarms || []).filter(
+    (alarm) => alarm.state === "open" && (alarm.object_id === id || alarm.payload?.object_id === id)
+  );
 }
 
 function entityReadiness(entity) {
   const trace = entity.trace || {};
   const identity = entity.identity || {};
   const token = Array.isArray(identity.token_bindings) ? identity.token_bindings[0] : null;
-  const identityReady = Boolean(trace.spiffe_id || identity.spiffe_id || trace.oidc_subject || token?.subject);
+  const identityReady = Boolean(
+    trace.spiffe_id || identity.spiffe_id || trace.oidc_subject || token?.subject
+  );
   const telemetryReady = Boolean(entity.observability?.telemetry_streams?.length);
-  const policyReady = Boolean(entity.enforcement?.mode === "Enforce" || entity.policy_ids?.length || entity.status === "published");
+  const policyReady = Boolean(
+    entity.enforcement?.mode === "Enforce" ||
+    entity.policy_ids?.length ||
+    entity.status === "published"
+  );
   const wasmReady = Boolean(entity.wasm?.hot_reload);
   return { identityReady, telemetryReady, policyReady, wasmReady };
 }
 
 function entityHealthStatus(entity) {
-  if (entity.risk === "high" || entity.status === "offline" || entity.status === "failed") return "bad";
-  if (entity.status === "found_unregistered" || entity.risk === "medium" || !entityReadiness(entity).identityReady) return "warn";
+  if (entity.risk === "high" || entity.status === "offline" || entity.status === "failed")
+    return "bad";
+  if (
+    entity.status === "found_unregistered" ||
+    entity.risk === "medium" ||
+    !entityReadiness(entity).identityReady
+  )
+    return "warn";
   return "ok";
 }
 
 function entityChips(entity) {
   const ready = entityReadiness(entity);
   return [
-    chipHtml(ready.identityReady ? "Identity ready" : "Identity gap", ready.identityReady ? "ok" : "warn"),
+    chipHtml(
+      ready.identityReady ? "Identity ready" : "Identity gap",
+      ready.identityReady ? "ok" : "warn"
+    ),
     chipHtml(ready.policyReady ? "Policy bound" : "Policy gap", ready.policyReady ? "ok" : "warn"),
-    chipHtml(ready.telemetryReady ? "Telemetry" : "No stream", ready.telemetryReady ? "ok" : "warn"),
+    chipHtml(
+      ready.telemetryReady ? "Telemetry" : "No stream",
+      ready.telemetryReady ? "ok" : "warn"
+    ),
     chipHtml(ready.wasmReady ? "WASM hot reload" : "WASM pending", ready.wasmReady ? "ok" : "warn")
   ].join("");
 }
@@ -509,7 +624,10 @@ function setOpsCollapsed(collapsed) {
 }
 
 function persistOpsSectionState() {
-  localStorage.setItem("pollek.cloud.ops.sections.collapsed", JSON.stringify([...app.collapsedOpsSections]));
+  localStorage.setItem(
+    "pollek.cloud.ops.sections.collapsed",
+    JSON.stringify([...app.collapsedOpsSections])
+  );
 }
 
 function applyOpsSectionState() {
@@ -586,9 +704,10 @@ function setActiveTab(tabName, options = {}) {
 function ensureCostTokensLoaded(force = false) {
   const desiredTenant = costTokenScopeTenant();
   const loadedTenant = app.costTokenOverview ? app.costTokenOverview.tenant_id : null;
-  const stale = !app.costTokenOverview
-    || app.costTokenOverview.error
-    || (desiredTenant ? loadedTenant !== desiredTenant : loadedTenant !== "all");
+  const stale =
+    !app.costTokenOverview ||
+    app.costTokenOverview.error ||
+    (desiredTenant ? loadedTenant !== desiredTenant : loadedTenant !== "all");
   if (force || stale) loadCostTokenOverview({ force });
   else renderCostTokens();
 }
@@ -701,16 +820,21 @@ function renderOperationsFocus() {
   const lcps = app.data.local_control_planes || [];
   const entities = app.data.local_entities || [];
   const alarms = (app.data.alarms || []).filter((alarm) => alarm.state === "open");
-  const foundAgents = entities.filter((entity) => entity.entity_type === "found_agent" || entity.status === "found_unregistered");
+  const foundAgents = entities.filter(
+    (entity) => entity.entity_type === "found_agent" || entity.status === "found_unregistered"
+  );
   const traceReady = entities.filter((entity) => entityReadiness(entity).identityReady).length;
   const policyReady = entities.filter((entity) => entityReadiness(entity).policyReady).length;
   const wasmReady = entities.filter((entity) => entityReadiness(entity).wasmReady).length;
   const worstLcp = [...lcps].sort((a, b) => {
-    const score = (item) => (
-      (item.status === "offline" ? 100 : item.status === "degraded" || item.status === "unknown" ? 60 : 0)
-      + (100 - Number(item.policy_coverage || 0))
-      + alarmsForObject(item.id).length * 30
-    );
+    const score = (item) =>
+      (item.status === "offline"
+        ? 100
+        : item.status === "degraded" || item.status === "unknown"
+          ? 60
+          : 0) +
+      (100 - Number(item.policy_coverage || 0)) +
+      alarmsForObject(item.id).length * 30;
     return score(b) - score(a);
   })[0];
   const traceCoverage = entities.length ? Math.round((traceReady / entities.length) * 100) : 0;
@@ -735,7 +859,9 @@ function renderOperationsFocus() {
       kind: "found_agent",
       status: foundAgents.length ? "warn" : "ok",
       title: `${foundAgents.length} found agents`,
-      detail: foundAgents[0] ? `${foundAgents[0].name} on ${foundAgents[0].device_name || foundAgents[0].device_id}` : "No unregistered agents detected",
+      detail: foundAgents[0]
+        ? `${foundAgents[0].name} on ${foundAgents[0].device_name || foundAgents[0].device_id}`
+        : "No unregistered agents detected",
       objectId: foundAgents[0]?.id
     },
     {
@@ -761,7 +887,9 @@ function renderOperationsFocus() {
     }
   ];
 
-  refs.operationsFocus.innerHTML = cards.map((card) => `
+  refs.operationsFocus.innerHTML = cards
+    .map(
+      (card) => `
     <button class="focus-card ${statusClass(card.status)}" ${card.objectId ? `data-object-id="${escapeHtml(card.objectId)}"` : ""}>
       ${iconHtml(card.kind, card.status)}
       <span>
@@ -769,7 +897,9 @@ function renderOperationsFocus() {
         <small>${escapeHtml(card.detail)}</small>
       </span>
     </button>
-  `).join("");
+  `
+    )
+    .join("");
   refs.operationsFocus.querySelectorAll("[data-object-id]").forEach((button) => {
     button.addEventListener("click", () => {
       app.selectedObjectId = button.dataset.objectId;
@@ -782,15 +912,14 @@ function fmtNumber(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-
-
 function recordValue(record, keys, fallback = "") {
   for (const key of keys) {
-    const value = record?.[key]
-      ?? record?.payload?.[key]
-      ?? record?.attributes?.[key]
-      ?? record?.dimensions?.[key]
-      ?? record?.metadata?.[key];
+    const value =
+      record?.[key] ??
+      record?.payload?.[key] ??
+      record?.attributes?.[key] ??
+      record?.dimensions?.[key] ??
+      record?.metadata?.[key];
     if (value !== undefined && value !== null && value !== "") return value;
   }
   return fallback;
@@ -805,7 +934,8 @@ function usageTokenCount(record) {
 
 function usageCostCents(record) {
   const allocated = recordValue(record, ["allocated_cost_cents"], null);
-  if (allocated !== null && allocated !== undefined && allocated !== "") return Number(allocated || 0);
+  if (allocated !== null && allocated !== undefined && allocated !== "")
+    return Number(allocated || 0);
   const direct = recordValue(record, ["estimated_cost_cents", "cost_cents", "amount_cents"], null);
   if (direct !== null && direct !== undefined && direct !== "") return Number(direct || 0);
   const dollars = Number(recordValue(record, ["estimated_cost_usd", "cost_usd"], 0));
@@ -821,15 +951,27 @@ function fmtCredits(value) {
 }
 
 function usagePricingModel(record) {
-  return recordValue(record, ["pricing_model", "billing_model", "billing_unit"], usageCreditCount(record) ? "credit_pool" : "token_metered");
+  return recordValue(
+    record,
+    ["pricing_model", "billing_model", "billing_unit"],
+    usageCreditCount(record) ? "credit_pool" : "token_metered"
+  );
 }
 
 function normalizeOsFamily(value = "") {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return "unknown";
   if (normalized.startsWith("win")) return "windows";
   if (normalized === "darwin" || normalized.startsWith("mac")) return "macos";
-  if (normalized.includes("linux") || normalized.includes("ubuntu") || normalized.includes("debian") || normalized.includes("fedora")) return "linux";
+  if (
+    normalized.includes("linux") ||
+    normalized.includes("ubuntu") ||
+    normalized.includes("debian") ||
+    normalized.includes("fedora")
+  )
+    return "linux";
   return ["windows", "macos", "linux"].includes(normalized) ? normalized : "unknown";
 }
 
@@ -851,24 +993,34 @@ function osFamilyLabel(value = "") {
 
 function lcpForDevice(deviceId = "", lcpId = "") {
   const lcps = app.data.local_control_planes || [];
-  return lcps.find((lcp) => lcp.id === lcpId)
-    || lcps.find((lcp) => lcp.device_id === deviceId || lcp.device_name === deviceId)
-    || null;
+  return (
+    lcps.find((lcp) => lcp.id === lcpId) ||
+    lcps.find((lcp) => lcp.device_id === deviceId || lcp.device_name === deviceId) ||
+    null
+  );
 }
 
 function osFamilyForRecord(record) {
   const direct = normalizeOsFamily(recordValue(record, ["os_family", "platform", "host_os"], ""));
   if (direct !== "unknown") return direct;
-  const lcp = lcpForDevice(recordValue(record, ["device_id", "device_name"], ""), recordValue(record, ["lcp_id"], ""));
+  const lcp = lcpForDevice(
+    recordValue(record, ["device_id", "device_name"], ""),
+    recordValue(record, ["lcp_id"], "")
+  );
   const fromLcp = normalizeOsFamily(lcp?.os_family || "");
   if (fromLcp !== "unknown") return fromLcp;
-  return inferOsFamilyFromText(`${recordValue(record, ["device_name", "device_id"], "")} ${recordValue(record, ["lcp_id"], "")}`);
+  return inferOsFamilyFromText(
+    `${recordValue(record, ["device_name", "device_id"], "")} ${recordValue(record, ["lcp_id"], "")}`
+  );
 }
 
 function osVersionForRecord(record) {
   const direct = recordValue(record, ["os_version", "platform_version"], "");
   if (direct) return direct;
-  const lcp = lcpForDevice(recordValue(record, ["device_id", "device_name"], ""), recordValue(record, ["lcp_id"], ""));
+  const lcp = lcpForDevice(
+    recordValue(record, ["device_id", "device_name"], ""),
+    recordValue(record, ["lcp_id"], "")
+  );
   return lcp?.os_version || "";
 }
 
@@ -878,11 +1030,14 @@ function osFamilyForEntity(entity) {
   const lcp = lcpForEntity(entity);
   const fromLcp = normalizeOsFamily(lcp?.os_family || "");
   if (fromLcp !== "unknown") return fromLcp;
-  return inferOsFamilyFromText(`${entity?.device_name || entity?.device_id || ""} ${entity?.lcp_id || ""}`);
+  return inferOsFamilyFromText(
+    `${entity?.device_name || entity?.device_id || ""} ${entity?.lcp_id || ""}`
+  );
 }
 
 function costBasisLabel(item) {
-  if (item.creditPools?.length || item.credits) return `${fmtMoney(item.costCents || 0)} allocated / ${fmtCredits(item.credits || 0)}`;
+  if (item.creditPools?.length || item.credits)
+    return `${fmtMoney(item.costCents || 0)} allocated / ${fmtCredits(item.credits || 0)}`;
   return fmtMoney(item.costCents || 0);
 }
 
@@ -894,11 +1049,13 @@ function costBasisLabel(item) {
 function aiUsageRecords(tenantId = selectedTenantId()) {
   return filteredByTenant(app.data.usage_records || [], tenantId).filter((record) => {
     const metric = String(record.metric || "");
-    return metric === "ai_model_usage"
-      || metric.includes("token")
-      || metric.includes("cost")
-      || usageTokenCount(record) > 0
-      || usageCostCents(record) > 0;
+    return (
+      metric === "ai_model_usage" ||
+      metric.includes("token") ||
+      metric.includes("cost") ||
+      usageTokenCount(record) > 0 ||
+      usageCostCents(record) > 0
+    );
   });
 }
 
@@ -906,11 +1063,26 @@ function summarizeUsageRecords(records) {
   const totalTokens = records.reduce((sum, record) => sum + usageTokenCount(record), 0);
   const totalCostCents = records.reduce((sum, record) => sum + usageCostCents(record), 0);
   const credits = records.reduce((sum, record) => sum + usageCreditCount(record), 0);
-  const devices = new Set(records.map((record) => recordValue(record, ["device_id", "device_name"], "unknown")).filter(Boolean));
-  const users = new Set(records.map((record) => recordValue(record, ["user_subject", "user_id"], "unknown")).filter(Boolean));
+  const devices = new Set(
+    records
+      .map((record) => recordValue(record, ["device_id", "device_name"], "unknown"))
+      .filter(Boolean)
+  );
+  const users = new Set(
+    records
+      .map((record) => recordValue(record, ["user_subject", "user_id"], "unknown"))
+      .filter(Boolean)
+  );
   const agents = new Set(records.map((record) => usageAgentKey(record)).filter(Boolean));
-  const creditPools = new Set(records.map((record) => recordValue(record, ["billing_pool_id", "credit_pool_id"], "")).filter(Boolean));
-  const calls = records.reduce((sum, record) => sum + Number(recordValue(record, ["call_count", "calls"], 0) || 0), 0);
+  const creditPools = new Set(
+    records
+      .map((record) => recordValue(record, ["billing_pool_id", "credit_pool_id"], ""))
+      .filter(Boolean)
+  );
+  const calls = records.reduce(
+    (sum, record) => sum + Number(recordValue(record, ["call_count", "calls"], 0) || 0),
+    0
+  );
   return {
     records: records.length,
     agents: agents.size,
@@ -961,7 +1133,8 @@ function usageRecordsByDevice(records) {
       });
     }
     const device = devices.get(deviceId);
-    if (device.osFamily === "unknown" && recordOsFamily !== "unknown") device.osFamily = recordOsFamily;
+    if (device.osFamily === "unknown" && recordOsFamily !== "unknown")
+      device.osFamily = recordOsFamily;
     if (!device.osVersion && recordOsVersion) device.osVersion = recordOsVersion;
     const tokens = usageTokenCount(record);
     const costCents = usageCostCents(record);
@@ -973,7 +1146,11 @@ function usageRecordsByDevice(records) {
     if (!device.agentsByKey.has(agentKey)) {
       device.agentsByKey.set(agentKey, {
         id: recordValue(record, ["agent_id", "entity_id"], record.id),
-        name: recordValue(record, ["agent_name", "name"], recordValue(record, ["agent_id", "entity_id"], "unknown agent")),
+        name: recordValue(
+          record,
+          ["agent_name", "name"],
+          recordValue(record, ["agent_id", "entity_id"], "unknown agent")
+        ),
         user: recordValue(record, ["user_subject", "user_id"], "unknown user"),
         tokens: 0,
         costCents: 0,
@@ -999,7 +1176,11 @@ function usageRecordsByDevice(records) {
         credits: 0,
         creditPools: new Set(),
         calls: 0,
-        allocationMethod: recordValue(record, ["allocation_method", "cost_allocation_method"], usagePricingModel(record)),
+        allocationMethod: recordValue(
+          record,
+          ["allocation_method", "cost_allocation_method"],
+          usagePricingModel(record)
+        ),
         confidence: recordValue(record, ["confidence", "source"], "reported")
       });
     }
@@ -1011,14 +1192,18 @@ function usageRecordsByDevice(records) {
     model.calls += calls;
   }
   for (const device of devices.values()) {
-    device.agents = [...device.agentsByKey.values()].map((agent) => {
-      const models = [...agent.modelsByKey.values()].map((model) => ({
-        ...model,
-        creditPools: [...model.creditPools]
-      })).sort((a, b) => b.costCents - a.costCents || b.tokens - a.tokens);
-      const { modelsByKey, creditPools, ...safeAgent } = agent;
-      return { ...safeAgent, creditPools: [...creditPools], models };
-    }).sort((a, b) => b.costCents - a.costCents || b.tokens - a.tokens);
+    device.agents = [...device.agentsByKey.values()]
+      .map((agent) => {
+        const models = [...agent.modelsByKey.values()]
+          .map((model) => ({
+            ...model,
+            creditPools: [...model.creditPools]
+          }))
+          .sort((a, b) => b.costCents - a.costCents || b.tokens - a.tokens);
+        const { modelsByKey, creditPools, ...safeAgent } = agent;
+        return { ...safeAgent, creditPools: [...creditPools], models };
+      })
+      .sort((a, b) => b.costCents - a.costCents || b.tokens - a.tokens);
     device.tokens = device.agents.reduce((sum, agent) => sum + agent.tokens, 0);
     device.costCents = device.agents.reduce((sum, agent) => sum + agent.costCents, 0);
     device.credits = device.agents.reduce((sum, agent) => sum + agent.credits, 0);
@@ -1032,8 +1217,11 @@ function usageRecordsByDevice(records) {
 function usageRecordsForEntity(entity) {
   if (!entity) return [];
   const entityKind = entity.entity_type || entity.class || objectKind(entity);
-  const isAgent = ["registered_agent", "found_agent", "agent"].includes(entityKind) || entity.class === "agent";
-  const expectedNames = [entity.name, entity.local_object_id, entity.id].filter(Boolean).map((value) => String(value).toLowerCase());
+  const isAgent =
+    ["registered_agent", "found_agent", "agent"].includes(entityKind) || entity.class === "agent";
+  const expectedNames = [entity.name, entity.local_object_id, entity.id]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
   return aiUsageRecords(entity.tenant_id || selectedTenantId()).filter((record) => {
     const ids = [
       recordValue(record, ["entity_id"]),
@@ -1046,12 +1234,15 @@ function usageRecordsForEntity(entity) {
     const sameDevice = [entity.device_id, entity.device_name].filter(Boolean).includes(deviceValue);
     const sameUser = [entity.user_id, entity.user_subject].filter(Boolean).includes(userValue);
     const scopedNameMatch = expectedNames.includes(agentName) && sameDevice && sameUser;
-    const directAgentMatch = ids.includes(entity.id)
-      || ids.includes(entity.local_object_id)
-      || scopedNameMatch;
+    const directAgentMatch =
+      ids.includes(entity.id) || ids.includes(entity.local_object_id) || scopedNameMatch;
     if (isAgent) return directAgentMatch;
     const deviceId = recordValue(record, ["device_id", "device_name"], "");
-    return directAgentMatch || (entity.id && deviceId === entity.id) || (entity.device_id && deviceId === entity.device_id);
+    return (
+      directAgentMatch ||
+      (entity.id && deviceId === entity.id) ||
+      (entity.device_id && deviceId === entity.device_id)
+    );
   });
 }
 
@@ -1060,25 +1251,77 @@ function renderAiUsageOverview() {
   const records = aiUsageRecords();
   const summary = summarizeUsageRecords(records);
   const devices = usageRecordsByDevice(records);
-  const lcpLedgerCount = records.filter((record) => record.source === "lcp_usage_ledger" || record.confidence === "reported_by_lcp").length;
-  const observedOsFamilies = new Set(records.map((record) => osFamilyForRecord(record)).filter((family) => family !== "unknown"));
+  const lcpLedgerCount = records.filter(
+    (record) => record.source === "lcp_usage_ledger" || record.confidence === "reported_by_lcp"
+  ).length;
+  const observedOsFamilies = new Set(
+    records.map((record) => osFamilyForRecord(record)).filter((family) => family !== "unknown")
+  );
   refs.aiUsageSummary.innerHTML = [
-    { kind: "integration", value: lcpLedgerCount ? "Validated" : "Estimate", label: lcpLedgerCount ? `${lcpLedgerCount} LCP ledger records` : "Awaiting LCP ledger", status: lcpLedgerCount ? "ok" : "warn" },
-    { kind: "integration", value: `${observedOsFamilies.size}/3 OS seen`, label: "Fixtures ready: Windows, macOS, Linux", status: observedOsFamilies.size >= 3 ? "ok" : "warn" },
-    { kind: "billing", value: fmtMoney(summary.totalCostCents), label: "Estimated org spend", status: summary.totalCostCents ? "warn" : "neutral" },
-    { kind: "telemetry", value: fmtNumber(summary.totalTokens), label: "Tokens observed", status: "neutral" },
-    { kind: "billing", value: fmtCredits(summary.credits), label: `${summary.creditPools.length} credit pools`, status: summary.creditPools.length ? "warn" : "neutral" },
-    { kind: "device", value: fmtNumber(summary.devices), label: "Devices with AI usage", status: summary.devices ? "ok" : "warn" },
-    { kind: "agent", value: fmtNumber(summary.agents), label: "Agent applications", status: summary.agents ? "ok" : "warn" },
-    { kind: "billing", value: fmtMoney(summary.avgCostPerDeviceCents), label: "Average per device", status: "neutral" }
-  ].map((item) => `
+    {
+      kind: "integration",
+      value: lcpLedgerCount ? "Validated" : "Estimate",
+      label: lcpLedgerCount ? `${lcpLedgerCount} LCP ledger records` : "Awaiting LCP ledger",
+      status: lcpLedgerCount ? "ok" : "warn"
+    },
+    {
+      kind: "integration",
+      value: `${observedOsFamilies.size}/3 OS seen`,
+      label: "Fixtures ready: Windows, macOS, Linux",
+      status: observedOsFamilies.size >= 3 ? "ok" : "warn"
+    },
+    {
+      kind: "billing",
+      value: fmtMoney(summary.totalCostCents),
+      label: "Estimated org spend",
+      status: summary.totalCostCents ? "warn" : "neutral"
+    },
+    {
+      kind: "telemetry",
+      value: fmtNumber(summary.totalTokens),
+      label: "Tokens observed",
+      status: "neutral"
+    },
+    {
+      kind: "billing",
+      value: fmtCredits(summary.credits),
+      label: `${summary.creditPools.length} credit pools`,
+      status: summary.creditPools.length ? "warn" : "neutral"
+    },
+    {
+      kind: "device",
+      value: fmtNumber(summary.devices),
+      label: "Devices with AI usage",
+      status: summary.devices ? "ok" : "warn"
+    },
+    {
+      kind: "agent",
+      value: fmtNumber(summary.agents),
+      label: "Agent applications",
+      status: summary.agents ? "ok" : "warn"
+    },
+    {
+      kind: "billing",
+      value: fmtMoney(summary.avgCostPerDeviceCents),
+      label: "Average per device",
+      status: "neutral"
+    }
+  ]
+    .map(
+      (item) => `
     <div class="usage-total-card ${statusClass(item.status)}">
       ${iconHtml(item.kind, item.status)}
       <span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.label)}</small></span>
     </div>
-  `).join("");
+  `
+    )
+    .join("");
 
-  refs.aiUsageDeviceList.innerHTML = devices.length ? devices.slice(0, 8).map((device) => `
+  refs.aiUsageDeviceList.innerHTML = devices.length
+    ? devices
+        .slice(0, 8)
+        .map(
+          (device) => `
     <article class="usage-device-card">
       <div class="usage-device-head">
         ${iconHtml("device", device.costCents ? "warn" : "neutral")}
@@ -1092,23 +1335,36 @@ function renderAiUsageOverview() {
         <span style="width:${Math.min(100, Math.max(4, Math.round((device.tokens / Math.max(1, summary.totalTokens)) * 100)))}%"></span>
       </div>
       <div class="usage-agent-list" aria-label="Agent-first usage under ${escapeHtml(device.deviceName)}">
-        ${device.agents.slice(0, 4).map((agent) => `
+        ${device.agents
+          .slice(0, 4)
+          .map(
+            (agent) => `
           <div class="usage-agent-row">
             <span><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.user)} | ${escapeHtml(fmtNumber(agent.calls))} calls | ${escapeHtml(agent.models.length)} model${agent.models.length === 1 ? "" : "s"} | ${escapeHtml(agent.creditPools.length ? agent.creditPools[0] : "direct token meter")}</small></span>
             <span>${escapeHtml(fmtNumber(agent.tokens))} tokens<br><b>${escapeHtml(costBasisLabel(agent))}</b></span>
             <div class="usage-model-list">
-              ${agent.models.slice(0, 3).map((model) => `
+              ${agent.models
+                .slice(0, 3)
+                .map(
+                  (model) => `
                 <span class="usage-model-chip">
                   <b>${escapeHtml(model.provider)} / ${escapeHtml(model.model)}</b>
                   ${escapeHtml(fmtNumber(model.tokens))} tokens | ${escapeHtml(costBasisLabel(model))} | ${escapeHtml(model.allocationMethod)}
                 </span>
-              `).join("")}
+              `
+                )
+                .join("")}
             </div>
           </div>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     </article>
-  `).join("") : `<div class="detail-row"><strong>No AI usage recorded</strong><span>Usage appears after Local Pollek sends model/tool telemetry.</span></div>`;
+  `
+        )
+        .join("")
+    : `<div class="detail-row"><strong>No AI usage recorded</strong><span>Usage appears after Local Pollek sends model/tool telemetry.</span></div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1176,7 +1432,9 @@ function costTokenRangeLabel() {
 
 function costTokenReportBasePath() {
   const tenantId = costTokenScopeTenant();
-  return tenantId ? `/v1/tenants/${encodePathPart(tenantId)}/reports/cost-tokens` : "/api/reports/cost-tokens";
+  return tenantId
+    ? `/v1/tenants/${encodePathPart(tenantId)}/reports/cost-tokens`
+    : "/api/reports/cost-tokens";
 }
 
 async function loadCostTokenOverview(options = {}) {
@@ -1224,7 +1482,9 @@ function renderCostTokens() {
 
   const overview = app.costTokenOverview;
   if (!overview || overview.error) {
-    const message = overview?.error ? `Unable to load report: ${escapeHtml(overview.error)}` : "Loading cost and token report...";
+    const message = overview?.error
+      ? `Unable to load report: ${escapeHtml(overview.error)}`
+      : "Loading cost and token report...";
     refs.costTokenSummary.innerHTML = `<div class="usage-total-card neutral"><span><strong>--</strong><small>${message}</small></span></div>`;
     refs.costTokenRows.innerHTML = `<tr><td colspan="7" class="empty-cell">${message}</td></tr>`;
     refs.costTokenCategoryCards.innerHTML = "";
@@ -1239,22 +1499,71 @@ function renderCostTokens() {
 
 function renderCostTokenSummary(totals, sources) {
   const cards = [
-    { kind: "billing", value: fmtMoney(totals.cost_cents || 0), label: "Total cost", status: totals.cost_cents ? "warn" : "neutral" },
-    { kind: "telemetry", value: fmtNumber(totals.total_tokens || 0), label: `${fmtNumber(totals.input_tokens || 0)} in / ${fmtNumber(totals.output_tokens || 0)} out`, status: "neutral" },
-    { kind: "billing", value: fmtCredits(totals.credits || 0), label: `${(totals.credit_pools || []).length} credit pools`, status: (totals.credit_pools || []).length ? "warn" : "neutral" },
-    { kind: "device", value: fmtNumber(totals.devices || 0), label: "Devices", status: totals.devices ? "ok" : "warn" },
-    { kind: "identity", value: fmtNumber(totals.users || 0), label: "Users", status: totals.users ? "ok" : "warn" },
-    { kind: "agent", value: fmtNumber(totals.agents || 0), label: "Agents", status: totals.agents ? "ok" : "warn" },
-    { kind: "device", value: fmtNumber(totals.tenants || 0), label: "Tenants", status: totals.tenants ? "ok" : "neutral" },
-    { kind: "telemetry", value: fmtNumber(totals.calls || 0), label: "Model calls", status: "neutral" },
-    { kind: "integration", value: `${fmtNumber(sources.lcp_usage_ledger || 0)}/${fmtNumber(totals.records || 0)}`, label: "LCP ledger records", status: (sources.lcp_usage_ledger || 0) ? "ok" : "warn" }
+    {
+      kind: "billing",
+      value: fmtMoney(totals.cost_cents || 0),
+      label: "Total cost",
+      status: totals.cost_cents ? "warn" : "neutral"
+    },
+    {
+      kind: "telemetry",
+      value: fmtNumber(totals.total_tokens || 0),
+      label: `${fmtNumber(totals.input_tokens || 0)} in / ${fmtNumber(totals.output_tokens || 0)} out`,
+      status: "neutral"
+    },
+    {
+      kind: "billing",
+      value: fmtCredits(totals.credits || 0),
+      label: `${(totals.credit_pools || []).length} credit pools`,
+      status: (totals.credit_pools || []).length ? "warn" : "neutral"
+    },
+    {
+      kind: "device",
+      value: fmtNumber(totals.devices || 0),
+      label: "Devices",
+      status: totals.devices ? "ok" : "warn"
+    },
+    {
+      kind: "identity",
+      value: fmtNumber(totals.users || 0),
+      label: "Users",
+      status: totals.users ? "ok" : "warn"
+    },
+    {
+      kind: "agent",
+      value: fmtNumber(totals.agents || 0),
+      label: "Agents",
+      status: totals.agents ? "ok" : "warn"
+    },
+    {
+      kind: "device",
+      value: fmtNumber(totals.tenants || 0),
+      label: "Tenants",
+      status: totals.tenants ? "ok" : "neutral"
+    },
+    {
+      kind: "telemetry",
+      value: fmtNumber(totals.calls || 0),
+      label: "Model calls",
+      status: "neutral"
+    },
+    {
+      kind: "integration",
+      value: `${fmtNumber(sources.lcp_usage_ledger || 0)}/${fmtNumber(totals.records || 0)}`,
+      label: "LCP ledger records",
+      status: sources.lcp_usage_ledger || 0 ? "ok" : "warn"
+    }
   ];
-  refs.costTokenSummary.innerHTML = cards.map((item) => `
+  refs.costTokenSummary.innerHTML = cards
+    .map(
+      (item) => `
     <div class="usage-total-card ${statusClass(item.status)}">
       ${iconHtml(item.kind, item.status)}
       <span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.label)}</small></span>
     </div>
-  `).join("");
+  `
+    )
+    .join("");
 }
 
 function renderCostTokenTable(overview) {
@@ -1307,25 +1616,54 @@ function renderCostTokenTable(overview) {
 
 function costTokenGroupMeta(group, dimension) {
   if (dimension === "device") {
-    return [group.os_family && group.os_family !== "unknown" ? osFamilyLabel(group.os_family) : "", group.lcp_id, `${group.user_count} users`, `${group.agent_count} agents`].filter(Boolean).join(" | ");
+    return [
+      group.os_family && group.os_family !== "unknown" ? osFamilyLabel(group.os_family) : "",
+      group.lcp_id,
+      `${group.user_count} users`,
+      `${group.agent_count} agents`
+    ]
+      .filter(Boolean)
+      .join(" | ");
   }
-  if (dimension === "user") return [`${group.device_count} devices`, `${group.agent_count} agents`, `${group.model_count} models`].join(" | ");
-  if (dimension === "agent") return [`${group.device_count} devices`, `${group.user_count} users`, `${group.model_count} models`].join(" | ");
-  if (dimension === "tenant") return [`${group.device_count} devices`, `${group.user_count} users`, `${group.agent_count} agents`].join(" | ");
-  if (dimension === "model") return [`${group.device_count} devices`, `${group.user_count} users`, group.credit_pools.length ? group.credit_pools[0] : "direct token meter"].join(" | ");
-  if (dimension === "provider") return [`${group.model_count} models`, `${group.agent_count} agents`].join(" | ");
+  if (dimension === "user")
+    return [
+      `${group.device_count} devices`,
+      `${group.agent_count} agents`,
+      `${group.model_count} models`
+    ].join(" | ");
+  if (dimension === "agent")
+    return [
+      `${group.device_count} devices`,
+      `${group.user_count} users`,
+      `${group.model_count} models`
+    ].join(" | ");
+  if (dimension === "tenant")
+    return [
+      `${group.device_count} devices`,
+      `${group.user_count} users`,
+      `${group.agent_count} agents`
+    ].join(" | ");
+  if (dimension === "model")
+    return [
+      `${group.device_count} devices`,
+      `${group.user_count} users`,
+      group.credit_pools.length ? group.credit_pools[0] : "direct token meter"
+    ].join(" | ");
+  if (dimension === "provider")
+    return [`${group.model_count} models`, `${group.agent_count} agents`].join(" | ");
   return "";
 }
 
 function renderCostTokenCategoryCards(overview) {
   if (!refs.costTokenCategoryCards) return;
   const dimensions = ["user", "device", "agent", "tenant", "model", "provider"];
-  refs.costTokenCategoryCards.innerHTML = dimensions.map((dimension) => {
-    const labels = COST_TOKEN_DIMENSION_LABELS[dimension];
-    const groups = (overview.categories && overview.categories[dimension]) || [];
-    const top = groups[0];
-    const active = dimension === app.costTokenDimension ? " active" : "";
-    return `
+  refs.costTokenCategoryCards.innerHTML = dimensions
+    .map((dimension) => {
+      const labels = COST_TOKEN_DIMENSION_LABELS[dimension];
+      const groups = (overview.categories && overview.categories[dimension]) || [];
+      const top = groups[0];
+      const active = dimension === app.costTokenDimension ? " active" : "";
+      return `
       <button type="button" class="cost-token-category-card${active}" data-cost-dimension="${dimension}">
         <span class="cost-token-category-head">
           ${iconHtml(dimension === "user" ? "identity" : dimension === "tenant" ? "device" : dimension, "neutral")}
@@ -1334,7 +1672,8 @@ function renderCostTokenCategoryCards(overview) {
         <span class="cost-token-category-top">${top ? `Top: ${escapeHtml(top.label || top.key)} (${escapeHtml(fmtMoney(top.cost_cents || 0))})` : "No usage yet"}</span>
       </button>
     `;
-  }).join("");
+    })
+    .join("");
   refs.costTokenCategoryCards.querySelectorAll("[data-cost-dimension]").forEach((button) => {
     button.addEventListener("click", () => {
       app.costTokenDimension = button.dataset.costDimension;
@@ -1358,7 +1697,10 @@ function renderCostTokenDetail(group, dimension) {
     ["Cached input", fmtNumber(group.cached_input_tokens || 0)],
     ["Credits", fmtCredits(group.credits || 0)],
     ["Model calls", fmtNumber(group.calls || 0)],
-    ["Records", `${fmtNumber(group.records || 0)} (${fmtNumber(group.reported_records || 0)} reported / ${fmtNumber(group.estimated_records || 0)} estimated)`],
+    [
+      "Records",
+      `${fmtNumber(group.records || 0)} (${fmtNumber(group.reported_records || 0)} reported / ${fmtNumber(group.estimated_records || 0)} estimated)`
+    ],
     ["Last activity", group.last_activity_at ? fmtTime(group.last_activity_at) : "n/a"]
   ];
   refs.costTokenDetail.innerHTML = `
@@ -1367,19 +1709,32 @@ function renderCostTokenDetail(group, dimension) {
     </div>
     <div class="cost-token-detail-models">
       <h4>Provider / model breakdown</h4>
-      ${models.length ? models.map((model) => `
+      ${
+        models.length
+          ? models
+              .map(
+                (model) => `
         <div class="cost-token-model-row">
           <span><strong>${escapeHtml(model.provider)} / ${escapeHtml(model.model)}</strong><small>${escapeHtml(fmtNumber(model.calls))} calls | ${escapeHtml(model.confidence)}</small></span>
           <span>${escapeHtml(fmtNumber(model.total_tokens))} tokens<br><b>${escapeHtml(fmtMoney(model.cost_cents))}</b></span>
         </div>
-      `).join("") : `<p class="muted-note">No per-model detail available for this ${escapeHtml(labels.header.toLowerCase())}.</p>`}
+      `
+              )
+              .join("")
+          : `<p class="muted-note">No per-model detail available for this ${escapeHtml(labels.header.toLowerCase())}.</p>`
+      }
     </div>
   `;
 }
 
 function costTokenModelsForGroup(group, dimension) {
   const records = (app.data?.usage_records || []).filter((record) => {
-    if (String(record.metric || "") !== "ai_model_usage" && usageTokenCount(record) === 0 && usageCostCents(record) === 0) return false;
+    if (
+      String(record.metric || "") !== "ai_model_usage" &&
+      usageTokenCount(record) === 0 &&
+      usageCostCents(record) === 0
+    )
+      return false;
     const scopeTenant = costTokenScopeTenant();
     if (scopeTenant && record.tenant_id !== scopeTenant) return false;
     return costTokenRecordMatchesGroup(record, dimension, group.key);
@@ -1389,24 +1744,50 @@ function costTokenModelsForGroup(group, dimension) {
     const provider = recordValue(record, ["provider"], "unknown provider");
     const model = recordValue(record, ["model"], "unknown model");
     const key = `${provider}::${model}`;
-    if (!models.has(key)) models.set(key, { provider, model, total_tokens: 0, cost_cents: 0, calls: 0, confidence: recordValue(record, ["confidence", "source"], "reported") });
+    if (!models.has(key))
+      models.set(key, {
+        provider,
+        model,
+        total_tokens: 0,
+        cost_cents: 0,
+        calls: 0,
+        confidence: recordValue(record, ["confidence", "source"], "reported")
+      });
     const entry = models.get(key);
     entry.total_tokens += usageTokenCount(record);
     entry.cost_cents += usageCostCents(record);
     entry.calls += Number(recordValue(record, ["call_count", "calls"], 0) || 0);
   }
-  return [...models.values()].sort((a, b) => b.cost_cents - a.cost_cents || b.total_tokens - a.total_tokens);
+  return [...models.values()].sort(
+    (a, b) => b.cost_cents - a.cost_cents || b.total_tokens - a.total_tokens
+  );
 }
 
 function costTokenRecordMatchesGroup(record, dimension, key) {
   switch (dimension) {
-    case "device": return recordValue(record, ["device_id", "device_name"], "unknown-device") === key;
-    case "user": return recordValue(record, ["user_subject", "user_id"], "unknown-user") === key;
-    case "agent": return recordValue(record, ["agent_id", "entity_id", "object_id"], recordValue(record, ["agent_name", "name"], "unknown-agent")) === key;
-    case "tenant": return recordValue(record, ["tenant_id"], "unknown-tenant") === key;
-    case "model": return `${recordValue(record, ["provider"], "unknown")}::${recordValue(record, ["model"], "unknown")}` === key;
-    case "provider": return recordValue(record, ["provider"], "unknown") === key;
-    default: return false;
+    case "device":
+      return recordValue(record, ["device_id", "device_name"], "unknown-device") === key;
+    case "user":
+      return recordValue(record, ["user_subject", "user_id"], "unknown-user") === key;
+    case "agent":
+      return (
+        recordValue(
+          record,
+          ["agent_id", "entity_id", "object_id"],
+          recordValue(record, ["agent_name", "name"], "unknown-agent")
+        ) === key
+      );
+    case "tenant":
+      return recordValue(record, ["tenant_id"], "unknown-tenant") === key;
+    case "model":
+      return (
+        `${recordValue(record, ["provider"], "unknown")}::${recordValue(record, ["model"], "unknown")}` ===
+        key
+      );
+    case "provider":
+      return recordValue(record, ["provider"], "unknown") === key;
+    default:
+      return false;
   }
 }
 
@@ -1414,8 +1795,10 @@ function updateCostTokenDownloadLinks() {
   const base = costTokenReportBasePath();
   const dimension = app.costTokenDimension;
   const range = costTokenRangeQuery("&");
-  if (refs.costTokenDownloadCsv) refs.costTokenDownloadCsv.href = `${base}?group_by=${dimension}&format=csv${range}`;
-  if (refs.costTokenDownloadJson) refs.costTokenDownloadJson.href = `${base}?group_by=${dimension}&format=json${range}`;
+  if (refs.costTokenDownloadCsv)
+    refs.costTokenDownloadCsv.href = `${base}?group_by=${dimension}&format=csv${range}`;
+  if (refs.costTokenDownloadJson)
+    refs.costTokenDownloadJson.href = `${base}?group_by=${dimension}&format=json${range}`;
 }
 
 const entityNavigationGroups = [
@@ -1451,10 +1834,14 @@ function isSideNavAgentItem(item) {
 
 function lcpForEntity(entity) {
   const lcps = app.data.local_control_planes || [];
-  return lcps.find((lcp) => entity.lcp_id === lcp.id)
-    || lcps.find((lcp) => entity.device_id === lcp.device_id || entity.device_name === lcp.device_name)
-    || lcps[0]
-    || null;
+  return (
+    lcps.find((lcp) => entity.lcp_id === lcp.id) ||
+    lcps.find(
+      (lcp) => entity.device_id === lcp.device_id || entity.device_name === lcp.device_name
+    ) ||
+    lcps[0] ||
+    null
+  );
 }
 
 function aggregateStatus(items) {
@@ -1469,9 +1856,13 @@ function buildNavigationTree() {
   const items = [];
   const baseItems = app.data.tree || [];
   const localEntities = app.data.local_entities || [];
-  const seedAgentIds = new Set(baseItems.filter((item) => item.type === "agent").map((item) => item.id));
+  const seedAgentIds = new Set(
+    baseItems.filter((item) => item.type === "agent").map((item) => item.id)
+  );
   const groupOrder = new Map(sideNavEntityGroups.map((group, index) => [group.kind, index]));
-  const lcpOrder = new Map((app.data.local_control_planes || []).map((lcp, index) => [lcp.id, index]));
+  const lcpOrder = new Map(
+    (app.data.local_control_planes || []).map((lcp, index) => [lcp.id, index])
+  );
 
   for (const item of baseItems) {
     if (seedAgentIds.has(item.id)) continue;
@@ -1491,7 +1882,9 @@ function buildNavigationTree() {
         parent_id: lcp.id,
         type: "entity_group",
         entity_kind: groupKind,
-        name: sideNavEntityGroups.find((group) => group.kind === groupKind)?.label || kindLabel(groupKind),
+        name:
+          sideNavEntityGroups.find((group) => group.kind === groupKind)?.label ||
+          kindLabel(groupKind),
         status: "unknown",
         risk: "medium",
         nav_only: true,
@@ -1519,7 +1912,9 @@ function buildNavigationTree() {
       const statusWeight = { bad: 0, warn: 1, neutral: 2, ok: 3 };
       const statusDelta = (statusWeight[leftStatus] ?? 2) - (statusWeight[rightStatus] ?? 2);
       if (statusDelta) return statusDelta;
-      return String(a.name || a.local_object_id || a.id).localeCompare(String(b.name || b.local_object_id || b.id));
+      return String(a.name || a.local_object_id || a.id).localeCompare(
+        String(b.name || b.local_object_id || b.id)
+      );
     });
     for (const entity of sortedEntities) {
       items.push({
@@ -1530,11 +1925,9 @@ function buildNavigationTree() {
         name: entity.name || entity.local_object_id || entity.id,
         status: entity.status,
         risk: entity.risk,
-        detail: [
-          entity.device_name || entity.device_id,
-          entity.user_subject,
-          entity.source
-        ].filter(Boolean).join(" | ")
+        detail: [entity.device_name || entity.device_id, entity.user_subject, entity.source]
+          .filter(Boolean)
+          .join(" | ")
       });
     }
   }
@@ -1564,8 +1957,14 @@ function navPathIds(id, items) {
 }
 
 function persistNavNodeState() {
-  localStorage.setItem("pollek.cloud.nav.nodes.collapsed", JSON.stringify([...app.collapsedNavNodes]));
-  localStorage.setItem("pollek.cloud.nav.nodes.expanded", JSON.stringify([...app.expandedNavNodes]));
+  localStorage.setItem(
+    "pollek.cloud.nav.nodes.collapsed",
+    JSON.stringify([...app.collapsedNavNodes])
+  );
+  localStorage.setItem(
+    "pollek.cloud.nav.nodes.expanded",
+    JSON.stringify([...app.expandedNavNodes])
+  );
 }
 
 function toggleNavNode(nodeId, defaultCollapsed = false) {
@@ -1597,13 +1996,11 @@ function renderTree() {
   const childMap = navChildMap(navItems);
   const selectedPath = navPathIds(app.selectedObjectId, navItems);
   const query = app.query.trim().toLowerCase();
-  const itemText = (item) => [
-    item.name,
-    item.type,
-    item.entity_kind,
-    item.detail,
-    kindLabel(item.entity_kind || item.type)
-  ].filter(Boolean).join(" ").toLowerCase();
+  const itemText = (item) =>
+    [item.name, item.type, item.entity_kind, item.detail, kindLabel(item.entity_kind || item.type)]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
   const shouldShow = (item) => {
     if (!query) return true;
     if (itemText(item).includes(query)) return true;
@@ -1616,7 +2013,10 @@ function renderTree() {
     const hasChildren = children.some((child) => shouldShow(child));
     const lockedOpen = query || selectedPath.has(item.id);
     const defaultCollapsed = item.nav_only && Number(item.count || 0) > 20;
-    const collapsed = hasChildren && !lockedOpen && (defaultCollapsed ? !app.expandedNavNodes.has(item.id) : app.collapsedNavNodes.has(item.id));
+    const collapsed =
+      hasChildren &&
+      !lockedOpen &&
+      (defaultCollapsed ? !app.expandedNavNodes.has(item.id) : app.collapsedNavNodes.has(item.id));
     const button = document.createElement("button");
     const isActive = app.selectedObjectId === (item.object_id || item.id);
     button.className = `tree-row ${isActive ? "active" : ""} ${hasChildren ? "has-children" : "leaf"} ${collapsed ? "collapsed" : "expanded"}`;
@@ -1627,7 +2027,9 @@ function renderTree() {
     button.style.setProperty("--depth", depth);
     button.style.paddingLeft = `${6 + depth * 10}px`;
     const iconKind = item.entity_kind || item.type;
-    const detail = item.detail || (item.count ? `${item.count} ${kindLabel(item.entity_kind)} entities` : kindLabel(item.type));
+    const detail =
+      item.detail ||
+      (item.count ? `${item.count} ${kindLabel(item.entity_kind)} entities` : kindLabel(item.type));
     button.innerHTML = `
       <span class="tree-expander" aria-hidden="true">${hasChildren ? ">" : ""}</span>
       ${iconHtml(iconKind, item.status, "node-icon")}
@@ -1648,7 +2050,9 @@ function renderTree() {
       }
       app.selectedObjectId = item.object_id || item.id;
       if (isSideNavAgentItem(item)) {
-        const focusedEntity = (app.data.local_entities || []).find((entity) => entity.id === app.selectedObjectId);
+        const focusedEntity = (app.data.local_entities || []).find(
+          (entity) => entity.id === app.selectedObjectId
+        );
         app.entityTypeFilter = "all";
         app.entityDeviceFilter = "all";
         app.entityUserFilter = "all";
@@ -1672,9 +2076,11 @@ function renderTree() {
 }
 
 function selectedObject() {
-  return app.data.objects[app.selectedObjectId]
-    || (app.data.local_entities || []).find((entity) => entity.id === app.selectedObjectId)
-    || app.data.objects.tenant_local_lab;
+  return (
+    app.data.objects[app.selectedObjectId] ||
+    (app.data.local_entities || []).find((entity) => entity.id === app.selectedObjectId) ||
+    app.data.objects.tenant_local_lab
+  );
 }
 
 function pathToObject(id) {
@@ -1695,7 +2101,9 @@ function renderObjectHeader() {
   const objectOsFamily = object.os_family || (object.device_id ? osFamilyForEntity(object) : "");
   const contextParts = [
     kindLabel(kind),
-    objectOsFamily && normalizeOsFamily(objectOsFamily) !== "unknown" ? osFamilyLabel(objectOsFamily) : "",
+    objectOsFamily && normalizeOsFamily(objectOsFamily) !== "unknown"
+      ? osFamilyLabel(objectOsFamily)
+      : "",
     object.device_name || object.site || object.group || object.tenant_id,
     object.user_subject,
     object.spiffe_id || object.trace?.spiffe_id || object.identity?.spiffe_id,
@@ -1708,7 +2116,10 @@ function renderObjectHeader() {
   refs.objectRisk.className = `risk-pill ${object.risk === "high" ? "bad" : object.risk === "medium" ? "warn" : "ok"}`;
   refs.objectRisk.textContent = `${object.risk || "low"} risk`;
   if (refs.objectContext) {
-    refs.objectContext.innerHTML = contextParts.slice(0, 5).map((part) => `<span>${escapeHtml(part)}</span>`).join("");
+    refs.objectContext.innerHTML = contextParts
+      .slice(0, 5)
+      .map((part) => `<span>${escapeHtml(part)}</span>`)
+      .join("");
   }
 
   if (object.type === "lcp" && object.endpoint) {
@@ -1723,8 +2134,9 @@ function renderFleetRows() {
     .filter((lcp) => {
       const query = app.query.trim().toLowerCase();
       if (!query) return true;
-      return [lcp.name, lcp.site, lcp.group, lcp.device_name, lcp.active_bundle, lcp.status]
-        .some((value) => String(value).toLowerCase().includes(query));
+      return [lcp.name, lcp.site, lcp.group, lcp.device_name, lcp.active_bundle, lcp.status].some(
+        (value) => String(value).toLowerCase().includes(query)
+      );
     });
 
   refs.fleetRows.innerHTML = "";
@@ -1763,10 +2175,7 @@ function renderFleetRows() {
 }
 
 function allRelationships() {
-  return [
-    ...(app.data.relationships || []),
-    ...(app.data.local_entity_relationships || [])
-  ];
+  return [...(app.data.relationships || []), ...(app.data.local_entity_relationships || [])];
 }
 
 function renderRelationships(container = refs.relationshipMap, limit = 6) {
@@ -1789,7 +2198,12 @@ function renderRelationships(container = refs.relationshipMap, limit = 6) {
   const visible = (relations.length ? relations : relationships).slice(0, limit);
   for (const rel of visible) {
     const relatedId = rel.from === object.id ? rel.to : rel.from;
-    const related = app.data.objects[relatedId] || { id: relatedId, name: relatedId, type: "object", status: "unknown" };
+    const related = app.data.objects[relatedId] || {
+      id: relatedId,
+      name: relatedId,
+      type: "object",
+      status: "unknown"
+    };
     const node = document.createElement("button");
     node.className = "relationship-node";
     node.innerHTML = `
@@ -1836,7 +2250,11 @@ function renderRelationshipDetails() {
 function populateSelect(select, allLabel, rows, selectedValue) {
   if (!select) return;
   const options = [`<option value="all">${escapeHtml(allLabel)}</option>`]
-    .concat(rows.map((row) => `<option value="${escapeHtml(row.value)}">${escapeHtml(row.label)}</option>`))
+    .concat(
+      rows.map(
+        (row) => `<option value="${escapeHtml(row.value)}">${escapeHtml(row.label)}</option>`
+      )
+    )
     .join("");
   if (select.dataset.options !== options) {
     select.innerHTML = options;
@@ -1889,21 +2307,50 @@ function renderEntityInsights() {
   const wasmReady = entities.filter((entity) => entityReadiness(entity).wasmReady).length;
   const total = Math.max(1, entities.length);
   const items = [
-    { kind: "registered_agent", label: "Registered", value: registered, status: registered ? "ok" : "warn" },
+    {
+      kind: "registered_agent",
+      label: "Registered",
+      value: registered,
+      status: registered ? "ok" : "warn"
+    },
     { kind: "found_agent", label: "Found", value: found, status: found ? "warn" : "ok" },
     { kind: "policy", label: "Policies", value: policies, status: policies ? "ok" : "warn" },
-    { kind: "enforcement", label: "Enforcement", value: enforcement, status: enforcement ? "ok" : "warn" },
+    {
+      kind: "enforcement",
+      label: "Enforcement",
+      value: enforcement,
+      status: enforcement ? "ok" : "warn"
+    },
     { kind: "observability", label: "Observe", value: observe, status: observe ? "ok" : "warn" },
-    { kind: "identity", label: "Identity trace", value: `${Math.round((identityReady / total) * 100)}%`, status: identityReady === entities.length ? "ok" : "warn" },
-    { kind: "telemetry", label: "Telemetry", value: `${Math.round((telemetryReady / total) * 100)}%`, status: telemetryReady === entities.length ? "ok" : "warn" },
-    { kind: "rollout", label: "WASM", value: `${Math.round((wasmReady / total) * 100)}%`, status: wasmReady === entities.length ? "ok" : "warn" }
+    {
+      kind: "identity",
+      label: "Identity trace",
+      value: `${Math.round((identityReady / total) * 100)}%`,
+      status: identityReady === entities.length ? "ok" : "warn"
+    },
+    {
+      kind: "telemetry",
+      label: "Telemetry",
+      value: `${Math.round((telemetryReady / total) * 100)}%`,
+      status: telemetryReady === entities.length ? "ok" : "warn"
+    },
+    {
+      kind: "rollout",
+      label: "WASM",
+      value: `${Math.round((wasmReady / total) * 100)}%`,
+      status: wasmReady === entities.length ? "ok" : "warn"
+    }
   ];
-  refs.entityInsightStrip.innerHTML = items.map((item) => `
+  refs.entityInsightStrip.innerHTML = items
+    .map(
+      (item) => `
     <div class="insight-card ${statusClass(item.status)}">
       ${iconHtml(item.kind, item.status)}
       <span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.label)}</small></span>
     </div>
-  `).join("");
+  `
+    )
+    .join("");
 }
 
 function renderSelectedEntityDetail(entity) {
@@ -1928,7 +2375,8 @@ function renderSelectedEntityDetail(entity) {
   const streams = entity.observability?.telemetry_streams || [];
   const entityStatus = entityHealthStatus(entity);
   const traceId = entity.trace?.spiffe_id || entity.identity?.spiffe_id || "SPIFFE pending";
-  const policySummary = (entity.policy_ids || []).join(", ") || entity.enforcement?.mode || "No active policy binding";
+  const policySummary =
+    (entity.policy_ids || []).join(", ") || entity.enforcement?.mode || "No active policy binding";
   refs.selectedEntityDetail.innerHTML = `
     <section class="entity-detail-card ${statusClass(entityStatus)}">
       <div class="entity-detail-head">
@@ -1967,9 +2415,14 @@ function renderSelectedEntityDetail(entity) {
       <div class="entity-cost-ledger">
         <strong>Agent Cost & Tokens</strong>
         <span>${escapeHtml(usageRecords.length ? `${usageRecords.length} usage records / ${fmtNumber(usage.calls)} calls / ${usage.creditPools.length ? usage.creditPools.join(", ") : "direct token meter"}` : "No reported usage yet; showing zero until LCP sends model usage telemetry.")}</span>
-        ${usageRecords.slice(0, 3).map((record) => `
+        ${usageRecords
+          .slice(0, 3)
+          .map(
+            (record) => `
           <code>${escapeHtml(recordValue(record, ["provider"], "provider"))} / ${escapeHtml(recordValue(record, ["model"], "model"))} | ${escapeHtml(fmtNumber(usageTokenCount(record)))} tokens | ${escapeHtml(costBasisLabel({ costCents: usageCostCents(record), credits: usageCreditCount(record), creditPools: recordValue(record, ["billing_pool_id", "credit_pool_id"], "") ? [recordValue(record, ["billing_pool_id", "credit_pool_id"], "")] : [] }))} | ${escapeHtml(recordValue(record, ["allocation_method", "cost_allocation_method"], usagePricingModel(record)))} | ${escapeHtml(recordValue(record, ["confidence", "source"], "reported"))}</code>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     </section>
   `;
@@ -1978,9 +2431,24 @@ function renderSelectedEntityDetail(entity) {
 function filteredEntities() {
   const query = app.entityQuery.trim().toLowerCase();
   return (app.data.local_entities || []).filter((entity) => {
-    if (app.entityTypeFilter !== "all" && entity.entity_type !== app.entityTypeFilter && entity.class !== app.entityTypeFilter) return false;
-    if (app.entityDeviceFilter !== "all" && entity.device_id !== app.entityDeviceFilter && entity.device_name !== app.entityDeviceFilter) return false;
-    if (app.entityUserFilter !== "all" && entity.user_id !== app.entityUserFilter && entity.user_subject !== app.entityUserFilter) return false;
+    if (
+      app.entityTypeFilter !== "all" &&
+      entity.entity_type !== app.entityTypeFilter &&
+      entity.class !== app.entityTypeFilter
+    )
+      return false;
+    if (
+      app.entityDeviceFilter !== "all" &&
+      entity.device_id !== app.entityDeviceFilter &&
+      entity.device_name !== app.entityDeviceFilter
+    )
+      return false;
+    if (
+      app.entityUserFilter !== "all" &&
+      entity.user_id !== app.entityUserFilter &&
+      entity.user_subject !== app.entityUserFilter
+    )
+      return false;
     if (query && !JSON.stringify(entity).toLowerCase().includes(query)) return false;
     return true;
   });
@@ -2020,10 +2488,13 @@ function sortedEntitiesForDisplay(entities) {
 }
 
 function selectedLocalEntity(entities) {
-  const selectedEntity = (app.data.local_entities || []).find((entity) => entity.id === app.selectedObjectId);
+  const selectedEntity = (app.data.local_entities || []).find(
+    (entity) => entity.id === app.selectedObjectId
+  );
   if (selectedEntity) return selectedEntity;
   const object = selectedObject();
-  if (object?.id && (app.data.local_entities || []).some((entity) => entity.id === object.id)) return object;
+  if (object?.id && (app.data.local_entities || []).some((entity) => entity.id === object.id))
+    return object;
   return entities[0] || null;
 }
 
@@ -2074,8 +2545,14 @@ function groupedEntitiesByScope(entities) {
 }
 
 function persistEntityGroupState() {
-  localStorage.setItem("pollek.cloud.entities.groups.collapsed", JSON.stringify([...app.collapsedEntityGroups]));
-  localStorage.setItem("pollek.cloud.entities.groups.expanded", JSON.stringify([...app.expandedEntityGroups]));
+  localStorage.setItem(
+    "pollek.cloud.entities.groups.collapsed",
+    JSON.stringify([...app.collapsedEntityGroups])
+  );
+  localStorage.setItem(
+    "pollek.cloud.entities.groups.expanded",
+    JSON.stringify([...app.expandedEntityGroups])
+  );
 }
 
 function entityGroupCollapsed(key, defaultCollapsed, hasActiveEntity) {
@@ -2103,15 +2580,17 @@ function toggleEntityGroup(key, defaultCollapsed = false, hasActiveEntity = fals
 }
 
 function categoryGroupsForScope(scopeGroup) {
-  const groups = new Map(entityNavigationGroups.map((group) => [
-    group.kind,
-    {
-      key: group.kind,
-      label: group.label,
-      kind: group.kind,
-      entities: []
-    }
-  ]));
+  const groups = new Map(
+    entityNavigationGroups.map((group) => [
+      group.kind,
+      {
+        key: group.kind,
+        label: group.label,
+        kind: group.kind,
+        entities: []
+      }
+    ])
+  );
   for (const entity of scopeGroup.entities) {
     const key = navigationEntityGroup(entity);
     if (!groups.has(key)) {
@@ -2148,7 +2627,11 @@ function renderEntities() {
   for (const scopeGroup of scopeGroups) {
     const scopeHasActive = scopeGroup.entities.some((entity) => entity.id === activeEntity?.id);
     const scopeDefaultCollapsed = scopeGroup.entities.length > 80;
-    const scopeCollapsed = entityGroupCollapsed(scopeGroup.key, scopeDefaultCollapsed, scopeHasActive);
+    const scopeCollapsed = entityGroupCollapsed(
+      scopeGroup.key,
+      scopeDefaultCollapsed,
+      scopeHasActive
+    );
     const scopeStatus = entityGroupStatus(scopeGroup.entities);
     const scopeButtonId = safeDomId("entity-scope-button", scopeGroup.key);
     const scopePanelId = safeDomId("entity-scope-panel", scopeGroup.key);
@@ -2177,8 +2660,13 @@ function renderEntities() {
     for (const category of categoryGroupsForScope(scopeGroup)) {
       const categoryKey = `${scopeGroup.key}::${category.kind}`;
       const categoryHasActive = category.entities.some((entity) => entity.id === activeEntity?.id);
-      const categoryDefaultCollapsed = category.entities.length > 12 || category.kind === "observability";
-      const categoryCollapsed = entityGroupCollapsed(categoryKey, categoryDefaultCollapsed, categoryHasActive);
+      const categoryDefaultCollapsed =
+        category.entities.length > 12 || category.kind === "observability";
+      const categoryCollapsed = entityGroupCollapsed(
+        categoryKey,
+        categoryDefaultCollapsed,
+        categoryHasActive
+      );
       const categoryStatus = entityGroupStatus(category.entities);
       const categoryButtonId = safeDomId("entity-kind-button", categoryKey);
       const categoryPanelId = safeDomId("entity-kind-panel", categoryKey);
@@ -2213,7 +2701,9 @@ function renderEntities() {
           entity.status,
           entity.device_name || entity.device_id,
           entity.user_subject || "unknown user"
-        ].filter(Boolean).join(" | ");
+        ]
+          .filter(Boolean)
+          .join(" | ");
         row.innerHTML = `
           <div class="entity-main">
             ${iconHtml(entity.entity_type || entity.class, entity.status)}
@@ -2243,7 +2733,9 @@ function renderEntityTrace(entity) {
     return;
   }
 
-  const token = Array.isArray(entity.identity?.token_bindings) ? entity.identity.token_bindings[0] : null;
+  const token = Array.isArray(entity.identity?.token_bindings)
+    ? entity.identity.token_bindings[0]
+    : null;
   const trace = entity.trace || {};
   const rows = [
     {
@@ -2263,7 +2755,8 @@ function renderEntityTrace(entity) {
     },
     {
       title: "Policy and enforcement",
-      status: entity.enforcement?.mode === "Enforce" || entity.status === "published" ? "ok" : "warn",
+      status:
+        entity.enforcement?.mode === "Enforce" || entity.status === "published" ? "ok" : "warn",
       detail: `${(entity.policy_ids || []).join(", ") || "no policy binding"} | ${entity.enforcement?.mode || "observe"} | ${entity.enforcement?.pdp_engine || "pdp pending"}`
     },
     {
@@ -2330,12 +2823,16 @@ function renderServiceEndpoints() {
 
 function renderEvents() {
   refs.eventTable.innerHTML = "";
-  const events = app.data.events.length ? app.data.events : [{
-    received_at: new Date().toISOString(),
-    event_type: "waiting",
-    severity: "info",
-    payload: { detail: "No telemetry events received yet." }
-  }];
+  const events = app.data.events.length
+    ? app.data.events
+    : [
+        {
+          received_at: new Date().toISOString(),
+          event_type: "waiting",
+          severity: "info",
+          payload: { detail: "No telemetry events received yet." }
+        }
+      ];
   for (const event of events.slice(0, 8)) {
     const row = document.createElement("div");
     row.className = `event-row ${statusClass(event.severity === "warning" ? "warn" : event.severity === "critical" ? "bad" : "ok")}`;
@@ -2351,7 +2848,11 @@ function renderEvents() {
 
 function eventMatchesObject(event, object) {
   if (!object?.id || object.id === "tenant_local_lab") return true;
-  return event.device_id === object.id || event.payload?.lcp_id === object.id || event.payload?.object_id === object.id;
+  return (
+    event.device_id === object.id ||
+    event.payload?.lcp_id === object.id ||
+    event.payload?.object_id === object.id
+  );
 }
 
 function renderTelemetryExplorer() {
@@ -2359,12 +2860,18 @@ function renderTelemetryExplorer() {
   const object = selectedObject();
   const source = app.telemetryResults.length ? app.telemetryResults : app.data.events;
   const events = source.filter((event) => eventMatchesObject(event, object));
-  const visible = events.length ? events : [{
-    received_at: new Date().toISOString(),
-    event_type: "waiting",
-    severity: "info",
-    payload: { detail: "No telemetry matches this object. Use Send Sample while LCP is still building." }
-  }];
+  const visible = events.length
+    ? events
+    : [
+        {
+          received_at: new Date().toISOString(),
+          event_type: "waiting",
+          severity: "info",
+          payload: {
+            detail: "No telemetry matches this object. Use Send Sample while LCP is still building."
+          }
+        }
+      ];
   for (const event of visible.slice(0, 30)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(event.severity === "critical" ? "failed" : event.severity === "warning" ? "degraded" : "connected")}`;
@@ -2423,7 +2930,9 @@ function createAlarmRow(alarm, verbose = false) {
 
 function renderTasks() {
   refs.taskList.innerHTML = "";
-  const tasks = app.data.tasks.length ? app.data.tasks : [{ summary: "No recent tasks", status: "idle", created_at: "" }];
+  const tasks = app.data.tasks.length
+    ? app.data.tasks
+    : [{ summary: "No recent tasks", status: "idle", created_at: "" }];
   for (const task of tasks.slice(0, 8)) {
     const row = document.createElement("div");
     row.className = `task-row ${statusClass(task.status)}`;
@@ -2553,12 +3062,17 @@ function ledgerSeverity(statusOrSeverity) {
 
 function ledgerNextAction(entry) {
   if (entry.next_action) return entry.next_action;
-  if (entry.source === "alarm" && entry.severity !== "ok") return "Human review: acknowledge the alert, open the object, and assign an owner.";
-  if (entry.source === "policy" && /approval|review|simulation/i.test(entry.title)) return "Human approval is required before rollout or bundle signing.";
-  if (entry.source === "identity" && /waiting|pending/i.test(`${entry.status} ${entry.title}`)) return "Operator action: complete enrollment or invitation acceptance.";
-  if (entry.source === "control" && entry.severity !== "ok") return "Operator action: inspect secure channel status and retry dispatch.";
+  if (entry.source === "alarm" && entry.severity !== "ok")
+    return "Human review: acknowledge the alert, open the object, and assign an owner.";
+  if (entry.source === "policy" && /approval|review|simulation/i.test(entry.title))
+    return "Human approval is required before rollout or bundle signing.";
+  if (entry.source === "identity" && /waiting|pending/i.test(`${entry.status} ${entry.title}`))
+    return "Operator action: complete enrollment or invitation acceptance.";
+  if (entry.source === "control" && entry.severity !== "ok")
+    return "Operator action: inspect secure channel status and retry dispatch.";
   if (entry.severity === "bad") return "Human review required before the next automated action.";
-  if (entry.severity === "warn") return "Review recommended; automation can continue only after the owner confirms scope.";
+  if (entry.severity === "warn")
+    return "Review recommended; automation can continue only after the owner confirms scope.";
   return "No manual action required.";
 }
 
@@ -2569,12 +3083,30 @@ function addLedgerEntry(entries, entry) {
     source: entry.source || "activity",
     severity,
     status: entry.status || entry.severity || "info",
-    timestamp: entry.timestamp || entry.created_at || entry.received_at || entry.occurred_at || new Date().toISOString(),
+    timestamp:
+      entry.timestamp ||
+      entry.created_at ||
+      entry.received_at ||
+      entry.occurred_at ||
+      new Date().toISOString(),
     title: entry.title || entry.event_type || entry.action || "Activity",
     summary: entry.summary || entry.detail || "",
-    object: entry.object || entry.object_name || entry.target_id || entry.device_id || entry.lcp_id || "fleet",
-    device: entry.device || entry.device_id || entry.payload?.device_id || entry.details?.device_id || "",
-    user: entry.user || entry.user_subject || entry.actor_id || entry.payload?.actor_id || entry.details?.actor_id || "",
+    object:
+      entry.object ||
+      entry.object_name ||
+      entry.target_id ||
+      entry.device_id ||
+      entry.lcp_id ||
+      "fleet",
+    device:
+      entry.device || entry.device_id || entry.payload?.device_id || entry.details?.device_id || "",
+    user:
+      entry.user ||
+      entry.user_subject ||
+      entry.actor_id ||
+      entry.payload?.actor_id ||
+      entry.details?.actor_id ||
+      "",
     result: entry.result || entry.status || entry.severity || "recorded",
     icon: entry.icon || entry.source || "telemetry",
     next_action: entry.next_action,
@@ -2592,7 +3124,11 @@ function buildActivityLedger() {
       severity: event.severity,
       timestamp: event.received_at,
       title: event.event_type,
-      summary: event.payload?.detail || event.payload?.schema_version || event.payload?.telemetry_kind || "Telemetry event received.",
+      summary:
+        event.payload?.detail ||
+        event.payload?.schema_version ||
+        event.payload?.telemetry_kind ||
+        "Telemetry event received.",
       object: event.payload?.object_id || event.payload?.lcp_id || event.device_id || "cloud",
       device: event.device_id,
       user: event.payload?.user_subject || event.payload?.actor_id || "",
@@ -2624,7 +3160,8 @@ function buildActivityLedger() {
       timestamp: task.updated_at || task.created_at,
       title: task.summary,
       summary: task.type,
-      object: task.details?.lcp_id || task.details?.device_id || task.details?.tenant_id || "task-center",
+      object:
+        task.details?.lcp_id || task.details?.device_id || task.details?.tenant_id || "task-center",
       device: task.details?.device_id || "",
       result: task.status,
       raw: task
@@ -2751,11 +3288,25 @@ function buildActivityLedger() {
 function filteredActivityLedger() {
   const query = app.activityQuery.trim().toLowerCase();
   return buildActivityLedger().filter((entry) => {
-    if (app.activitySourceFilter !== "all" && entry.source !== app.activitySourceFilter) return false;
-    if (app.activitySeverityFilter !== "all" && entry.severity !== app.activitySeverityFilter) return false;
+    if (app.activitySourceFilter !== "all" && entry.source !== app.activitySourceFilter)
+      return false;
+    if (app.activitySeverityFilter !== "all" && entry.severity !== app.activitySeverityFilter)
+      return false;
     if (!query) return true;
-    return [entry.source, entry.status, entry.title, entry.summary, entry.object, entry.device, entry.user, entry.result]
-      .some((value) => String(value || "").toLowerCase().includes(query));
+    return [
+      entry.source,
+      entry.status,
+      entry.title,
+      entry.summary,
+      entry.object,
+      entry.device,
+      entry.user,
+      entry.result
+    ].some((value) =>
+      String(value || "")
+        .toLowerCase()
+        .includes(query)
+    );
   });
 }
 
@@ -2772,12 +3323,16 @@ function renderActivitySummary(entries) {
     ["Needs review", counts.review, counts.review ? "warn" : "ok"],
     ["Critical", counts.critical, counts.critical ? "bad" : "ok"],
     ["Successful", counts.ok, "ok"]
-  ].map(([label, value, status]) => `
+  ]
+    .map(
+      ([label, value, status]) => `
     <div class="insight-card ${statusClass(status)}">
       ${iconHtml(status === "bad" ? "alarm" : status === "warn" ? "task" : "telemetry", status)}
       <span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>
     </div>
-  `).join("");
+  `
+    )
+    .join("");
 }
 
 function renderActivityLedger() {
@@ -2785,21 +3340,25 @@ function renderActivityLedger() {
   const entries = filteredActivityLedger();
   refs.activityLedger.innerHTML = "";
   renderActivitySummary(entries);
-  const visible = entries.length ? entries : [{
-    id: "ledger_empty",
-    source: "activity",
-    severity: "neutral",
-    status: "idle",
-    timestamp: new Date().toISOString(),
-    title: "No activity matches the current filters",
-    summary: "Adjust source, severity, or search to continue investigation.",
-    object: "fleet",
-    device: "",
-    user: "",
-    result: "idle",
-    icon: "task",
-    raw: {}
-  }];
+  const visible = entries.length
+    ? entries
+    : [
+        {
+          id: "ledger_empty",
+          source: "activity",
+          severity: "neutral",
+          status: "idle",
+          timestamp: new Date().toISOString(),
+          title: "No activity matches the current filters",
+          summary: "Adjust source, severity, or search to continue investigation.",
+          object: "fleet",
+          device: "",
+          user: "",
+          result: "idle",
+          icon: "task",
+          raw: {}
+        }
+      ];
   for (const entry of visible.slice(0, 80)) {
     const article = document.createElement("article");
     article.className = `ledger-entry ${entry.severity}`;
@@ -2840,7 +3399,10 @@ function renderTimeline() {
   refs.evidenceExportList.innerHTML = "";
 
   const rollouts = app.data.rollout_plans || [];
-  for (const rollout of (rollouts.length ? rollouts : [{ bundle_id: "No rollout planned", status: "idle", target_ids: [], created_at: "" }]).slice(0, 8)) {
+  for (const rollout of (rollouts.length
+    ? rollouts
+    : [{ bundle_id: "No rollout planned", status: "idle", target_ids: [], created_at: "" }]
+  ).slice(0, 8)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${rollout.status === "planned" ? "warn" : statusClass(rollout.status)}`;
     row.innerHTML = `
@@ -2869,7 +3431,17 @@ function renderTimeline() {
   }
 
   const enrollments = app.data.enrollment_sessions || [];
-  for (const session of (enrollments.length ? enrollments : [{ user_code: "No enrollment", status: "idle", command: "Create an enrollment when a new LCP is ready.", created_at: "" }]).slice(0, 6)) {
+  for (const session of (enrollments.length
+    ? enrollments
+    : [
+        {
+          user_code: "No enrollment",
+          status: "idle",
+          command: "Create an enrollment when a new LCP is ready.",
+          created_at: ""
+        }
+      ]
+  ).slice(0, 6)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${session.status === "waiting_for_lcp" ? "warn" : statusClass(session.status)}`;
     row.innerHTML = `
@@ -2884,7 +3456,10 @@ function renderTimeline() {
   }
 
   const exports = app.data.evidence_exports || [];
-  for (const item of (exports.length ? exports : [{ id: "No evidence exports", status: "idle", scope: "none", requested_at: "" }]).slice(0, 6)) {
+  for (const item of (exports.length
+    ? exports
+    : [{ id: "No evidence exports", status: "idle", scope: "none", requested_at: "" }]
+  ).slice(0, 6)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${item.status === "ready" ? "ok" : ""}`;
     row.innerHTML = `
@@ -2906,7 +3481,17 @@ function renderComplianceWorkspace() {
   refs.breakglassList.innerHTML = "";
 
   const bundles = app.data.compliance_policy_bundles || [];
-  for (const bundle of (bundles.length ? bundles : [{ name: "No compliance bundles", frameworks: [], controls: [], status: "enterprise_required" }]).slice(0, 8)) {
+  for (const bundle of (bundles.length
+    ? bundles
+    : [
+        {
+          name: "No compliance bundles",
+          frameworks: [],
+          controls: [],
+          status: "enterprise_required"
+        }
+      ]
+  ).slice(0, 8)) {
     const row = document.createElement("button");
     row.className = `detail-row trace-row ${bundle.deployable ? "ok" : "warn"}`;
     row.innerHTML = `
@@ -2927,11 +3512,31 @@ function renderComplianceWorkspace() {
   const score = app.data.compliance_score || {};
   const factors = score.factors || {};
   const scoreRows = [
-    ["Overall score", score.score ?? 0, score.score >= 80 ? "healthy" : score.score >= 60 ? "warning" : "critical"],
-    ["Entity health", factors.entity_health ?? 0, factors.entity_health >= 80 ? "healthy" : "warning"],
-    ["Evidence coverage", factors.evidence_coverage ?? 0, factors.evidence_coverage >= 70 ? "healthy" : "warning"],
-    ["Signed bundle coverage", factors.signed_bundle_coverage ?? 0, factors.signed_bundle_coverage >= 80 ? "healthy" : "warning"],
-    ["Identity trace coverage", factors.identity_trace_coverage ?? 0, factors.identity_trace_coverage >= 80 ? "healthy" : "warning"]
+    [
+      "Overall score",
+      score.score ?? 0,
+      score.score >= 80 ? "healthy" : score.score >= 60 ? "warning" : "critical"
+    ],
+    [
+      "Entity health",
+      factors.entity_health ?? 0,
+      factors.entity_health >= 80 ? "healthy" : "warning"
+    ],
+    [
+      "Evidence coverage",
+      factors.evidence_coverage ?? 0,
+      factors.evidence_coverage >= 70 ? "healthy" : "warning"
+    ],
+    [
+      "Signed bundle coverage",
+      factors.signed_bundle_coverage ?? 0,
+      factors.signed_bundle_coverage >= 80 ? "healthy" : "warning"
+    ],
+    [
+      "Identity trace coverage",
+      factors.identity_trace_coverage ?? 0,
+      factors.identity_trace_coverage >= 80 ? "healthy" : "warning"
+    ]
   ];
   for (const [label, value, status] of scoreRows) {
     const row = document.createElement("div");
@@ -2947,7 +3552,17 @@ function renderComplianceWorkspace() {
   }
 
   const runs = app.data.policy_sandboxes || [];
-  for (const run of (runs.length ? runs : [{ id: "No sandbox runs", status: "idle", mode: "Run simulation before rollout", blast_radius: {} }]).slice(0, 6)) {
+  for (const run of (runs.length
+    ? runs
+    : [
+        {
+          id: "No sandbox runs",
+          status: "idle",
+          mode: "Run simulation before rollout",
+          blast_radius: {}
+        }
+      ]
+  ).slice(0, 6)) {
     const blast = run.blast_radius || {};
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(run.status)}`;
@@ -2963,7 +3578,17 @@ function renderComplianceWorkspace() {
   }
 
   const requests = app.data.breakglass_requests || [];
-  for (const request of (requests.length ? requests : [{ id: "No breakglass requests", status: "idle", target_id: "none", reason: "Request only for audited emergency access." }]).slice(0, 6)) {
+  for (const request of (requests.length
+    ? requests
+    : [
+        {
+          id: "No breakglass requests",
+          status: "idle",
+          target_id: "none",
+          reason: "Request only for audited emergency access."
+        }
+      ]
+  ).slice(0, 6)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(request.status)}`;
     row.innerHTML = `
@@ -2981,14 +3606,27 @@ function renderComplianceWorkspace() {
 function renderAudit() {
   refs.auditList.innerHTML = "";
   refs.integrationHealthList.innerHTML = "";
-  const auditRows = app.data.audit_events?.length ? app.data.audit_events : app.data.tasks.map((task) => ({
-    action: task.type,
-    target_type: "task",
-    target_id: task.id,
-    occurred_at: task.created_at,
-    payload: task.details || {}
-  }));
-  for (const event of (auditRows.length ? auditRows : [{ action: "No audit events", target_type: "audit", target_id: "none", occurred_at: "", payload: {} }]).slice(0, 12)) {
+  const auditRows = app.data.audit_events?.length
+    ? app.data.audit_events
+    : app.data.tasks.map((task) => ({
+        action: task.type,
+        target_type: "task",
+        target_id: task.id,
+        occurred_at: task.created_at,
+        payload: task.details || {}
+      }));
+  for (const event of (auditRows.length
+    ? auditRows
+    : [
+        {
+          action: "No audit events",
+          target_type: "audit",
+          target_id: "none",
+          occurred_at: "",
+          payload: {}
+        }
+      ]
+  ).slice(0, 12)) {
     const row = document.createElement("div");
     row.className = "detail-row trace-row";
     row.innerHTML = `
@@ -3025,9 +3663,21 @@ function renderBundleStatusCenter() {
   refs.bundleStatusCenterList.innerHTML = "";
   refs.bundleDeliveryList.innerHTML = "";
   const tenantId = selectedTenantId();
-  const bundles = (app.data.policy_bundles || []).filter((bundle) => !bundle.tenant_id || bundle.tenant_id === tenantId || tenantId === "local");
+  const bundles = (app.data.policy_bundles || []).filter(
+    (bundle) => !bundle.tenant_id || bundle.tenant_id === tenantId || tenantId === "local"
+  );
   const artifacts = app.data.policy_bundle_artifacts || [];
-  for (const bundle of (bundles.length ? bundles : [{ id: "bundle_pending", name: "No bundle for selected tenant", status: "pending", revision: "pending" }]).slice(0, 10)) {
+  for (const bundle of (bundles.length
+    ? bundles
+    : [
+        {
+          id: "bundle_pending",
+          name: "No bundle for selected tenant",
+          status: "pending",
+          revision: "pending"
+        }
+      ]
+  ).slice(0, 10)) {
     const artifact = artifacts.find((item) => item.bundle_id === bundle.id);
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(bundle.status)}`;
@@ -3037,22 +3687,57 @@ function renderBundleStatusCenter() {
         <strong>${escapeHtml(bundle.name || bundle.id)}</strong>
         <small>${escapeHtml(bundle.tenant_id || tenantId)} | ${escapeHtml(bundle.revision || "revision pending")} | ${escapeHtml(bundle.status || "unknown")}</small>
       </span>
-      <code>${escapeHtml(JSON.stringify({
-        bundle_id: bundle.id,
-        coverage: bundle.coverage,
-        hot_reload: bundle.hot_reload,
-        artifact_hash: artifact?.payload_hash || bundle.artifact_hash || "pending"
-      }, null, 2))}</code>
+      <code>${escapeHtml(
+        JSON.stringify(
+          {
+            bundle_id: bundle.id,
+            coverage: bundle.coverage,
+            hot_reload: bundle.hot_reload,
+            artifact_hash: artifact?.payload_hash || bundle.artifact_hash || "pending"
+          },
+          null,
+          2
+        )
+      )}</code>
     `;
     refs.bundleStatusCenterList.append(row);
   }
 
   const deliveryRows = [
-    ...(app.data.hot_reload_events || []).map((event) => ({ kind: "wasm", status: event.status, title: event.bundle_id || event.id, detail: `${event.target_id || event.device_id || "fleet"} | generation ${event.generation ?? "pending"}`, code: event })),
-    ...(app.data.cloud_to_local_dispatches || []).map((dispatch) => ({ kind: "rollout", status: dispatch.status, title: dispatch.control_type || dispatch.id, detail: `${dispatch.tenant_id || tenantId} | ${dispatch.lcp_id || "lcp pending"}`, code: dispatch })),
-    ...(app.data.rollout_plans || []).map((rollout) => ({ kind: "rollout", status: rollout.status, title: rollout.bundle_id || rollout.id, detail: `${(rollout.target_ids || []).length} targets | ${rollout.wave_strategy || "manual"}`, code: rollout }))
+    ...(app.data.hot_reload_events || []).map((event) => ({
+      kind: "wasm",
+      status: event.status,
+      title: event.bundle_id || event.id,
+      detail: `${event.target_id || event.device_id || "fleet"} | generation ${event.generation ?? "pending"}`,
+      code: event
+    })),
+    ...(app.data.cloud_to_local_dispatches || []).map((dispatch) => ({
+      kind: "rollout",
+      status: dispatch.status,
+      title: dispatch.control_type || dispatch.id,
+      detail: `${dispatch.tenant_id || tenantId} | ${dispatch.lcp_id || "lcp pending"}`,
+      code: dispatch
+    })),
+    ...(app.data.rollout_plans || []).map((rollout) => ({
+      kind: "rollout",
+      status: rollout.status,
+      title: rollout.bundle_id || rollout.id,
+      detail: `${(rollout.target_ids || []).length} targets | ${rollout.wave_strategy || "manual"}`,
+      code: rollout
+    }))
   ];
-  for (const item of (deliveryRows.length ? deliveryRows : [{ kind: "rollout", status: "pending", title: "No delivery events yet", detail: "Dispatch or hot reload events will appear here.", code: {} }]).slice(0, 12)) {
+  for (const item of (deliveryRows.length
+    ? deliveryRows
+    : [
+        {
+          kind: "rollout",
+          status: "pending",
+          title: "No delivery events yet",
+          detail: "Dispatch or hot reload events will appear here.",
+          code: {}
+        }
+      ]
+  ).slice(0, 12)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(item.status)}`;
     row.innerHTML = `
@@ -3134,7 +3819,10 @@ function renderTrust() {
   const view = app.trustView;
 
   if (!view || view.error) {
-    const message = view && view.error ? `Unable to load trust spine: ${escapeHtml(view.error)}` : "Loading trust spine...";
+    const message =
+      view && view.error
+        ? `Unable to load trust spine: ${escapeHtml(view.error)}`
+        : "Loading trust spine...";
     if (refs.trustScopeNote) refs.trustScopeNote.textContent = message;
     if (refs.trustPolicySummary) refs.trustPolicySummary.innerHTML = "";
     if (refs.trustSignerList) refs.trustSignerList.innerHTML = "";
@@ -3149,24 +3837,44 @@ function renderTrust() {
   const allowlist = view.signer_allowlist || {};
 
   if (refs.trustScopeNote) {
-    refs.trustScopeNote.textContent = `Trust domain: ${view.trust_domain || "unknown"}. Active signer: ${view.signer_key_id || "none"}. `
-      + `${view.bundle_count || 0} signed bundle(s), revocation epoch ${revocations.revocation_epoch ?? 0}. `
-      + "All documents below are ed25519-signed and served from the single trust-spine source.";
+    refs.trustScopeNote.textContent =
+      `Trust domain: ${view.trust_domain || "unknown"}. Active signer: ${view.signer_key_id || "none"}. ` +
+      `${view.bundle_count || 0} signed bundle(s), revocation epoch ${revocations.revocation_epoch ?? 0}. ` +
+      "All documents below are ed25519-signed and served from the single trust-spine source.";
   }
 
   if (refs.trustPolicySummary) {
-    const activeRequirements = Object.keys(requirements).filter((key) => requirements[key] === true).length;
+    const activeRequirements = Object.keys(requirements).filter(
+      (key) => requirements[key] === true
+    ).length;
     const cards = [
-      { value: policy.policy_version != null ? `v${policy.policy_version}` : "-", label: "Trust policy version", status: policy.signatures && policy.signatures.length ? "ok" : "bad" },
+      {
+        value: policy.policy_version != null ? `v${policy.policy_version}` : "-",
+        label: "Trust policy version",
+        status: policy.signatures && policy.signatures.length ? "ok" : "bad"
+      },
       { value: String(activeRequirements), label: "require_* flags enforced", status: "ok" },
       { value: `L${requirements.require_slsa_level ?? 0}`, label: "Min SLSA level", status: "ok" },
-      { value: String(revocations.revocation_epoch ?? 0), label: "Revocation epoch", status: (revocations.revoked_revisions || []).length || (revocations.revoked_key_ids || []).length || (revocations.revoked_bundle_digests || []).length ? "warn" : "neutral" }
+      {
+        value: String(revocations.revocation_epoch ?? 0),
+        label: "Revocation epoch",
+        status:
+          (revocations.revoked_revisions || []).length ||
+          (revocations.revoked_key_ids || []).length ||
+          (revocations.revoked_bundle_digests || []).length
+            ? "warn"
+            : "neutral"
+      }
     ];
-    refs.trustPolicySummary.innerHTML = cards.map((card) => `
+    refs.trustPolicySummary.innerHTML = cards
+      .map(
+        (card) => `
       <div class="usage-total-card ${statusClass(card.status)}">
         <span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.label)}</small></span>
       </div>
-    `).join("");
+    `
+      )
+      .join("");
   }
 
   if (refs.trustSignerList) {
@@ -3192,7 +3900,10 @@ function renderTrust() {
     refs.trustRevocationList.innerHTML = "";
     const rows = [
       ...(revocations.revoked_revisions || []).map((value) => ({ type: "revision", value })),
-      ...(revocations.revoked_bundle_digests || []).map((value) => ({ type: "bundle digest", value })),
+      ...(revocations.revoked_bundle_digests || []).map((value) => ({
+        type: "bundle digest",
+        value
+      })),
       ...(revocations.revoked_key_ids || []).map((value) => ({ type: "signer keyid", value }))
     ];
     if (!rows.length) {
@@ -3220,21 +3931,29 @@ function renderTrust() {
     const revoked = Boolean(bundle.revocation && bundle.revocation.revoked);
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${revoked ? "bad" : trustVerificationStatusClass(bundle.verification_status)}`;
-    const revokedNote = revoked ? ` | REVOKED (${escapeHtml((bundle.revocation.reasons || []).join(", "))})` : "";
+    const revokedNote = revoked
+      ? ` | REVOKED (${escapeHtml((bundle.revocation.reasons || []).join(", "))})`
+      : "";
     row.innerHTML = `
       <span>
         <strong>${escapeHtml(bundle.bundle_id || "bundle")}</strong>
         <small>${escapeHtml(bundle.tenant_id || "")} | rev ${escapeHtml(bundle.revision || "?")} | gen ${escapeHtml(String(bundle.generation ?? "?"))} | ${escapeHtml(bundle.verification_status || "unsigned")}${revokedNote}</small>
       </span>
-      <code>${escapeHtml(JSON.stringify({
-        signed_fields: bundle.signed_fields,
-        slsa_level: bundle.provenance && bundle.provenance.slsa_level,
-        materials: bundle.provenance && bundle.provenance.materials,
-        attestation: bundle.attestation,
-        data_sha256: bundle.data_sha256,
-        sbom_sha256: bundle.sbom_sha256,
-        signatures: bundle.signatures
-      }, null, 2))}</code>
+      <code>${escapeHtml(
+        JSON.stringify(
+          {
+            signed_fields: bundle.signed_fields,
+            slsa_level: bundle.provenance && bundle.provenance.slsa_level,
+            materials: bundle.provenance && bundle.provenance.materials,
+            attestation: bundle.attestation,
+            data_sha256: bundle.data_sha256,
+            sbom_sha256: bundle.sbom_sha256,
+            signatures: bundle.signatures
+          },
+          null,
+          2
+        )
+      )}</code>
     `;
     refs.trustBundleList.append(row);
   }
@@ -3258,7 +3977,8 @@ function renderSettingsWorkspace() {
         status: object.status || "unknown",
         risk: object.risk || "low",
         endpoint: object.endpoint || undefined,
-        spiffe_id: object.spiffe_id || object.trace?.spiffe_id || object.identity?.spiffe_id || undefined
+        spiffe_id:
+          object.spiffe_id || object.trace?.spiffe_id || object.identity?.spiffe_id || undefined
       }
     },
     {
@@ -3344,7 +4064,8 @@ function renderAdministrationWorkspace() {
   const plans = new Map((app.data.billing_plans || []).map((plan) => [plan.id, plan]));
   const subscriptions = filteredByTenant(app.data.subscriptions, tenantId);
   const billingAccounts = app.data.billing_accounts || [];
-  const subscription = subscriptions.find((item) => ["active", "trialing"].includes(item.status)) || subscriptions[0];
+  const subscription =
+    subscriptions.find((item) => ["active", "trialing"].includes(item.status)) || subscriptions[0];
   const plan = plans.get(subscription?.plan_id) || app.data.billing_plans?.[0] || {};
   const usage = filteredByTenant(app.data.usage_counters, tenantId);
   const invoices = filteredByTenant(app.data.invoices, tenantId);
@@ -3357,9 +4078,12 @@ function renderAdministrationWorkspace() {
 
   if (refs.tenantSwitcher) {
     const selected = tenantId;
-    refs.tenantSwitcher.innerHTML = tenantCatalog().map((item) => (
-      `<option value="${escapeHtml(item.tenant_id)}" ${item.tenant_id === selected ? "selected" : ""}>${escapeHtml(item.name || item.tenant_id)}</option>`
-    )).join("");
+    refs.tenantSwitcher.innerHTML = tenantCatalog()
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.tenant_id)}" ${item.tenant_id === selected ? "selected" : ""}>${escapeHtml(item.name || item.tenant_id)}</option>`
+      )
+      .join("");
   }
   if (refs.tenantContextSummary) {
     refs.tenantContextSummary.innerHTML = `
@@ -3390,11 +4114,17 @@ function renderAdministrationWorkspace() {
         <strong>${escapeHtml(org.organization_name || org.name || org.tenant_id)}</strong>
         <small>${escapeHtml(org.deployment_mode || tenant.mode || "private-cloud-dev")} | ${escapeHtml(orgSubscription?.status || org.status || "active")} | ${escapeHtml(orgPlan.name || "Plan pending")}</small>
       </span>
-      <code>${escapeHtml(JSON.stringify({
-        tenant_id: org.tenant_id,
-        billing_email: org.billing_email || "",
-        identity_controls: identityControls
-      }, null, 2))}</code>
+      <code>${escapeHtml(
+        JSON.stringify(
+          {
+            tenant_id: org.tenant_id,
+            billing_email: org.billing_email || "",
+            identity_controls: identityControls
+          },
+          null,
+          2
+        )
+      )}</code>
     `;
     row.addEventListener("click", () => setSelectedTenant(org.tenant_id));
     refs.adminOrgList.append(row);
@@ -3411,7 +4141,17 @@ function renderAdministrationWorkspace() {
   refs.adminOrgList.append(identitySeparationRow);
 
   refs.adminMembersList.innerHTML = "";
-  const visibleMembers = members.length ? members : [{ id: "none", email: "No members", display_name: "No members", roles: [], status: "unknown" }];
+  const visibleMembers = members.length
+    ? members
+    : [
+        {
+          id: "none",
+          email: "No members",
+          display_name: "No members",
+          roles: [],
+          status: "unknown"
+        }
+      ];
   for (const member of visibleMembers.slice(0, 20)) {
     const account = accounts.get(member.account_id) || {};
     const row = document.createElement("div");
@@ -3459,7 +4199,16 @@ function renderAdministrationWorkspace() {
   }
 
   refs.adminIdpList.innerHTML = "";
-  for (const provider of (idps.length ? idps : [{ id: "none", display_name: "No identity provider", provider_type: "oidc", status: "planned" }])) {
+  for (const provider of idps.length
+    ? idps
+    : [
+        {
+          id: "none",
+          display_name: "No identity provider",
+          provider_type: "oidc",
+          status: "planned"
+        }
+      ]) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(provider.status)}`;
     row.innerHTML = `
@@ -3498,7 +4247,9 @@ function renderAdministrationWorkspace() {
   }
 
   refs.billingUsageList.innerHTML = "";
-  const usageRows = usage.length ? usage : [{ metric: "usage pending", quantity: 0, status: "pending" }];
+  const usageRows = usage.length
+    ? usage
+    : [{ metric: "usage pending", quantity: 0, status: "pending" }];
   for (const item of usageRows) {
     const row = document.createElement("div");
     row.className = "detail-row trace-row";
@@ -3538,7 +4289,18 @@ function renderAdministrationWorkspace() {
   }
 
   refs.billingInvoiceList.innerHTML = "";
-  for (const invoice of (invoices.length ? invoices : [{ id: "No invoice preview", status: "preview", total_cents: 0, currency: "USD", line_items: [] }]).slice(0, 5)) {
+  for (const invoice of (invoices.length
+    ? invoices
+    : [
+        {
+          id: "No invoice preview",
+          status: "preview",
+          total_cents: 0,
+          currency: "USD",
+          line_items: []
+        }
+      ]
+  ).slice(0, 5)) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(invoice.status)}`;
     row.innerHTML = `
@@ -3579,7 +4341,17 @@ function renderAdministrationWorkspace() {
   }
 
   refs.kmsHealthList.innerHTML = "";
-  for (const provider of (kmsProviders.length ? kmsProviders : [{ id: "kms_pending", provider: "openbao", purpose: "planned", status: "planned", algorithm: "unknown" }])) {
+  for (const provider of kmsProviders.length
+    ? kmsProviders
+    : [
+        {
+          id: "kms_pending",
+          provider: "openbao",
+          purpose: "planned",
+          status: "planned",
+          algorithm: "unknown"
+        }
+      ]) {
     const row = document.createElement("div");
     row.className = `detail-row trace-row ${statusClass(provider.status)}`;
     row.innerHTML = `
@@ -3611,7 +4383,18 @@ async function runProbe(lcpUrl) {
     refs.probeResult.innerHTML = `
       <strong>${result.ok ? "Probe succeeded" : "Probe failed"}</strong>
       <span>${escapeHtml(result.lcp_url)} -> ${escapeHtml(result.cloud_url)}</span>
-      <code>${escapeHtml(JSON.stringify(result.results.map((item) => ({ name: item.name, ok: item.ok, status: item.status, latency_ms: item.latency_ms })), null, 2))}</code>
+      <code>${escapeHtml(
+        JSON.stringify(
+          result.results.map((item) => ({
+            name: item.name,
+            ok: item.ok,
+            status: item.status,
+            latency_ms: item.latency_ms
+          })),
+          null,
+          2
+        )
+      )}</code>
     `;
     await refresh();
   } catch (error) {
@@ -3678,16 +4461,24 @@ function reportActionError(title, error, fallback = "The operation could not com
     <strong>${escapeHtml(title)}</strong>
     <span>${escapeHtml(error?.message || fallback)}</span>
     <span>Human review: verify the Local Control Plane contract, endpoint version, auth mode, and allowed control paths before retrying.</span>
-    <code>${escapeHtml(JSON.stringify({
-      status: dispatch?.status || payload?.status || error?.status || "failed",
-      action: dispatch?.action || payload?.action || "manual_review_required",
-      failed_results: failedResults,
-      payload: payload ? {
-        schema_version: payload.schema_version,
-        error: payload.error,
-        detail: payload.detail
-      } : null
-    }, null, 2))}</code>
+    <code>${escapeHtml(
+      JSON.stringify(
+        {
+          status: dispatch?.status || payload?.status || error?.status || "failed",
+          action: dispatch?.action || payload?.action || "manual_review_required",
+          failed_results: failedResults,
+          payload: payload
+            ? {
+                schema_version: payload.schema_version,
+                error: payload.error,
+                detail: payload.detail
+              }
+            : null
+        },
+        null,
+        2
+      )
+    )}</code>
   `;
 }
 
@@ -3709,9 +4500,13 @@ async function createDemoTenant() {
     app.currentSessionId = payload.session.id;
     app.currentSessionToken = payload.session.access_token || "";
     sessionStorage.setItem("pollek.cloud.current_session_id", app.currentSessionId);
-    if (app.currentSessionToken) sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
+    if (app.currentSessionToken)
+      sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
     await postJson("/api/dev/seed-role-users", { tenant_id: payload.tenant.id });
-    reportAdminAction("Tenant signup created", `${payload.tenant.id} | ${payload.account.email}`, { session: payload.session.id, subscription: payload.subscription.id });
+    reportAdminAction("Tenant signup created", `${payload.tenant.id} | ${payload.account.email}`, {
+      session: payload.session.id,
+      subscription: payload.subscription.id
+    });
     await refresh();
     setActiveTab("administration");
   } catch (error) {
@@ -3735,8 +4530,16 @@ async function inviteDemoMember(options = {}) {
       actor_id: tenantActorId(tenantId)
     });
     app.lastInvitationToken = payload.token || "";
-    if (app.lastInvitationToken) sessionStorage.setItem("pollek.cloud.last_invitation_token", app.lastInvitationToken);
-    reportAdminAction("Invitation created", `${payload.invitation.email} | ${(payload.invitation.roles || []).join(", ")}`, { invite_url: payload.invitation.invite_url || "", token_available_for_accept_test: Boolean(payload.token) });
+    if (app.lastInvitationToken)
+      sessionStorage.setItem("pollek.cloud.last_invitation_token", app.lastInvitationToken);
+    reportAdminAction(
+      "Invitation created",
+      `${payload.invitation.email} | ${(payload.invitation.roles || []).join(", ")}`,
+      {
+        invite_url: payload.invitation.invite_url || "",
+        token_available_for_accept_test: Boolean(payload.token)
+      }
+    );
     await refresh();
     setActiveTab("administration");
     return payload;
@@ -3755,7 +4558,11 @@ async function seedRoleUsers() {
   try {
     const tenantId = selectedTenantId();
     const payload = await postJson("/api/dev/seed-role-users", { tenant_id: tenantId });
-    reportAdminAction("Role test users ready", `${tenantId} | ${payload.users.length} users`, payload.users.map((user) => ({ email: user.email, roles: user.roles })));
+    reportAdminAction(
+      "Role test users ready",
+      `${tenantId} | ${payload.users.length} users`,
+      payload.users.map((user) => ({ email: user.email, roles: user.roles }))
+    );
     await refresh();
     setActiveTab("administration");
   } catch (error) {
@@ -3775,12 +4582,18 @@ async function loginDemoUser() {
     const account = accountById(member?.account_id);
     const email = account?.email || member?.email || "local-admin@pollek.local";
     const login = await requestJson(`/v1/auth/login?tenant_id=${encodePathPart(tenantId)}`);
-    const callback = await requestJson(`/v1/auth/callback?tenant_id=${encodePathPart(tenantId)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(account?.display_name || member?.display_name || "Demo Admin")}`);
+    const callback = await requestJson(
+      `/v1/auth/callback?tenant_id=${encodePathPart(tenantId)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(account?.display_name || member?.display_name || "Demo Admin")}`
+    );
     app.currentSessionId = callback.session.id;
     app.currentSessionToken = callback.session.access_token || "";
     sessionStorage.setItem("pollek.cloud.current_session_id", app.currentSessionId);
-    if (app.currentSessionToken) sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
-    reportAdminAction("Local-dev login completed", `${email} | ${login.provider_type}`, { session: callback.session.id, provider_id: login.provider_id });
+    if (app.currentSessionToken)
+      sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
+    reportAdminAction("Local-dev login completed", `${email} | ${login.provider_type}`, {
+      session: callback.session.id,
+      provider_id: login.provider_id
+    });
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -3794,12 +4607,16 @@ async function logoutDemoUser() {
   refs.logoutDemoButton.disabled = true;
   refs.logoutDemoButton.textContent = "Logging out";
   try {
-    const payload = await postJson("/v1/auth/logout", { session_id: app.currentSessionId || undefined });
+    const payload = await postJson("/v1/auth/logout", {
+      session_id: app.currentSessionId || undefined
+    });
     app.currentSessionId = "";
     app.currentSessionToken = "";
     sessionStorage.removeItem("pollek.cloud.current_session_id");
     sessionStorage.removeItem("pollek.cloud.current_session_token");
-    reportAdminAction("Session logged out", payload.session_id || "dev browser session", { ok: payload.ok });
+    reportAdminAction("Session logged out", payload.session_id || "dev browser session", {
+      ok: payload.ok
+    });
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -3813,7 +4630,8 @@ async function acceptLatestInvite() {
   refs.acceptInviteButton.disabled = true;
   refs.acceptInviteButton.textContent = "Accepting";
   try {
-    let token = app.lastInvitationToken || sessionStorage.getItem("pollek.cloud.last_invitation_token") || "";
+    let token =
+      app.lastInvitationToken || sessionStorage.getItem("pollek.cloud.last_invitation_token") || "";
     if (!token) {
       const invite = await inviteDemoMember({ roles: ["viewer"] });
       token = invite?.token || "";
@@ -3825,10 +4643,15 @@ async function acceptLatestInvite() {
     app.currentSessionId = payload.session.id;
     app.currentSessionToken = payload.session.access_token || "";
     sessionStorage.setItem("pollek.cloud.current_session_id", app.currentSessionId);
-    if (app.currentSessionToken) sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
+    if (app.currentSessionToken)
+      sessionStorage.setItem("pollek.cloud.current_session_token", app.currentSessionToken);
     app.lastInvitationToken = "";
     sessionStorage.removeItem("pollek.cloud.last_invitation_token");
-    reportAdminAction("Invitation accepted", `${payload.account.email} joined ${payload.membership.tenant_id}`, { roles: payload.membership.roles, session: payload.session.id });
+    reportAdminAction(
+      "Invitation accepted",
+      `${payload.account.email} joined ${payload.membership.tenant_id}`,
+      { roles: payload.membership.roles, session: payload.session.id }
+    );
     await refresh();
     setActiveTab("administration");
   } catch (error) {
@@ -3841,13 +4664,23 @@ async function acceptLatestInvite() {
 
 async function updateMemberRoles(accountId, roles) {
   const tenantId = selectedTenantId();
-  const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/members/{account_id}/roles", tenantId).replace("{account_id}", encodePathPart(accountId)), {
-    roles,
-    status: "active",
-    principal: tenantPrincipal(tenantId),
-    actor_id: tenantActorId(tenantId)
-  });
-  reportAdminAction("Member role updated", `${payload.member.email} | ${(payload.member.roles || []).join(", ")}`, { tenant_id: tenantId, account_id: accountId });
+  const payload = await postJson(
+    tenantPath("/v1/tenants/{tenant_id}/members/{account_id}/roles", tenantId).replace(
+      "{account_id}",
+      encodePathPart(accountId)
+    ),
+    {
+      roles,
+      status: "active",
+      principal: tenantPrincipal(tenantId),
+      actor_id: tenantActorId(tenantId)
+    }
+  );
+  reportAdminAction(
+    "Member role updated",
+    `${payload.member.email} | ${(payload.member.roles || []).join(", ")}`,
+    { tenant_id: tenantId, account_id: accountId }
+  );
   await refresh();
 }
 
@@ -3857,11 +4690,20 @@ async function removeTenantMember(accountId) {
   const label = account?.email || accountId;
   if (!window.confirm(`Remove ${label} from ${selectedTenantId()}?`)) return;
   const tenantId = selectedTenantId();
-  const payload = await deleteJson(tenantPath("/v1/tenants/{tenant_id}/members/{account_id}", tenantId).replace("{account_id}", encodePathPart(accountId)), {
-    principal: tenantPrincipal(tenantId),
-    actor_id: tenantActorId(tenantId)
+  const payload = await deleteJson(
+    tenantPath("/v1/tenants/{tenant_id}/members/{account_id}", tenantId).replace(
+      "{account_id}",
+      encodePathPart(accountId)
+    ),
+    {
+      principal: tenantPrincipal(tenantId),
+      actor_id: tenantActorId(tenantId)
+    }
+  );
+  reportAdminAction("Member removed", `${payload.member.email} | ${payload.member.status}`, {
+    tenant_id: tenantId,
+    account_id: accountId
   });
-  reportAdminAction("Member removed", `${payload.member.email} | ${payload.member.status}`, { tenant_id: tenantId, account_id: accountId });
   await refresh();
 }
 
@@ -3870,20 +4712,27 @@ async function configureIdentityProvider() {
   refs.configureIdpButton.textContent = "Configuring";
   try {
     const tenantId = selectedTenantId();
-    const payload = await putJson(tenantPath("/v1/tenants/{tenant_id}/identity-providers", tenantId), {
-      id: `idp_keycloak_${tenantId.replace(/[^a-z0-9]/gi, "_")}`,
-      provider_type: "keycloak_oidc",
-      display_name: `Keycloak ${tenantId}`,
-      status: "configured",
-      issuer_url: `http://127.0.0.1:8080/realms/${tenantId}`,
-      client_id: "pollek-cloud-console",
-      discovery_url: `http://127.0.0.1:8080/realms/${tenantId}/.well-known/openid-configuration`,
-      scopes: ["openid", "profile", "email", "groups"],
-      client_secret: `local-dev-${tenantId}`,
-      principal: tenantPrincipal(tenantId),
-      actor_id: tenantActorId(tenantId)
-    });
-    reportAdminAction("Identity provider configured", `${payload.provider.display_name} | ${payload.provider.status}`, { issuer_url: payload.provider.issuer_url, secret_ref: payload.provider.secret_ref });
+    const payload = await putJson(
+      tenantPath("/v1/tenants/{tenant_id}/identity-providers", tenantId),
+      {
+        id: `idp_keycloak_${tenantId.replace(/[^a-z0-9]/gi, "_")}`,
+        provider_type: "keycloak_oidc",
+        display_name: `Keycloak ${tenantId}`,
+        status: "configured",
+        issuer_url: `http://127.0.0.1:8080/realms/${tenantId}`,
+        client_id: "pollek-cloud-console",
+        discovery_url: `http://127.0.0.1:8080/realms/${tenantId}/.well-known/openid-configuration`,
+        scopes: ["openid", "profile", "email", "groups"],
+        client_secret: `local-dev-${tenantId}`,
+        principal: tenantPrincipal(tenantId),
+        actor_id: tenantActorId(tenantId)
+      }
+    );
+    reportAdminAction(
+      "Identity provider configured",
+      `${payload.provider.display_name} | ${payload.provider.status}`,
+      { issuer_url: payload.provider.issuer_url, secret_ref: payload.provider.secret_ref }
+    );
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -3899,12 +4748,19 @@ async function provisionScimUser() {
   try {
     const tenantId = selectedTenantId();
     const stamp = Date.now().toString().slice(-5);
-    const payload = await postJson("/scim/v2/Users", {
-      userName: `scim-user-${stamp}@example.com`,
-      displayName: `SCIM User ${stamp}`,
-      active: true
-    }, { headers: { "x-pollek-tenant-id": tenantId } });
-    reportAdminAction("SCIM user provisioned", `${payload.userName} | ${tenantId}`, { id: payload.id, schemas: payload.schemas });
+    const payload = await postJson(
+      "/scim/v2/Users",
+      {
+        userName: `scim-user-${stamp}@example.com`,
+        displayName: `SCIM User ${stamp}`,
+        active: true
+      },
+      { headers: { "x-pollek-tenant-id": tenantId } }
+    );
+    reportAdminAction("SCIM user provisioned", `${payload.userName} | ${tenantId}`, {
+      id: payload.id,
+      schemas: payload.schemas
+    });
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -3920,11 +4776,20 @@ async function provisionScimGroup() {
   try {
     const tenantId = selectedTenantId();
     const stamp = Date.now().toString().slice(-5);
-    const payload = await postJson("/scim/v2/Groups", {
-      displayName: `Pollek Security Operators ${stamp}`,
-      members: filteredByTenant(app.data.tenant_members, tenantId).slice(0, 3).map((member) => ({ value: member.account_id, display: member.email }))
-    }, { headers: { "x-pollek-tenant-id": tenantId } });
-    reportAdminAction("SCIM group provisioned", `${payload.displayName} | ${tenantId}`, { id: payload.id, member_count: payload.members?.length || 0 });
+    const payload = await postJson(
+      "/scim/v2/Groups",
+      {
+        displayName: `Pollek Security Operators ${stamp}`,
+        members: filteredByTenant(app.data.tenant_members, tenantId)
+          .slice(0, 3)
+          .map((member) => ({ value: member.account_id, display: member.email }))
+      },
+      { headers: { "x-pollek-tenant-id": tenantId } }
+    );
+    reportAdminAction("SCIM group provisioned", `${payload.displayName} | ${tenantId}`, {
+      id: payload.id,
+      member_count: payload.members?.length || 0
+    });
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -3940,14 +4805,21 @@ async function updateSubscriptionPlan() {
   try {
     const tenantId = selectedTenantId();
     const currentPlan = activePlanId(tenantId);
-    const nextPlan = currentPlan === "plan_private_cloud" ? "plan_enterprise_cloud" : "plan_private_cloud";
-    const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/billing/subscription", tenantId), {
-      plan_id: nextPlan,
-      status: "active",
-      billing_period: "monthly",
-      actor_id: tenantActorId(tenantId)
+    const nextPlan =
+      currentPlan === "plan_private_cloud" ? "plan_enterprise_cloud" : "plan_private_cloud";
+    const payload = await postJson(
+      tenantPath("/v1/tenants/{tenant_id}/billing/subscription", tenantId),
+      {
+        plan_id: nextPlan,
+        status: "active",
+        billing_period: "monthly",
+        actor_id: tenantActorId(tenantId)
+      }
+    );
+    reportAdminAction("Subscription updated", `${tenantId} | ${payload.plan?.name || nextPlan}`, {
+      subscription: payload.subscription.id,
+      plan_id: payload.subscription.plan_id
     });
-    reportAdminAction("Subscription updated", `${tenantId} | ${payload.plan?.name || nextPlan}`, { subscription: payload.subscription.id, plan_id: payload.subscription.plan_id });
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -3962,14 +4834,21 @@ async function addPaymentReference() {
   refs.addPaymentButton.textContent = "Adding";
   try {
     const tenantId = selectedTenantId();
-    const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/billing/payment-methods", tenantId), {
-      provider: "manual-dev",
-      type: "enterprise_purchase_order",
-      reference: `po-${tenantId}-${Date.now()}`,
-      billing_email: selectedTenantRecord().billing_email || `billing+${tenantId}@pollek.local`,
-      actor_id: tenantActorId(tenantId)
-    });
-    reportAdminAction("Payment reference added", `${payload.payment_method.provider} | ${payload.payment_method.type}`, { reference_hash: payload.payment_method.reference_hash });
+    const payload = await postJson(
+      tenantPath("/v1/tenants/{tenant_id}/billing/payment-methods", tenantId),
+      {
+        provider: "manual-dev",
+        type: "enterprise_purchase_order",
+        reference: `po-${tenantId}-${Date.now()}`,
+        billing_email: selectedTenantRecord().billing_email || `billing+${tenantId}@pollek.local`,
+        actor_id: tenantActorId(tenantId)
+      }
+    );
+    reportAdminAction(
+      "Payment reference added",
+      `${payload.payment_method.provider} | ${payload.payment_method.type}`,
+      { reference_hash: payload.payment_method.reference_hash }
+    );
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -3984,8 +4863,14 @@ async function refreshInvoicePreview() {
   refs.refreshInvoicesButton.textContent = "Refreshing";
   try {
     const tenantId = selectedTenantId();
-    const payload = await requestJson(tenantPath("/v1/tenants/{tenant_id}/billing/invoices", tenantId));
-    reportAdminAction("Invoice preview refreshed", `${tenantId} | ${payload.invoices.length} invoices`, payload.invoices[0]);
+    const payload = await requestJson(
+      tenantPath("/v1/tenants/{tenant_id}/billing/invoices", tenantId)
+    );
+    reportAdminAction(
+      "Invoice preview refreshed",
+      `${tenantId} | ${payload.invoices.length} invoices`,
+      payload.invoices[0]
+    );
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -4008,12 +4893,16 @@ async function sendBillingWebhookTest() {
     };
     const first = await postJson("/v1/billing/webhooks/manual-dev", body);
     const second = await postJson("/v1/billing/webhooks/manual-dev", body);
-    reportAdminAction("Billing webhook idempotency tested", `${first.event.status} then ${second.event.status}`, {
-      event_id: first.event.provider_event_id,
-      first_status: first.event.status,
-      second_status: second.event.status,
-      payload_hash: first.event.payload_hash
-    });
+    reportAdminAction(
+      "Billing webhook idempotency tested",
+      `${first.event.status} then ${second.event.status}`,
+      {
+        event_id: first.event.provider_event_id,
+        first_status: first.event.status,
+        second_status: second.event.status,
+        payload_hash: first.event.payload_hash
+      }
+    );
     await refresh();
   } catch (error) {
     refs.probeResult.textContent = String(error);
@@ -4028,13 +4917,20 @@ async function issueAdminLicense() {
   refs.issueLicenseButton.textContent = "Issuing";
   try {
     const tenantId = selectedTenantId();
-    const payload = await postJson(tenantPath("/v1/tenants/{tenant_id}/billing/license/issue", tenantId), {
-      deployment_mode: "private_cloud",
-      max_seats: 100,
-      max_lcps: 50,
-      max_devices: 1000
-    });
-    reportAdminAction("Offline license issued", `${payload.license.id} | ${payload.license.algorithm}`, { tenant_id: payload.license.tenant_id, payload_hash: payload.license.payload_hash });
+    const payload = await postJson(
+      tenantPath("/v1/tenants/{tenant_id}/billing/license/issue", tenantId),
+      {
+        deployment_mode: "private_cloud",
+        max_seats: 100,
+        max_lcps: 50,
+        max_devices: 1000
+      }
+    );
+    reportAdminAction(
+      "Offline license issued",
+      `${payload.license.id} | ${payload.license.algorithm}`,
+      { tenant_id: payload.license.tenant_id, payload_hash: payload.license.payload_hash }
+    );
     await refresh();
     setActiveTab("administration");
   } catch (error) {
@@ -4133,7 +5029,10 @@ async function simulateLatestPolicy() {
   refs.simulatePolicyButton.disabled = true;
   refs.simulatePolicyButton.textContent = "Simulating";
   try {
-    const payload = await postJson(`/api/policy/drafts/${encodeURIComponent(draftId)}/simulate`, {});
+    const payload = await postJson(
+      `/api/policy/drafts/${encodeURIComponent(draftId)}/simulate`,
+      {}
+    );
     refs.policyAssistantResult.innerHTML = `
       <strong>${escapeHtml(payload.simulation.status)}</strong>
       <span>${escapeHtml(payload.simulation.summary)}</span>
@@ -4237,7 +5136,17 @@ async function syncEntities() {
     refs.probeResult.innerHTML = `
       <strong>${payload.ok ? "Entity sync completed" : "Entity sync failed"}</strong>
       <span>${escapeHtml(payload.run.lcp_id)} | ${escapeHtml(payload.run.entity_count)} entities | ${escapeHtml(payload.run.status)}</span>
-      <code>${escapeHtml(JSON.stringify((payload.run.results || []).map((item) => ({ key: item.key, ok: item.ok, status: item.status })), null, 2))}</code>
+      <code>${escapeHtml(
+        JSON.stringify(
+          (payload.run.results || []).map((item) => ({
+            key: item.key,
+            ok: item.ok,
+            status: item.status
+          })),
+          null,
+          2
+        )
+      )}</code>
     `;
     await refresh();
     setActiveTab("entities");
@@ -4280,11 +5189,25 @@ async function dispatchConfigUpdate() {
     refs.probeResult.innerHTML = `
       <strong>Config dispatch ${escapeHtml(payload.dispatch.status)}</strong>
       <span>${escapeHtml(payload.dispatch.lcp_id)} | ${escapeHtml(payload.dispatch.action)} | ${escapeHtml(payload.dispatch.id)}</span>
-      <code>${escapeHtml(JSON.stringify(payload.dispatch.results.map((item) => ({ path: item.path, ok: item.ok, status: item.status })), null, 2))}</code>
+      <code>${escapeHtml(
+        JSON.stringify(
+          payload.dispatch.results.map((item) => ({
+            path: item.path,
+            ok: item.ok,
+            status: item.status
+          })),
+          null,
+          2
+        )
+      )}</code>
     `;
     await refresh();
   } catch (error) {
-    reportActionError("Config dispatch needs review", error, "Cloud could not push the configuration update to this LCP.");
+    reportActionError(
+      "Config dispatch needs review",
+      error,
+      "Cloud could not push the configuration update to this LCP."
+    );
   } finally {
     refs.pushConfigButton.disabled = false;
     refs.pushConfigButton.textContent = "Push Config";
@@ -4303,12 +5226,26 @@ async function dispatchHotReload() {
     refs.probeResult.innerHTML = `
       <strong>Hot reload dispatch ${escapeHtml(payload.dispatch.status)}</strong>
       <span>${escapeHtml(payload.dispatch.bundle_id || "bundle pending")} | unsupported ${escapeHtml((payload.dispatch.unsupported_paths || []).length)}</span>
-      <code>${escapeHtml(JSON.stringify(payload.dispatch.results.map((item) => ({ path: item.path, ok: item.ok, status: item.status })), null, 2))}</code>
+      <code>${escapeHtml(
+        JSON.stringify(
+          payload.dispatch.results.map((item) => ({
+            path: item.path,
+            ok: item.ok,
+            status: item.status
+          })),
+          null,
+          2
+        )
+      )}</code>
     `;
     await refresh();
     setActiveTab("timeline");
   } catch (error) {
-    reportActionError("Hot reload needs review", error, "Cloud could not hot reload the policy bundle on this LCP.");
+    reportActionError(
+      "Hot reload needs review",
+      error,
+      "Cloud could not hot reload the policy bundle on this LCP."
+    );
   } finally {
     refs.hotReloadButton.disabled = false;
     refs.hotReloadButton.textContent = "Hot Reload";
@@ -4356,10 +5293,13 @@ async function requestBreakglass() {
       reason: "Local enterprise breakglass drill for audited emergency policy operations.",
       duration_minutes: 60
     });
-    const approved = await postJson(`/api/breakglass/${encodeURIComponent(payload.request.id)}/approve`, {
-      tenant_id: "local",
-      approver: "local-dev-security-admin"
-    });
+    const approved = await postJson(
+      `/api/breakglass/${encodeURIComponent(payload.request.id)}/approve`,
+      {
+        tenant_id: "local",
+        approver: "local-dev-security-admin"
+      }
+    );
     refs.probeResult.innerHTML = `
       <strong>Breakglass active</strong>
       <span>${escapeHtml(approved.request.target_id)} | ${escapeHtml(approved.request.status)}</span>
@@ -4378,7 +5318,9 @@ async function deployComplianceBundle() {
   refs.complianceDeployButton.textContent = "Deploying";
   try {
     const bundleId = app.selectedComplianceBundleId || app.data.compliance_policy_bundles?.[0]?.id;
-    const targets = (app.data.local_control_planes || []).filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
+    const targets = (app.data.local_control_planes || [])
+      .filter((lcp) => lcp.status !== "offline")
+      .map((lcp) => lcp.id);
     const payload = await postJson("/api/compliance/policy-bundles/deploy", {
       bundle_id: bundleId,
       tenant_id: selectedTenantId(),
@@ -4386,7 +5328,10 @@ async function deployComplianceBundle() {
       approved_by: tenantActorId(),
       target_ids: targets
     });
-    const advanced = await postJson(`/api/rollouts/${encodeURIComponent(payload.rollout.id)}/advance`, {});
+    const advanced = await postJson(
+      `/api/rollouts/${encodeURIComponent(payload.rollout.id)}/advance`,
+      {}
+    );
     refs.probeResult.innerHTML = `
       <strong>Compliance bundle staged</strong>
       <span>${escapeHtml(payload.policy_bundle.id)} | rollout ${escapeHtml(advanced.rollout.status)}</span>
@@ -4520,8 +5465,12 @@ function applyCustomCostTokenDate(which, value) {
   ensureCostTokensLoaded(true);
 }
 
-refs.costTokenFrom?.addEventListener("change", (event) => applyCustomCostTokenDate("from", event.target.value));
-refs.costTokenTo?.addEventListener("change", (event) => applyCustomCostTokenDate("to", event.target.value));
+refs.costTokenFrom?.addEventListener("change", (event) =>
+  applyCustomCostTokenDate("from", event.target.value)
+);
+refs.costTokenTo?.addEventListener("change", (event) =>
+  applyCustomCostTokenDate("to", event.target.value)
+);
 
 refs.costTokenRefresh?.addEventListener("click", () => ensureCostTokensLoaded(true));
 
@@ -4548,14 +5497,15 @@ document.querySelectorAll(".tab").forEach((button) => {
 document.querySelectorAll(".view-button").forEach((button) => {
   if (!button.dataset.targetTab) {
     const label = button.textContent.trim();
-    button.dataset.targetTab = {
-      Inventory: "summary",
-      Entities: "entities",
-      "Policy Center": "policies",
-      "Observe Center": "telemetry",
-      Compliance: "compliance",
-      Administration: "administration"
-    }[label] || "summary";
+    button.dataset.targetTab =
+      {
+        Inventory: "summary",
+        Entities: "entities",
+        "Policy Center": "policies",
+        "Observe Center": "telemetry",
+        Compliance: "compliance",
+        Administration: "administration"
+      }[label] || "summary";
   }
   button.addEventListener("click", () => setActiveTab(button.dataset.targetTab));
 });

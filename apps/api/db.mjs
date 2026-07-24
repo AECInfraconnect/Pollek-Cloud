@@ -31,9 +31,11 @@ export function isEnabled() {
 async function getPool() {
   if (pool) return pool;
   if (!pgModule) pgModule = (await import("pg")).default;
-  const ssl = process.env.PGSSLMODE === "disable" || /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || "")
-    ? false
-    : { rejectUnauthorized: false };
+  const ssl =
+    process.env.PGSSLMODE === "disable" ||
+    /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || "")
+      ? false
+      : { rejectUnauthorized: false };
   pool = new pgModule.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl,
@@ -51,7 +53,9 @@ export async function migrate() {
     version text PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()
   )`);
-  const applied = new Set((await db.query("SELECT version FROM schema_migrations")).rows.map((r) => r.version));
+  const applied = new Set(
+    (await db.query("SELECT version FROM schema_migrations")).rows.map((r) => r.version)
+  );
   const files = (await readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
   const ran = [];
   for (const file of files) {
@@ -61,12 +65,17 @@ export async function migrate() {
     try {
       await client.query("BEGIN");
       await client.query(sql);
-      await client.query("INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING", [file]);
+      await client.query(
+        "INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING",
+        [file]
+      );
       await client.query("COMMIT");
       ran.push(file);
     } catch (error) {
       await client.query("ROLLBACK");
-      throw new Error(`migration ${file} failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `migration ${file} failed: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       client.release();
     }
@@ -96,23 +105,32 @@ export async function withTenant(tenantId, fn) {
 function tenantOf(doc) {
   if (Array.isArray(doc)) {
     const value = doc[1];
-    return (value && typeof value === "object" && typeof value.tenant_id === "string" && value.tenant_id) || SYSTEM_TENANT;
+    return (
+      (value &&
+        typeof value === "object" &&
+        typeof value.tenant_id === "string" &&
+        value.tenant_id) ||
+      SYSTEM_TENANT
+    );
   }
-  if (doc && typeof doc === "object" && typeof doc.tenant_id === "string" && doc.tenant_id) return doc.tenant_id;
+  if (doc && typeof doc === "object" && typeof doc.tenant_id === "string" && doc.tenant_id)
+    return doc.tenant_id;
   return SYSTEM_TENANT;
 }
 
 // Flatten the runtime snapshot into (collection, ordinal, tenant_id, doc) rows.
 function snapshotToRows(snapshot, persistedFleetKeys) {
   const rows = [];
-  const push = (collection, doc) => rows.push({ collection, ordinal: 0, tenant_id: tenantOf(doc), doc });
+  const push = (collection, doc) =>
+    rows.push({ collection, ordinal: 0, tenant_id: tenantOf(doc), doc });
   const pushArray = (collection, arr) => {
     (Array.isArray(arr) ? arr : []).forEach((item, index) => {
       rows.push({ collection, ordinal: index, tenant_id: tenantOf(item), doc: item });
     });
   };
 
-  if (snapshot.tenant && typeof snapshot.tenant === "object") push("root-obj:tenant", snapshot.tenant);
+  if (snapshot.tenant && typeof snapshot.tenant === "object")
+    push("root-obj:tenant", snapshot.tenant);
   for (const key of ROOT_ARRAYS) pushArray(`root-arr:${key}`, snapshot[key]);
   for (const key of ROOT_MAPS) pushArray(`root-map:${key}`, snapshot[key]);
 
@@ -132,19 +150,22 @@ function rowsToSnapshot(rows) {
     if (!grouped.has(row.collection)) grouped.set(row.collection, []);
     grouped.get(row.collection).push(row);
   }
-  const orderedDocs = (collection) => (grouped.get(collection) || [])
-    .sort((a, b) => a.ordinal - b.ordinal)
-    .map((row) => row.doc);
+  const orderedDocs = (collection) =>
+    (grouped.get(collection) || []).sort((a, b) => a.ordinal - b.ordinal).map((row) => row.doc);
 
   const snapshot = { fleet: {} };
   const tenantRows = grouped.get("root-obj:tenant");
   if (tenantRows && tenantRows.length) snapshot.tenant = tenantRows[0].doc;
-  for (const key of ROOT_ARRAYS) if (grouped.has(`root-arr:${key}`)) snapshot[key] = orderedDocs(`root-arr:${key}`);
-  for (const key of ROOT_MAPS) if (grouped.has(`root-map:${key}`)) snapshot[key] = orderedDocs(`root-map:${key}`);
+  for (const key of ROOT_ARRAYS)
+    if (grouped.has(`root-arr:${key}`)) snapshot[key] = orderedDocs(`root-arr:${key}`);
+  for (const key of ROOT_MAPS)
+    if (grouped.has(`root-map:${key}`)) snapshot[key] = orderedDocs(`root-map:${key}`);
 
   for (const collection of grouped.keys()) {
-    if (collection.startsWith("fleet-arr:")) snapshot.fleet[collection.slice("fleet-arr:".length)] = orderedDocs(collection);
-    else if (collection.startsWith("fleet-val:")) snapshot.fleet[collection.slice("fleet-val:".length)] = grouped.get(collection)[0].doc;
+    if (collection.startsWith("fleet-arr:"))
+      snapshot.fleet[collection.slice("fleet-arr:".length)] = orderedDocs(collection);
+    else if (collection.startsWith("fleet-val:"))
+      snapshot.fleet[collection.slice("fleet-val:".length)] = grouped.get(collection)[0].doc;
   }
   return snapshot;
 }
@@ -177,7 +198,9 @@ export async function persistSnapshot(snapshot, persistedFleetKeys) {
 // Load the durable snapshot. Returns null when the store is empty (fresh database).
 export async function loadSnapshot() {
   const rows = await withTenant(ALL_TENANTS, async (client) => {
-    const result = await client.query("SELECT collection, ordinal, tenant_id, doc FROM runtime_items");
+    const result = await client.query(
+      "SELECT collection, ordinal, tenant_id, doc FROM runtime_items"
+    );
     return result.rows;
   });
   if (!rows.length) return null;

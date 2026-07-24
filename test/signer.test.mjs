@@ -26,7 +26,11 @@ test("rotation overlap: a signature made by a retired key verifies while it is i
   const withKey = signer.retiredVerificationKeys(rawB64);
   assert.equal(withKey.length, 1);
   const verifiedBy = signer.verifyAgainstKeys(payload, sig, withKey);
-  assert.equal(verifiedBy, signer.keyIdForRawB64(rawB64), "retired key in the overlap set verifies");
+  assert.equal(
+    verifiedBy,
+    signer.keyIdForRawB64(rawB64),
+    "retired key in the overlap set verifies"
+  );
 
   // Dropped from the overlap set -> no longer trusted.
   const withoutKey = signer.retiredVerificationKeys("");
@@ -52,9 +56,18 @@ test("retiredVerificationKeys parses comma/space lists and skips malformed entri
 
 test("enforceApprovalRecord requires an approved record with an approver", () => {
   assert.throws(() => signer.enforceApprovalRecord(null), /approval_record_required/);
-  assert.throws(() => signer.enforceApprovalRecord({ status: "pending", approved_by: "x" }), /approved_record_required/);
-  assert.throws(() => signer.enforceApprovalRecord({ status: "approved" }), /approval_record_missing_approver/);
-  assert.equal(signer.enforceApprovalRecord({ status: "approved", approved_by: "sec-admin" }).status, "approved");
+  assert.throws(
+    () => signer.enforceApprovalRecord({ status: "pending", approved_by: "x" }),
+    /approved_record_required/
+  );
+  assert.throws(
+    () => signer.enforceApprovalRecord({ status: "approved" }),
+    /approval_record_missing_approver/
+  );
+  assert.equal(
+    signer.enforceApprovalRecord({ status: "approved", approved_by: "sec-admin" }).status,
+    "approved"
+  );
 });
 
 test("assertBackendSupported fails loud for an unwired backend and passes for local", () => {

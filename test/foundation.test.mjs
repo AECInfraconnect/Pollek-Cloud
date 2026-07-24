@@ -12,7 +12,10 @@ import path from "node:path";
 function stableJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+    .join(",")}}`;
 }
 
 // Build an ed25519 public key from the raw 32-byte key (base64url) published in the signer
@@ -22,7 +25,12 @@ function ed25519KeyFromRawB64(rawB64) {
 }
 
 function verifyDetached(unsignedObject, sigB64Url, publicKey) {
-  return crypto.verify(null, Buffer.from(stableJson(unsignedObject)), publicKey, Buffer.from(sigB64Url, "base64url"));
+  return crypto.verify(
+    null,
+    Buffer.from(stableJson(unsignedObject)),
+    publicKey,
+    Buffer.from(sigB64Url, "base64url")
+  );
 }
 
 // Strip the fields the server appends on top of the signed manifest to recover the exact
@@ -143,11 +151,20 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.ok(contract.interfaces["pollek.cloud.breakglass"]);
   assert.ok(contract.interfaces["pollek.cloud.adapter_catalog"]);
   assert.equal(contract.interfaces["pollek.cloud.policy_authoring"].human_approval_required, true);
-  assert.ok(contract.interfaces["pollek.cloud.policy_authoring"].paths.includes("/api/policy/providers"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_authoring"].controls.includes("secret_redaction"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_authoring"].controls.includes("policy_test_fixtures"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_authoring"].paths.includes("/api/policy/providers")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_authoring"].controls.includes("secret_redaction")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_authoring"].controls.includes("policy_test_fixtures")
+  );
   assert.equal(contract.interfaces["pollek.cloud.enterprise_compliance"].enterprise_only, true);
-  assert.equal(contract.interfaces["pollek.cloud.enterprise_compliance"].local_catalog_visible, false);
+  assert.equal(
+    contract.interfaces["pollek.cloud.enterprise_compliance"].local_catalog_visible,
+    false
+  );
   assert.equal(contract.features.local_entity_inventory, true);
   assert.equal(contract.features.tenant_trust_scopes, true);
   assert.equal(contract.features.authorization_rbac_rebac_cedar_openfga, true);
@@ -187,59 +204,214 @@ test("contract discovery declares required cloud protocol features", async () =>
   assert.equal(contract.features.telemetry_secret_quarantine, true);
   assert.equal(contract.features.lcp_telemetry_read_parity, true);
   assert.equal(contract.features.lcp_registry_sync_entity_ingest, true);
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/telemetry/decision-logs"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/telemetry/export"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/decisions"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/tool-invocations"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/resource-access"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/policy-deployments"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/logs/pep-health"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/api/telemetry/ingest-status"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("event_id_idempotency"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("per_event_secret_quarantine"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("telemetry_envelope_persistence"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/telemetry/decision-logs"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/telemetry/export"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/logs/decisions"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/logs/tool-invocations"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/logs/resource-access"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/logs/policy-deployments"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/logs/pep-health"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes("/api/telemetry/ingest-status")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].controls.includes("event_id_idempotency")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].controls.includes("per_event_secret_quarantine")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].controls.includes(
+      "telemetry_envelope_persistence"
+    )
+  );
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/v1/signup/tenant"));
-  assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/v1/tenants/{tenant_id}/members/{account_id}/roles"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.identity"].paths.includes(
+      "/v1/tenants/{tenant_id}/members/{account_id}/roles"
+    )
+  );
   assert.ok(contract.interfaces["pollek.cloud.identity"].paths.includes("/scim/v2/Users"));
-  assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/v1/tenants/{tenant_id}/billing/license/issue"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.billing"].paths.includes(
+      "/v1/tenants/{tenant_id}/billing/license/issue"
+    )
+  );
   assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/api/lcp/usage-ledgers"));
-  assert.ok(contract.interfaces["pollek.cloud.billing"].paths.includes("/v1/tenants/{tenant_id}/lcp/usage-ledgers"));
-  assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("lcp_reported_agent_usage_ledger"));
-  assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("cross_os_usage_fixtures"));
-  assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("credit_pool_allocation"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.billing"].paths.includes(
+      "/v1/tenants/{tenant_id}/lcp/usage-ledgers"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.billing"].controls.includes("lcp_reported_agent_usage_ledger")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.billing"].controls.includes("cross_os_usage_fixtures")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.billing"].controls.includes("credit_pool_allocation")
+  );
   assert.ok(contract.interfaces["pollek.cloud.billing"].controls.includes("webhook_idempotency"));
   assert.ok(contract.interfaces["pollek.cloud.kms"].paths.includes("/v1/kms/health"));
-  assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/events.schema.json"));
-  assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/bundle-manifest.schema.json"));
-  assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/telemetry-envelope.schema.json"));
-  assert.ok(contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes("/contracts/lcp-usage-ledger.schema.json"));
-  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/api/lcp/change-batches"));
-  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/lcp/change-batches"));
-  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/registry/resources"));
-  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/registry/tools"));
-  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/discovery/entities"));
-  assert.ok(contract.interfaces["pollek.cloud.local_entities"].paths.includes("/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes(
+      "/contracts/events.schema.json"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes(
+      "/contracts/bundle-manifest.schema.json"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes(
+      "/contracts/telemetry-envelope.schema.json"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.contract_artifacts"].paths.includes(
+      "/contracts/lcp-usage-ledger.schema.json"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.local_entities"].paths.includes("/api/lcp/change-batches")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.local_entities"].paths.includes(
+      "/v1/tenants/{tenant_id}/lcp/change-batches"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.local_entities"].paths.includes(
+      "/v1/tenants/{tenant_id}/registry/resources"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.local_entities"].paths.includes(
+      "/v1/tenants/{tenant_id}/registry/tools"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.local_entities"].paths.includes(
+      "/v1/tenants/{tenant_id}/discovery/entities"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.local_entities"].paths.includes(
+      "/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2"
+    )
+  );
   assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events"));
-  assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events/replay"));
-  assert.ok(contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/hot-reload/stream"));
-  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/entities/watch"));
-  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/change-batches"));
-  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/config/dispatch"));
-  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/lcp/hot-reload/dispatch"));
-  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("signed-control-envelope"));
-  assert.ok(contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("ack_cursor"));
-  assert.equal(contract.interfaces["pollek.cloud.policy_bundle_signing"].human_approval_required, true);
-  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].paths.includes("/api/policy-bundles/{bundle_id}/sign"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].paths.includes("/api/policy-bundles/{bundle_id}/verify"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("approval_record_required"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("ed25519_signature"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].paths.includes("/v1/policy-bundles/{bundle_id}/artifact"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].paths.includes("/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest"));
-  assert.ok(contract.interfaces["pollek.cloud.policy_bundle"].controls.includes("content_addressed_artifact"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/events/replay")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.connection_update"].paths.includes("/api/hot-reload/stream")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes("/api/entities/watch")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes(
+      "/api/lcp/change-batches"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes(
+      "/api/lcp/config/dispatch"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.secure_control_channel"].paths.includes(
+      "/api/lcp/hot-reload/dispatch"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes(
+      "signed-control-envelope"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.secure_control_channel"].controls.includes("ack_cursor")
+  );
+  assert.equal(
+    contract.interfaces["pollek.cloud.policy_bundle_signing"].human_approval_required,
+    true
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_bundle_signing"].paths.includes(
+      "/api/policy-bundles/{bundle_id}/sign"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_bundle_signing"].paths.includes(
+      "/api/policy-bundles/{bundle_id}/verify"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes(
+      "approval_record_required"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_bundle_signing"].controls.includes("ed25519_signature")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_bundle"].paths.includes(
+      "/v1/policy-bundles/{bundle_id}/artifact"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_bundle"].paths.includes(
+      "/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.policy_bundle"].controls.includes(
+      "content_addressed_artifact"
+    )
+  );
   assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/telemetry/events"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/telemetry/enforcement-status"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/tenants/{tenant_id}/browser-extension/events"));
-  assert.ok(contract.interfaces["pollek.cloud.telemetry"].controls.includes("tenant_device_headers"));
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes("/v1/telemetry/enforcement-status")
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].paths.includes(
+      "/v1/tenants/{tenant_id}/browser-extension/events"
+    )
+  );
+  assert.ok(
+    contract.interfaces["pollek.cloud.telemetry"].controls.includes("tenant_device_headers")
+  );
   assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/model"));
   assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/tuples"));
   assert.ok(contract.interfaces["pollek.cloud.authorization"].paths.includes("/api/authz/check"));
@@ -255,7 +427,12 @@ test("openapi artifact covers every contract discovery path", async () => {
     Object.values(contract.interfaces).flatMap((spec) => spec.paths || [])
   );
   const openApiPaths = new Set(Object.keys(openapi.paths || {}));
-  const allowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush"]);
+  const allowedRuntimePaths = new Set([
+    "/health",
+    "/api/cloud/status",
+    "/api/persistence/status",
+    "/api/persistence/flush"
+  ]);
   const missing = [...declaredPaths].filter((apiPath) => !openApiPaths.has(apiPath)).sort();
   const extra = [...openApiPaths]
     .filter((apiPath) => !declaredPaths.has(apiPath) && !allowedRuntimePaths.has(apiPath))
@@ -309,7 +486,9 @@ test("openapi artifact covers every contract discovery path", async () => {
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/browser-extension/events"].post);
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/registry/resources"].get);
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/discovery/entities"].get);
-  assert.ok(openapi.paths["/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2"].get);
+  assert.ok(
+    openapi.paths["/v1/tenants/{tenant_id}/devices/{device_id}/capability-snapshot-v2"].get
+  );
   assert.ok(openapi.paths["/v1/tenants/{tenant_id}/devices/{device_id}/bundles/latest"].post);
   assert.equal(packageJson.scripts["contracts:sdk"], "node scripts/generate-sdk.mjs");
   assert.match(packageJson.scripts["audit:foundation"], /contracts:check/);
@@ -578,11 +757,14 @@ test("dev server exposes fleet operations endpoints", async () => {
   assert.match(server, /function redactPromptText/);
   assert.match(server, /function buildPolicyCitations/);
   assert.match(server, /function createPolicyFixtures/);
-  assert.match(server, /crypto\.sign\(null, Buffer\.from\(payload\), bundleSigningKeyPair\.privateKey\)/);
+  // Real ed25519 signing/verification (formatting-tolerant: Prettier may wrap these calls).
+  assert.match(server, /crypto\s*\.\s*sign\(/);
+  assert.match(server, /bundleSigningKeyPair\.privateKey/);
   // Bundle verification is real ed25519: pinned-key path plus the signer key-set (rotation
   // overlap) path delegated to signer.verifyAgainstKeys.
-  assert.match(server, /crypto\.verify\(null, Buffer\.from\(payload\), signature\.public_key_pem/);
-  assert.match(server, /signer\.verifyAgainstKeys\(payload, sig, overlapKeys\)/);
+  assert.match(server, /crypto\.verify\(/);
+  assert.match(server, /signature\.public_key_pem/);
+  assert.match(server, /signer\.verifyAgainstKeys\(/);
   assert.doesNotMatch(server, /dev-placeholder/);
   assert.match(server, /async function pollLcpEntityWatch/);
   assert.match(server, /function ingestLcpChangeBatch/);
@@ -653,7 +835,14 @@ test("api foundation enforces security headers, bounded responses, and body limi
             tenant_id: "local",
             device_id: "device_pagination_test",
             redaction_applied: true,
-            payload: { agent_id: "agent_page_1", user_subject: "corp\\pager", provider: "Anthropic", model: "claude-sonnet-4", tokens: { input_tokens: 10, output_tokens: 5, total_tokens: 15 }, cost: { currency: "USD", total_cost: 0.01 } }
+            payload: {
+              agent_id: "agent_page_1",
+              user_subject: "corp\\pager",
+              provider: "Anthropic",
+              model: "claude-sonnet-4",
+              tokens: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+              cost: { currency: "USD", total_cost: 0.01 }
+            }
           }
         ]
       }
@@ -736,43 +925,73 @@ test("dev server serves latest LCP compatibility endpoints", async (t) => {
 
     const extensionStatus = await api(baseUrl, "/v1/tenants/local/browser-extension/status");
     assert.equal(extensionStatus.response.status, 200);
-    assert.equal(extensionStatus.payload.schema_version, "pollek.cloud.browser-extension-status.v1");
+    assert.equal(
+      extensionStatus.payload.schema_version,
+      "pollek.cloud.browser-extension-status.v1"
+    );
 
     const registryResources = await api(baseUrl, "/v1/tenants/local/registry/resources");
     assert.equal(registryResources.response.status, 200);
-    assert.equal(registryResources.payload.schema_version, "pollek.cloud.registry-resources-page.v1");
+    assert.equal(
+      registryResources.payload.schema_version,
+      "pollek.cloud.registry-resources-page.v1"
+    );
 
     const discoveryEntities = await api(baseUrl, "/v1/tenants/local/discovery/entities");
     assert.equal(discoveryEntities.response.status, 200);
-    assert.equal(discoveryEntities.payload.schema_version, "pollek.cloud.discovery-entities-page.v1");
+    assert.equal(
+      discoveryEntities.payload.schema_version,
+      "pollek.cloud.discovery-entities-page.v1"
+    );
 
-    const capability = await api(baseUrl, "/v1/tenants/local/devices/device_local_windows/capability-snapshot-v2");
+    const capability = await api(
+      baseUrl,
+      "/v1/tenants/local/devices/device_local_windows/capability-snapshot-v2"
+    );
     assert.equal(capability.response.status, 200);
     assert.equal(capability.payload.schema_version, "local-capability-snapshot.v2");
     assert.equal(capability.payload.tenant_id, "local");
 
     // No bundle exists on an empty Cloud, so bundles/latest is 404 until one is
     // deployed through the real gated compliance flow (authz tuple + deploy).
-    const noBundleYet = await api(baseUrl, "/v1/tenants/local/devices/device_local_windows/bundles/latest", {
-      method: "POST",
-      body: { installed_revision: "2026.06.29.000" }
-    });
+    const noBundleYet = await api(
+      baseUrl,
+      "/v1/tenants/local/devices/device_local_windows/bundles/latest",
+      {
+        method: "POST",
+        body: { installed_revision: "2026.06.29.000" }
+      }
+    );
     assert.equal(noBundleYet.response.status, 404);
 
     await api(baseUrl, "/api/authz/tuples", {
       method: "POST",
-      body: { tenant_id: "local", principal: "user:local-dev-security-admin", relation: "admin", object: "tenant:local" }
+      body: {
+        tenant_id: "local",
+        principal: "user:local-dev-security-admin",
+        relation: "admin",
+        object: "tenant:local"
+      }
     });
     const deploy = await api(baseUrl, "/api/compliance/policy-bundles/deploy", {
       method: "POST",
-      body: { tenant_id: "local", bundle_id: "cmp_soc2_gdpr_data_access", approved_by: "local-dev-security-admin", reason: "test bundle deploy" }
+      body: {
+        tenant_id: "local",
+        bundle_id: "cmp_soc2_gdpr_data_access",
+        approved_by: "local-dev-security-admin",
+        reason: "test bundle deploy"
+      }
     });
     assert.equal(deploy.response.status, 201);
 
-    const latestBundle = await api(baseUrl, "/v1/tenants/local/devices/device_local_windows/bundles/latest", {
-      method: "POST",
-      body: { installed_revision: "2026.06.29.000" }
-    });
+    const latestBundle = await api(
+      baseUrl,
+      "/v1/tenants/local/devices/device_local_windows/bundles/latest",
+      {
+        method: "POST",
+        body: { installed_revision: "2026.06.29.000" }
+      }
+    );
     assert.equal(latestBundle.response.status, 200);
     assert.equal(latestBundle.payload.schema_version, "bundle-envelope.v1");
     assert.equal(latestBundle.payload.tenant_id, "local");
@@ -781,7 +1000,10 @@ test("dev server serves latest LCP compatibility endpoints", async (t) => {
 
     const fleet = await api(baseUrl, "/api/fleet");
     assert.equal(fleet.response.status, 200);
-    assert.doesNotMatch(JSON.stringify(fleet.payload.events), /lcp-secret-token|browser-extension-secret/);
+    assert.doesNotMatch(
+      JSON.stringify(fleet.payload.events),
+      /lcp-secret-token|browser-extension-secret/
+    );
   });
 });
 
@@ -801,7 +1023,12 @@ test("cloud persists full LCP telemetry batches with idempotency, quarantine, an
           tenant_id: "local",
           device_id: "device_local_windows",
           redaction_applied: true,
-          payload: { agent_id: "agent_cursor", provider: "Anthropic", model: "claude-sonnet-4", token_usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 } }
+          payload: {
+            agent_id: "agent_cursor",
+            provider: "Anthropic",
+            model: "claude-sonnet-4",
+            token_usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 }
+          }
         },
         {
           schema_version: "telemetry-envelope.v1",
@@ -886,10 +1113,15 @@ test("cloud persists full LCP telemetry batches with idempotency, quarantine, an
     assert.equal(first.payload.duplicates, 0);
     assert.equal(first.payload.batch_id, "batch_full_lcp_1");
     assert.equal(first.payload.received_events, 8);
-    assert.ok(first.payload.rejection_reasons.some((item) => item.reason === "unredacted_secret_detected"));
+    assert.ok(
+      first.payload.rejection_reasons.some((item) => item.reason === "unredacted_secret_detected")
+    );
     assert.ok(first.payload.rejection_reasons.some((item) => item.reason === "invalid_envelope"));
 
-    const replay = await api(baseUrl, "/v1/telemetry/batches", { method: "POST", body: { ...batchBody, batch_id: "batch_full_lcp_1_retry" } });
+    const replay = await api(baseUrl, "/v1/telemetry/batches", {
+      method: "POST",
+      body: { ...batchBody, batch_id: "batch_full_lcp_1_retry" }
+    });
     assert.equal(replay.response.status, 202);
     assert.equal(replay.payload.accepted, 6);
     assert.equal(replay.payload.stored, 0);
@@ -899,7 +1131,11 @@ test("cloud persists full LCP telemetry batches with idempotency, quarantine, an
     const observations = await api(baseUrl, "/v1/telemetry/observations");
     assert.equal(observations.response.status, 200);
     assert.equal(observations.payload.schema_version, "observation-page.v1");
-    assert.ok(observations.payload.items.some((item) => item.event_id === "evt_obs_1" && item.event_type === "agent_observation"));
+    assert.ok(
+      observations.payload.items.some(
+        (item) => item.event_id === "evt_obs_1" && item.event_type === "agent_observation"
+      )
+    );
 
     const enforcement = await api(baseUrl, "/v1/telemetry/enforcement-status");
     assert.ok(enforcement.payload.items.some((item) => item.event_id === "evt_enforce_1"));
@@ -926,7 +1162,9 @@ test("cloud persists full LCP telemetry batches with idempotency, quarantine, an
     assert.ok(Array.isArray(exportJson.payload));
     assert.ok(exportJson.payload.some((item) => item.event_id === "evt_usage_1"));
 
-    const exportCsvResponse = await fetch(`${baseUrl}/v1/tenants/local/telemetry/export?format=csv`);
+    const exportCsvResponse = await fetch(
+      `${baseUrl}/v1/tenants/local/telemetry/export?format=csv`
+    );
     assert.equal(exportCsvResponse.status, 200);
     assert.match(exportCsvResponse.headers.get("content-type") || "", /text\/csv/);
     const exportCsv = await exportCsvResponse.text();
@@ -974,18 +1212,35 @@ test("cloud boots empty of fabricated fleet data and populates only via real ing
     // Real ingest populates the fleet.
     await api(baseUrl, "/enroll", {
       method: "POST",
-      body: { hostname: "REAL-NODE", device_id: "device_real_1", lcp_id: "lcp_real_1", os_family: "linux" }
+      body: {
+        hostname: "REAL-NODE",
+        device_id: "device_real_1",
+        lcp_id: "lcp_real_1",
+        os_family: "linux"
+      }
     });
     const afterEnroll = await api(baseUrl, "/api/fleet");
     assert.equal(afterEnroll.payload.local_control_planes.length, 1);
-    assert.ok(afterEnroll.payload.tree.some((node) => node.type === "lcp" && node.id === "lcp_real_1"));
+    assert.ok(
+      afterEnroll.payload.tree.some((node) => node.type === "lcp" && node.id === "lcp_real_1")
+    );
 
     await api(baseUrl, "/api/entities/ingest", {
       method: "POST",
-      body: { device_id: "device_real_1", lcp_id: "lcp_real_1", snapshot: { agents: [{ agent_id: "agent_real_1", name: "Real Agent", trust_level: "trusted" }] } }
+      body: {
+        device_id: "device_real_1",
+        lcp_id: "lcp_real_1",
+        snapshot: {
+          agents: [{ agent_id: "agent_real_1", name: "Real Agent", trust_level: "trusted" }]
+        }
+      }
     });
     const afterEntities = await api(baseUrl, "/api/fleet");
-    assert.ok(afterEntities.payload.local_entities.some((entity) => entity.id.includes("agent_real_1") || entity.name === "Real Agent"));
+    assert.ok(
+      afterEntities.payload.local_entities.some(
+        (entity) => entity.id.includes("agent_real_1") || entity.name === "Real Agent"
+      )
+    );
   });
 });
 
@@ -997,12 +1252,25 @@ test("registry sync ingests LCP registry objects and bridged telemetry", async (
       body: {
         tenant_id: "local",
         items: [
-          { type: "agent", data: { agent_id: "agent_sync_test", name: "Synced Agent", trust_level: "trusted" } },
+          {
+            type: "agent",
+            data: { agent_id: "agent_sync_test", name: "Synced Agent", trust_level: "trusted" }
+          },
           { type: "tool", data: { tool_id: "tool_sync_test", name: "Synced Tool" } },
           { type: "resource", data: { resource_id: "res_sync_test", name: "Synced Resource" } },
           { type: "mcp_server", data: { id: "mcp_sync_test", name: "Synced MCP Server" } },
-          { type: "telemetry_tool_invocation", data: { event_id: "evt_sync_tool_inv", tool_id: "tool_sync_test", agent_id: "agent_sync_test" } },
-          { type: "telemetry_policy_deployment", data: { event_id: "evt_sync_policy_dep", policy_id: "pol_sync" } }
+          {
+            type: "telemetry_tool_invocation",
+            data: {
+              event_id: "evt_sync_tool_inv",
+              tool_id: "tool_sync_test",
+              agent_id: "agent_sync_test"
+            }
+          },
+          {
+            type: "telemetry_policy_deployment",
+            data: { event_id: "evt_sync_policy_dep", policy_id: "pol_sync" }
+          }
         ]
       }
     });
@@ -1017,10 +1285,16 @@ test("registry sync ingests LCP registry objects and bridged telemetry", async (
     assert.ok(JSON.stringify(agents.payload).includes("agent_sync_test"));
 
     const toolInvocations = await api(baseUrl, "/v1/tenants/local/logs/tool-invocations");
-    assert.ok(toolInvocations.payload.tool_invocations.some((item) => item.event_id === "evt_sync_tool_inv"));
+    assert.ok(
+      toolInvocations.payload.tool_invocations.some((item) => item.event_id === "evt_sync_tool_inv")
+    );
 
     const policyDeployments = await api(baseUrl, "/v1/tenants/local/logs/policy-deployments");
-    assert.ok(policyDeployments.payload.policy_deployments.some((item) => item.event_id === "evt_sync_policy_dep"));
+    assert.ok(
+      policyDeployments.payload.policy_deployments.some(
+        (item) => item.event_id === "evt_sync_policy_dep"
+      )
+    );
   });
 });
 
@@ -1052,7 +1326,12 @@ test("cost and token reporting aggregates usage by device, user, agent, tenant, 
               lcp_id: "lcp_report_test",
               provider: "Anthropic",
               model: "claude-sonnet-4",
-              tokens: { input_tokens: 1000, output_tokens: 400, total_tokens: 1400, estimated: false },
+              tokens: {
+                input_tokens: 1000,
+                output_tokens: 400,
+                total_tokens: 1400,
+                estimated: false
+              },
               cost: { currency: "USD", total_cost: 1.25 }
             }
           }
@@ -1067,7 +1346,10 @@ test("cost and token reporting aggregates usage by device, user, agent, tenant, 
     assert.equal(overview.payload.schema_version, "pollek.cloud.cost-token-overview.v1");
     assert.equal(overview.payload.scope, "all_tenants");
     for (const dimension of ["device", "user", "agent", "tenant", "model", "provider"]) {
-      assert.ok(Array.isArray(overview.payload.categories[dimension]), `missing category ${dimension}`);
+      assert.ok(
+        Array.isArray(overview.payload.categories[dimension]),
+        `missing category ${dimension}`
+      );
     }
     assert.ok(overview.payload.totals.total_tokens >= 1400);
     assert.ok(overview.payload.totals.cost_cents >= 125);
@@ -1094,35 +1376,56 @@ test("cost and token reporting aggregates usage by device, user, agent, tenant, 
     assert.equal(reportAgent.total_tokens, 1400);
 
     const byDevice = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=device");
-    const reportDevice = byDevice.payload.groups.find((group) => group.key === "device_report_test");
+    const reportDevice = byDevice.payload.groups.find(
+      (group) => group.key === "device_report_test"
+    );
     assert.ok(reportDevice, "expected report device group");
     assert.equal(reportDevice.total_tokens, 1400);
 
     const byTenant = await api(baseUrl, "/api/reports/cost-tokens?group_by=tenant");
     assert.ok(byTenant.payload.groups.some((group) => group.key === "local"));
 
-    const csvResponse = await fetch(`${baseUrl}/v1/tenants/local/reports/cost-tokens?group_by=user&format=csv`);
+    const csvResponse = await fetch(
+      `${baseUrl}/v1/tenants/local/reports/cost-tokens?group_by=user&format=csv`
+    );
     assert.equal(csvResponse.status, 200);
     assert.match(csvResponse.headers.get("content-type") || "", /text\/csv/);
     const csv = await csvResponse.text();
-    assert.match(csv, /group_by,key,label,input_tokens,output_tokens,cached_input_tokens,total_tokens,cost_cents/);
+    assert.match(
+      csv,
+      /group_by,key,label,input_tokens,output_tokens,cached_input_tokens,total_tokens,cost_cents/
+    );
     assert.match(csv, /report-user/);
 
     // Time-range filtering: the event is dated 2026-07-13; a window that ends
     // before it must exclude it, and a window covering it must include it.
-    const beforeRange = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=user&from=2026-01-01&to=2026-01-31");
+    const beforeRange = await api(
+      baseUrl,
+      "/v1/tenants/local/reports/cost-tokens?group_by=user&from=2026-01-01&to=2026-01-31"
+    );
     assert.equal(beforeRange.response.status, 200);
     assert.equal(beforeRange.payload.range.applied, true);
     assert.equal(beforeRange.payload.range.from, "2026-01-01T00:00:00.000Z");
     assert.equal(beforeRange.payload.range.to, "2026-01-31T23:59:59.999Z");
-    assert.ok(!beforeRange.payload.groups.some((group) => group.key === "corp\\report-user"), "out-of-range window must exclude the event");
+    assert.ok(
+      !beforeRange.payload.groups.some((group) => group.key === "corp\\report-user"),
+      "out-of-range window must exclude the event"
+    );
 
-    const coveringRange = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens?group_by=user&from=2026-07-13&to=2026-07-13");
-    const coveringUser = coveringRange.payload.groups.find((group) => group.key === "corp\\report-user");
+    const coveringRange = await api(
+      baseUrl,
+      "/v1/tenants/local/reports/cost-tokens?group_by=user&from=2026-07-13&to=2026-07-13"
+    );
+    const coveringUser = coveringRange.payload.groups.find(
+      (group) => group.key === "corp\\report-user"
+    );
     assert.ok(coveringUser, "covering window must include the event");
     assert.equal(coveringUser.total_tokens, 1400);
 
-    const rangedOverview = await api(baseUrl, "/v1/tenants/local/reports/cost-tokens/overview?from=2026-01-01&to=2026-01-31");
+    const rangedOverview = await api(
+      baseUrl,
+      "/v1/tenants/local/reports/cost-tokens/overview?from=2026-01-01&to=2026-01-31"
+    );
     assert.equal(rangedOverview.payload.range.applied, true);
     assert.equal(rangedOverview.payload.totals.total_tokens, 0);
   });
@@ -1177,24 +1480,32 @@ test("admin IAM and billing workflows enforce tenant context and redact secrets"
     assert.equal(accepted.payload.membership.tenant_id, tenantId);
     assert.equal(accepted.payload.session.token_type, "Bearer");
 
-    const roleUpdate = await api(baseUrl, `/v1/tenants/${tenantId}/members/${accepted.payload.account.id}/roles`, {
-      method: "POST",
-      body: {
-        roles: ["operator"],
-        principal: `user:${admin.account_id}`,
-        actor_id: admin.account_id
+    const roleUpdate = await api(
+      baseUrl,
+      `/v1/tenants/${tenantId}/members/${accepted.payload.account.id}/roles`,
+      {
+        method: "POST",
+        body: {
+          roles: ["operator"],
+          principal: `user:${admin.account_id}`,
+          actor_id: admin.account_id
+        }
       }
-    });
+    );
     assert.equal(roleUpdate.response.status, 200);
     assert.deepEqual(roleUpdate.payload.member.roles, ["operator"]);
 
-    const removed = await api(baseUrl, `/v1/tenants/${tenantId}/members/${accepted.payload.account.id}`, {
-      method: "DELETE",
-      body: {
-        principal: `user:${admin.account_id}`,
-        actor_id: admin.account_id
+    const removed = await api(
+      baseUrl,
+      `/v1/tenants/${tenantId}/members/${accepted.payload.account.id}`,
+      {
+        method: "DELETE",
+        body: {
+          principal: `user:${admin.account_id}`,
+          actor_id: admin.account_id
+        }
       }
-    });
+    );
     assert.equal(removed.response.status, 200);
     assert.equal(removed.payload.member.status, "removed");
 
@@ -1246,7 +1557,10 @@ test("admin IAM and billing workflows enforce tenant context and redact secrets"
       }
     });
     assert.equal(payment.response.status, 201);
-    assert.doesNotMatch(JSON.stringify(payment.payload), /payment-token-secret|po-secret-reference/);
+    assert.doesNotMatch(
+      JSON.stringify(payment.payload),
+      /payment-token-secret|po-secret-reference/
+    );
 
     const invoices = await api(baseUrl, `/v1/tenants/${tenantId}/billing/invoices`);
     assert.equal(invoices.response.status, 200);
@@ -1259,8 +1573,14 @@ test("admin IAM and billing workflows enforce tenant context and redact secrets"
       type: "invoice.payment_succeeded",
       data: { tenant_id: tenantId }
     };
-    const webhook1 = await api(baseUrl, "/v1/billing/webhooks/manual-dev", { method: "POST", body: webhookBody });
-    const webhook2 = await api(baseUrl, "/v1/billing/webhooks/manual-dev", { method: "POST", body: webhookBody });
+    const webhook1 = await api(baseUrl, "/v1/billing/webhooks/manual-dev", {
+      method: "POST",
+      body: webhookBody
+    });
+    const webhook2 = await api(baseUrl, "/v1/billing/webhooks/manual-dev", {
+      method: "POST",
+      body: webhookBody
+    });
     assert.equal(webhook1.response.status, 202);
     assert.equal(webhook2.response.status, 200);
     assert.equal(webhook2.payload.event.status, "duplicate");
@@ -1276,7 +1596,14 @@ test("admin IAM and billing workflows enforce tenant context and redact secrets"
     const fleetJson = JSON.stringify(fleet.payload);
     assert.equal(fleet.response.status, 200);
     assert.doesNotMatch(fleetJson, /super-secret-value|payment-token-secret|po-secret-reference/);
-    assert.ok(fleet.payload.tenant_members.some((member) => member.tenant_id === tenantId && member.account_id === accepted.payload.account.id && member.status === "removed"));
+    assert.ok(
+      fleet.payload.tenant_members.some(
+        (member) =>
+          member.tenant_id === tenantId &&
+          member.account_id === accepted.payload.account.id &&
+          member.status === "removed"
+      )
+    );
   });
 });
 
@@ -1300,7 +1627,14 @@ test("billing usage exposes organization AI token and cost allocation", async (t
             tenant_id: "local",
             device_id: "device_billing_test",
             redaction_applied: true,
-            payload: { agent_id: "agent_billing", user_subject: "corp\\biller", provider: "Anthropic", model: "claude-sonnet-4", tokens: { input_tokens: 5000, output_tokens: 2000, total_tokens: 7000 }, cost: { currency: "USD", total_cost: 5.5 } }
+            payload: {
+              agent_id: "agent_billing",
+              user_subject: "corp\\biller",
+              provider: "Anthropic",
+              model: "claude-sonnet-4",
+              tokens: { input_tokens: 5000, output_tokens: 2000, total_tokens: 7000 },
+              cost: { currency: "USD", total_cost: 5.5 }
+            }
           }
         ]
       }
@@ -1324,12 +1658,33 @@ test("LCP usage ledger ingestion validates agent-first credit allocation", async
     // real enrollment flow first (empty Cloud has no pre-seeded LCP).
     const unknownLcp = await api(baseUrl, "/v1/tenants/local/lcp/usage-ledgers", {
       method: "POST",
-      body: { schema_version: "pollek.lcp.usage-ledger.v1", tenant_id: "local", lcp_id: "lcp_local", usage_entries: [{ agent_id: "a", device_id: "d", user_subject: "u", provider: "p", model: "m", total_tokens: 1 }] }
+      body: {
+        schema_version: "pollek.lcp.usage-ledger.v1",
+        tenant_id: "local",
+        lcp_id: "lcp_local",
+        usage_entries: [
+          {
+            agent_id: "a",
+            device_id: "d",
+            user_subject: "u",
+            provider: "p",
+            model: "m",
+            total_tokens: 1
+          }
+        ]
+      }
     });
     assert.equal(unknownLcp.response.status, 400);
     await api(baseUrl, "/enroll", {
       method: "POST",
-      body: { hostname: "DELL-WINDOWS", device_id: "device_local_windows", lcp_id: "lcp_local", os: "windows", os_family: "windows", os_version: "Windows 11 Pro 24H2" }
+      body: {
+        hostname: "DELL-WINDOWS",
+        device_id: "device_local_windows",
+        lcp_id: "lcp_local",
+        os: "windows",
+        os_family: "windows",
+        os_version: "Windows 11 Pro 24H2"
+      }
     });
 
     const valid = await api(baseUrl, "/v1/tenants/local/lcp/usage-ledgers", {
@@ -1429,13 +1784,18 @@ test("cross-OS LCP usage ledger fixtures ingest through tenant endpoint", async 
   await withDevServer(t, async (baseUrl) => {
     const fixtureNames = ["windows", "macos", "linux"];
     for (const fixtureName of fixtureNames) {
-      const fixture = JSON.parse(await readFile(`packages/contracts/fixtures/lcp-usage-ledger/${fixtureName}.json`, "utf8"));
+      const fixture = JSON.parse(
+        await readFile(`packages/contracts/fixtures/lcp-usage-ledger/${fixtureName}.json`, "utf8")
+      );
       assert.equal(fixture.schema_version, "pollek.lcp.usage-ledger.v1");
       assert.equal(fixture.os_family, fixtureName);
       assert.ok(fixture.usage_entries.length >= 1);
       assert.ok(fixture.usage_entries.every((entry) => entry.device_id === fixture.device_id));
 
-      const servedFixture = await api(baseUrl, `/contracts/fixtures/lcp-usage-ledger/${fixtureName}.json`);
+      const servedFixture = await api(
+        baseUrl,
+        `/contracts/fixtures/lcp-usage-ledger/${fixtureName}.json`
+      );
       assert.equal(servedFixture.response.status, 200);
       assert.equal(servedFixture.payload.ledger_id, fixture.ledger_id);
 
@@ -1443,7 +1803,13 @@ test("cross-OS LCP usage ledger fixtures ingest through tenant endpoint", async 
       // ledger is accepted as coming from a known LCP.
       await api(baseUrl, "/enroll", {
         method: "POST",
-        body: { hostname: fixture.usage_entries[0].device_name || fixture.usage_entries[0].device_id, device_id: fixture.usage_entries[0].device_id, lcp_id: fixture.lcp_id, os_family: fixture.os_family, os_version: fixture.os_version }
+        body: {
+          hostname: fixture.usage_entries[0].device_name || fixture.usage_entries[0].device_id,
+          device_id: fixture.usage_entries[0].device_id,
+          lcp_id: fixture.lcp_id,
+          os_family: fixture.os_family,
+          os_version: fixture.os_version
+        }
       });
 
       const result = await api(baseUrl, `/v1/tenants/${fixture.tenant_id}/lcp/usage-ledgers`, {
@@ -1453,13 +1819,19 @@ test("cross-OS LCP usage ledger fixtures ingest through tenant endpoint", async 
       assert.equal(result.response.status, 202);
       assert.equal(result.payload.ledger.accepted_count, fixture.usage_entries.length);
       assert.equal(result.payload.ledger.os_family, fixture.os_family);
-      assert.ok(result.payload.usage_records.every((record) => record.source === "lcp_usage_ledger"));
-      assert.ok(result.payload.usage_records.every((record) => record.os_family === fixture.os_family));
+      assert.ok(
+        result.payload.usage_records.every((record) => record.source === "lcp_usage_ledger")
+      );
+      assert.ok(
+        result.payload.usage_records.every((record) => record.os_family === fixture.os_family)
+      );
     }
 
     const fleet = await api(baseUrl, "/api/fleet");
     assert.equal(fleet.response.status, 200);
-    const osFamilies = new Set(fleet.payload.usage_records.map((record) => record.os_family).filter(Boolean));
+    const osFamilies = new Set(
+      fleet.payload.usage_records.map((record) => record.os_family).filter(Boolean)
+    );
     assert.ok(osFamilies.has("windows"));
     assert.ok(osFamilies.has("macos"));
     assert.ok(osFamilies.has("linux"));
@@ -1473,7 +1845,12 @@ test("cross-OS LCP usage ledger fixtures ingest through tenant endpoint", async 
 
 test("contract hub serves concrete schema artifacts", async (t) => {
   await withDevServer(t, async (baseUrl) => {
-    for (const artifactPath of ["/contracts/events.schema.json", "/contracts/bundle-manifest.schema.json", "/contracts/telemetry-envelope.schema.json", "/contracts/lcp-usage-ledger.schema.json"]) {
+    for (const artifactPath of [
+      "/contracts/events.schema.json",
+      "/contracts/bundle-manifest.schema.json",
+      "/contracts/telemetry-envelope.schema.json",
+      "/contracts/lcp-usage-ledger.schema.json"
+    ]) {
       const artifact = await api(baseUrl, artifactPath);
       assert.equal(artifact.response.status, 200);
       assert.equal(artifact.payload.$schema, "https://json-schema.org/draft/2020-12/schema");
@@ -1636,7 +2013,9 @@ test("console wires fleet operations controls", async () => {
   assert.match(css, /\.usage-device-card/);
   assert.match(css, /\.usage-model-chip/);
   assert.match(css, /\.entity-detail-card/);
-  assert.ok(app.includes('const sideNavAgentKinds = new Set(["agent", "registered_agent", "found_agent"]);'));
+  assert.ok(
+    app.includes('const sideNavAgentKinds = new Set(["agent", "registered_agent", "found_agent"]);')
+  );
   assert.match(app, /const sideNavEntityGroups = \[/);
   assert.match(app, /function navigationAgentGroup/);
   assert.match(app, /if \(!groupKind\) continue/);
@@ -1647,9 +2026,15 @@ test("console wires fleet operations controls", async () => {
   assert.ok(app.includes("button.style.paddingLeft = `${6 + depth * 10}px`;"));
   assert.match(app, /function entityGroupCollapsed\(key, defaultCollapsed, hasActiveEntity\)/);
   assert.match(app, /if \(app\.collapsedEntityGroups\.has\(key\)\) return true/);
-  assert.match(app, /function toggleEntityGroup\(key, defaultCollapsed = false, hasActiveEntity = false\)/);
+  assert.match(
+    app,
+    /function toggleEntityGroup\(key, defaultCollapsed = false, hasActiveEntity = false\)/
+  );
   assert.match(app, /toggleEntityGroup\(scopeGroup\.key, scopeDefaultCollapsed, scopeHasActive\)/);
-  assert.match(app, /toggleEntityGroup\(categoryKey, categoryDefaultCollapsed, categoryHasActive\)/);
+  assert.match(
+    app,
+    /toggleEntityGroup\(categoryKey, categoryDefaultCollapsed, categoryHasActive\)/
+  );
   assert.match(app, /async function syncEntities/);
   assert.match(app, /async function refreshLiveWatch/);
   assert.match(app, /async function dispatchConfigUpdate/);
@@ -1728,7 +2113,11 @@ test("static console assets stay ascii-only", async () => {
 
   for (const file of files) {
     const content = await readFile(file, "utf8");
-    assert.equal([...content].every((char) => char.charCodeAt(0) <= 127), true, `${file} contains non-ascii characters`);
+    assert.equal(
+      [...content].every((char) => char.charCodeAt(0) <= 127),
+      true,
+      `${file} contains non-ascii characters`
+    );
   }
 });
 
@@ -1737,11 +2126,21 @@ test("static console assets stay ascii-only", async () => {
 async function deployRealBundle(baseUrl) {
   await api(baseUrl, "/api/authz/tuples", {
     method: "POST",
-    body: { tenant_id: "local", principal: "user:local-dev-security-admin", relation: "admin", object: "tenant:local" }
+    body: {
+      tenant_id: "local",
+      principal: "user:local-dev-security-admin",
+      relation: "admin",
+      object: "tenant:local"
+    }
   });
   const deploy = await api(baseUrl, "/api/compliance/policy-bundles/deploy", {
     method: "POST",
-    body: { tenant_id: "local", bundle_id: "cmp_soc2_gdpr_data_access", approved_by: "local-dev-security-admin", reason: "phase-1 trust spine test" }
+    body: {
+      tenant_id: "local",
+      bundle_id: "cmp_soc2_gdpr_data_access",
+      approved_by: "local-dev-security-admin",
+      reason: "phase-1 trust spine test"
+    }
   });
   assert.equal(deploy.response.status, 201);
   const bundleId = deploy.payload?.bundle?.id || deploy.payload?.policy_bundle?.id;
@@ -1752,7 +2151,10 @@ async function deployRealBundle(baseUrl) {
 test("cloud emits provenance, SBOM and attestation signed inside the bundle (incl data.json)", async (t) => {
   await withDevServer(t, async (baseUrl) => {
     const bundleId = await deployRealBundle(baseUrl);
-    const manifestRes = await api(baseUrl, `/v1/policy-bundles/${encodeURIComponent(bundleId)}/manifest`);
+    const manifestRes = await api(
+      baseUrl,
+      `/v1/policy-bundles/${encodeURIComponent(bundleId)}/manifest`
+    );
     assert.equal(manifestRes.response.status, 200);
     const manifest = manifestRes.payload;
 
@@ -1783,14 +2185,19 @@ test("cloud emits provenance, SBOM and attestation signed inside the bundle (inc
     // Cloud's own verification is valid and carries a keyid.
     assert.equal(manifest.verification.status, "valid");
     assert.ok(manifest.signatures.length >= 1);
-    assert.ok(manifest.signatures[0].keyid && manifest.signatures[0].keyid.startsWith("pollek-cloud-ed25519-"));
+    assert.ok(
+      manifest.signatures[0].keyid &&
+        manifest.signatures[0].keyid.startsWith("pollek-cloud-ed25519-")
+    );
   });
 });
 
 test("emitted bundle signature verifies against the published signer allowlist key", async (t) => {
   await withDevServer(t, async (baseUrl) => {
     const bundleId = await deployRealBundle(baseUrl);
-    const manifest = (await api(baseUrl, `/v1/policy-bundles/${encodeURIComponent(bundleId)}/manifest`)).payload;
+    const manifest = (
+      await api(baseUrl, `/v1/policy-bundles/${encodeURIComponent(bundleId)}/manifest`)
+    ).payload;
     const allowlist = (await api(baseUrl, "/v1/trust/signer-allowlist")).payload;
 
     const signature = manifest.signatures[0];
@@ -1927,10 +2334,16 @@ test("contract hub serves the new trust-spine schema artifacts", async (t) => {
 
 test("enroll returns DEK-scheme SPIFFE id and real (env-driven) SPIRE bootstrap", async (t) => {
   await withDevServer(t, async (baseUrl) => {
-    const res = await api(baseUrl, "/enroll", { method: "POST", body: { hostname: "lcp-a", os: "linux" } });
+    const res = await api(baseUrl, "/enroll", {
+      method: "POST",
+      body: { hostname: "lcp-a", os: "linux" }
+    });
     assert.equal(res.response.status, 200);
     // DEK-locked SAN scheme, default trust domain, no legacy site/lcp segments.
-    assert.match(res.payload.spiffe_id, /^spiffe:\/\/pollek\.io\/tenant\/local\/device\/dev_[a-f0-9]+$/);
+    assert.match(
+      res.payload.spiffe_id,
+      /^spiffe:\/\/pollek\.io\/tenant\/local\/device\/dev_[a-f0-9]+$/
+    );
     assert.equal(res.payload.trust_domain, "spiffe://pollek.io");
     // Not provisioned yet -> honest nulls / pending, not a fabricated bundle.
     assert.equal(res.payload.spire_server_address, null);
@@ -1953,23 +2366,30 @@ test("spiffe-bundle endpoint reports pending until SPIRE provides a bundle", asy
 
 test("spiffe-bundle serves the configured bundle and SPIRE coordinates from env", async (t) => {
   const pem = "-----BEGIN CERTIFICATE-----\nMIITESTBUNDLE\n-----END CERTIFICATE-----\n";
-  await withDevServer(t, {
-    SPIRE_TRUST_BUNDLE: pem,
-    SPIRE_SERVER_ADDRESS: "spire.internal",
-    SPIRE_SERVER_PORT: "8081"
-  }, async (baseUrl) => {
-    const res = await api(baseUrl, "/v1/trust/spiffe-bundle");
-    assert.equal(res.payload.status, "configured");
-    assert.equal(res.payload.trust_bundle_pem, pem);
-    assert.deepEqual(res.payload.spire_server, { address: "spire.internal", port: 8081 });
-  });
+  await withDevServer(
+    t,
+    {
+      SPIRE_TRUST_BUNDLE: pem,
+      SPIRE_SERVER_ADDRESS: "spire.internal",
+      SPIRE_SERVER_PORT: "8081"
+    },
+    async (baseUrl) => {
+      const res = await api(baseUrl, "/v1/trust/spiffe-bundle");
+      assert.equal(res.payload.status, "configured");
+      assert.equal(res.payload.trust_bundle_pem, pem);
+      assert.deepEqual(res.payload.spire_server, { address: "spire.internal", port: 8081 });
+    }
+  );
 });
 
 test("mTLS enforce mode fails closed without an SVID and rejects a tenant mismatch", async (t) => {
   await withDevServer(t, { POLLEK_MTLS_MODE: "enforce" }, async (baseUrl) => {
     const protectedPath = "/v1/tenants/local/telemetry/events";
     // No SVID header -> 401 (fail closed).
-    const missing = await api(baseUrl, protectedPath, { method: "POST", body: { schema_version: "telemetry-envelope.v1" } });
+    const missing = await api(baseUrl, protectedPath, {
+      method: "POST",
+      body: { schema_version: "telemetry-envelope.v1" }
+    });
     assert.equal(missing.response.status, 401);
     assert.equal(missing.payload.error, "svid_required");
 
@@ -1985,10 +2405,21 @@ test("mTLS enforce mode fails closed without an SVID and rejects a tenant mismat
     // Matching tenant SVID -> passes the identity gate (not 401/403).
     const ok = await api(baseUrl, protectedPath, {
       method: "POST",
-      body: { schema_version: "telemetry-envelope.v1", event_id: "e1", event_type: "test.v1", tenant_id: "local", device_id: "d1", timestamp: new Date().toISOString(), payload: {} },
+      body: {
+        schema_version: "telemetry-envelope.v1",
+        event_id: "e1",
+        event_type: "test.v1",
+        tenant_id: "local",
+        device_id: "d1",
+        timestamp: new Date().toISOString(),
+        payload: {}
+      },
       headers: { "x-pollek-spiffe-id": "spiffe://pollek.io/tenant/local/device/d1" }
     });
-    assert.ok(ok.response.status !== 401 && ok.response.status !== 403, `identity gate passed (status ${ok.response.status})`);
+    assert.ok(
+      ok.response.status !== 401 && ok.response.status !== 403,
+      `identity gate passed (status ${ok.response.status})`
+    );
 
     // Enrollment is exempt (chicken-and-egg): a device enrolls to obtain its SVID.
     const enroll = await api(baseUrl, "/enroll", { method: "POST", body: { hostname: "lcp-b" } });
@@ -2000,8 +2431,19 @@ test("mTLS enforce accepts the Envoy XFCC header form", async (t) => {
   await withDevServer(t, { POLLEK_MTLS_MODE: "enforce" }, async (baseUrl) => {
     const ok = await api(baseUrl, "/v1/tenants/local/telemetry/events", {
       method: "POST",
-      body: { schema_version: "telemetry-envelope.v1", event_id: "e2", event_type: "test.v1", tenant_id: "local", device_id: "d2", timestamp: new Date().toISOString(), payload: {} },
-      headers: { "x-forwarded-client-cert": 'By=spiffe://pollek.io/cloud;URI=spiffe://pollek.io/tenant/local/device/d2;Hash=abc' }
+      body: {
+        schema_version: "telemetry-envelope.v1",
+        event_id: "e2",
+        event_type: "test.v1",
+        tenant_id: "local",
+        device_id: "d2",
+        timestamp: new Date().toISOString(),
+        payload: {}
+      },
+      headers: {
+        "x-forwarded-client-cert":
+          "By=spiffe://pollek.io/cloud;URI=spiffe://pollek.io/tenant/local/device/d2;Hash=abc"
+      }
     });
     assert.ok(ok.response.status !== 401 && ok.response.status !== 403);
   });
@@ -2011,9 +2453,20 @@ test("mTLS monitor mode allows missing SVID but records a warning; off mode is u
   await withDevServer(t, { POLLEK_MTLS_MODE: "monitor" }, async (baseUrl) => {
     const res = await api(baseUrl, "/v1/tenants/local/telemetry/events", {
       method: "POST",
-      body: { schema_version: "telemetry-envelope.v1", event_id: "e3", event_type: "test.v1", tenant_id: "local", device_id: "d3", timestamp: new Date().toISOString(), payload: {} }
+      body: {
+        schema_version: "telemetry-envelope.v1",
+        event_id: "e3",
+        event_type: "test.v1",
+        tenant_id: "local",
+        device_id: "d3",
+        timestamp: new Date().toISOString(),
+        payload: {}
+      }
     });
-    assert.ok(res.response.status !== 401 && res.response.status !== 403, "monitor mode does not fail closed");
+    assert.ok(
+      res.response.status !== 401 && res.response.status !== 403,
+      "monitor mode does not fail closed"
+    );
   });
 });
 
@@ -2061,7 +2514,15 @@ function jwtEnv(jwksUrl, mode) {
 
 function baseClaims(overrides = {}) {
   const now = Math.floor(Date.now() / 1000);
-  return { iss: ISSUER, aud: AUDIENCE, sub: "device-1", tenant_id: "local", iat: now, exp: now + 300, ...overrides };
+  return {
+    iss: ISSUER,
+    aud: AUDIENCE,
+    sub: "device-1",
+    tenant_id: "local",
+    iat: now,
+    exp: now + 300,
+    ...overrides
+  };
 }
 
 test("JWT enforce: valid same-tenant token passes the identity gate", async (t) => {
@@ -2072,9 +2533,20 @@ test("JWT enforce: valid same-tenant token passes the identity gate", async (t) 
     const res = await api(baseUrl, PROTECTED, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
-      body: { schema_version: "telemetry-envelope.v1", event_id: "e1", event_type: "t.v1", tenant_id: "local", device_id: "d1", timestamp: new Date().toISOString(), payload: {} }
+      body: {
+        schema_version: "telemetry-envelope.v1",
+        event_id: "e1",
+        event_type: "t.v1",
+        tenant_id: "local",
+        device_id: "d1",
+        timestamp: new Date().toISOString(),
+        payload: {}
+      }
     });
-    assert.ok(res.response.status !== 401 && res.response.status !== 403, `passed gate (status ${res.response.status})`);
+    assert.ok(
+      res.response.status !== 401 && res.response.status !== 403,
+      `passed gate (status ${res.response.status})`
+    );
   });
 });
 
@@ -2099,21 +2571,32 @@ test("JWT enforce: missing, expired, wrong-audience, wrong-issuer, and bad-signa
   const other = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
   const jwksUrl = await withJwksServer(t, h.jwk);
   await withDevServer(t, jwtEnv(jwksUrl, "enforce"), async (baseUrl) => {
-    const post = (headers) => api(baseUrl, PROTECTED, { method: "POST", headers, body: { schema_version: "telemetry-envelope.v1" } });
+    const post = (headers) =>
+      api(baseUrl, PROTECTED, {
+        method: "POST",
+        headers,
+        body: { schema_version: "telemetry-envelope.v1" }
+      });
 
     const missing = await post({});
     assert.equal(missing.response.status, 401);
     assert.equal(missing.payload.error, "jwt_required");
 
-    const expired = await post({ authorization: `Bearer ${h.mint(baseClaims({ exp: Math.floor(Date.now() / 1000) - 10 }))}` });
+    const expired = await post({
+      authorization: `Bearer ${h.mint(baseClaims({ exp: Math.floor(Date.now() / 1000) - 10 }))}`
+    });
     assert.equal(expired.response.status, 401);
     assert.equal(expired.payload.error, "jwt_expired");
 
-    const wrongAud = await post({ authorization: `Bearer ${h.mint(baseClaims({ aud: "someone-else" }))}` });
+    const wrongAud = await post({
+      authorization: `Bearer ${h.mint(baseClaims({ aud: "someone-else" }))}`
+    });
     assert.equal(wrongAud.response.status, 401);
     assert.equal(wrongAud.payload.error, "jwt_audience_mismatch");
 
-    const wrongIss = await post({ authorization: `Bearer ${h.mint(baseClaims({ iss: "https://evil.test/realms/x" }))}` });
+    const wrongIss = await post({
+      authorization: `Bearer ${h.mint(baseClaims({ iss: "https://evil.test/realms/x" }))}`
+    });
     assert.equal(wrongIss.response.status, 401);
     assert.equal(wrongIss.payload.error, "jwt_issuer_mismatch");
 
@@ -2132,7 +2615,9 @@ test("JWT enforce: missing, expired, wrong-audience, wrong-issuer, and bad-signa
     assert.equal(missingExp.payload.error, "jwt_missing_exp");
 
     // Fail closed on a non-numeric exp.
-    const nonNumericExp = await post({ authorization: `Bearer ${h.mint(baseClaims({ exp: "2099-01-01" }))}` });
+    const nonNumericExp = await post({
+      authorization: `Bearer ${h.mint(baseClaims({ exp: "2099-01-01" }))}`
+    });
     assert.equal(nonNumericExp.response.status, 401);
     assert.equal(nonNumericExp.payload.error, "jwt_missing_exp");
   });
@@ -2144,9 +2629,20 @@ test("JWT monitor: invalid token is allowed (fail-open) for observation", async 
   await withDevServer(t, jwtEnv(jwksUrl, "monitor"), async (baseUrl) => {
     const res = await api(baseUrl, PROTECTED, {
       method: "POST",
-      body: { schema_version: "telemetry-envelope.v1", event_id: "m1", event_type: "t.v1", tenant_id: "local", device_id: "d1", timestamp: new Date().toISOString(), payload: {} }
+      body: {
+        schema_version: "telemetry-envelope.v1",
+        event_id: "m1",
+        event_type: "t.v1",
+        tenant_id: "local",
+        device_id: "d1",
+        timestamp: new Date().toISOString(),
+        payload: {}
+      }
     });
-    assert.ok(res.response.status !== 401 && res.response.status !== 403, "monitor does not fail closed");
+    assert.ok(
+      res.response.status !== 401 && res.response.status !== 403,
+      "monitor does not fail closed"
+    );
   });
 });
 
@@ -2165,7 +2661,12 @@ test("enroll echoes the registered lcp_id back to the sync client", async (t) =>
   await withDevServer(t, async (baseUrl) => {
     const res = await api(baseUrl, "/enroll", {
       method: "POST",
-      body: { hostname: "wallet-linux", os: "linux", device_id: "device_wallet", lcp_id: "lcp_wallet" }
+      body: {
+        hostname: "wallet-linux",
+        os: "linux",
+        device_id: "device_wallet",
+        lcp_id: "lcp_wallet"
+      }
     });
     assert.equal(res.response.status, 200);
     assert.equal(res.payload.lcp_id, "lcp_wallet");
@@ -2203,7 +2704,10 @@ test("a revoked retired key is published as revoked, not active", async (t) => {
   const retiredKeyid = `pollek-cloud-ed25519-${crypto.createHash("sha256").update(Buffer.from(retiredRaw, "base64url")).digest("hex").slice(0, 16)}`;
 
   await withDevServer(t, { POLLEK_TRUST_RETIRED_PUBKEYS: retiredRaw }, async (baseUrl) => {
-    await api(baseUrl, "/v1/trust/revocations", { method: "POST", body: { revoked_key_ids: [retiredKeyid], reason: "rotation retirement" } });
+    await api(baseUrl, "/v1/trust/revocations", {
+      method: "POST",
+      body: { revoked_key_ids: [retiredKeyid], reason: "rotation retirement" }
+    });
     const res = await api(baseUrl, "/v1/trust/signer-allowlist");
     const entry = res.payload.signers.find((s) => s.keyid === retiredKeyid);
     assert.ok(entry);
@@ -2218,7 +2722,10 @@ async function mintSessionToken(baseUrl) {
     method: "POST",
     body: { organization_name: "Acme Test Org", admin_email: "admin@acme.test" }
   });
-  assert.ok(signup.response.status === 200 || signup.response.status === 201, `signup mints a session (status ${signup.response.status})`);
+  assert.ok(
+    signup.response.status === 200 || signup.response.status === 201,
+    `signup mints a session (status ${signup.response.status})`
+  );
   return signup.payload.session.access_token;
 }
 
@@ -2236,12 +2743,17 @@ test("session enforce: console/admin boundary needs a valid session; public + ma
 
     // A valid session token lets the console boundary through.
     const token = await mintSessionToken(baseUrl);
-    const withSession = await api(baseUrl, "/api/fleet", { headers: { authorization: `Bearer ${token}` } });
+    const withSession = await api(baseUrl, "/api/fleet", {
+      headers: { authorization: `Bearer ${token}` }
+    });
     assert.equal(withSession.response.status, 200);
 
     // Machine (DEK-facing) boundary is governed by the JWT gate, not the session gate:
     // no session token, but the session gate must NOT reject it with session_required.
-    const machine = await api(baseUrl, "/v1/tenants/local/telemetry/events", { method: "POST", body: { schema_version: "telemetry-envelope.v1" } });
+    const machine = await api(baseUrl, "/v1/tenants/local/telemetry/events", {
+      method: "POST",
+      body: { schema_version: "telemetry-envelope.v1" }
+    });
     assert.notEqual(machine.payload?.error, "session_required");
   });
 });

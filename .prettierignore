@@ -1,0 +1,16 @@
+node_modules/
+coverage/
+dist/
+pgdata/
+
+# Generated artifacts (owned by the contract generators / npm)
+packages/sdk/pollek-cloud-client.mjs
+packages/contracts/openapi.json
+package-lock.json
+
+# Data, schemas, templates, and docs are authored/asserted in a fixed shape;
+# Prettier is scoped to JS/MJS source only.
+**/*.json
+**/*.html
+**/*.css
+**/*.md

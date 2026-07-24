@@ -7,7 +7,14 @@ const rootDir = path.resolve(__dirname, "..");
 const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
 const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
 
-const RUNTIME_PATHS = ["/health", "/api/cloud/status", "/api/contract-hub/drift", "/api/persistence/status", "/api/persistence/flush", "/api/entities/watch"];
+const RUNTIME_PATHS = [
+  "/health",
+  "/api/cloud/status",
+  "/api/contract-hub/drift",
+  "/api/persistence/status",
+  "/api/persistence/flush",
+  "/api/entities/watch"
+];
 
 const PATH_METHODS = {
   "/health": ["get"],
@@ -201,27 +208,29 @@ function operationFor(contract, method, apiPath) {
     summary: `Pollek Cloud ${method.toUpperCase()} ${apiPath}`,
     operationId: operationId(method, apiPath),
     parameters: parameters.length ? parameters : undefined,
-    security: requiresOAuth || requiresSpiffe
-      ? [
-          {
-            ...(requiresOAuth ? { bearerAuth: [] } : {}),
-            ...(requiresSpiffe ? { spiffeMtls: [] } : {})
-          }
-        ]
-      : undefined,
-    requestBody: method === "get"
-      ? undefined
-      : {
-          required: false,
-          content: {
-            "application/json": {
-              schema: { type: "object", additionalProperties: true }
+    security:
+      requiresOAuth || requiresSpiffe
+        ? [
+            {
+              ...(requiresOAuth ? { bearerAuth: [] } : {}),
+              ...(requiresSpiffe ? { spiffeMtls: [] } : {})
             }
-          }
-        },
+          ]
+        : undefined,
+    requestBody:
+      method === "get"
+        ? undefined
+        : {
+            required: false,
+            content: {
+              "application/json": {
+                schema: { type: "object", additionalProperties: true }
+              }
+            }
+          },
     responses: isEventStream
       ? {
-          "200": {
+          200: {
             description: "Server-Sent Events stream for Contract Hub and hot-reload updates",
             content: {
               "text/event-stream": {
@@ -231,7 +240,7 @@ function operationFor(contract, method, apiPath) {
           }
         }
       : {
-          "200": {
+          200: {
             description: "Successful local development response",
             content: {
               "application/json": {
@@ -239,11 +248,11 @@ function operationFor(contract, method, apiPath) {
               }
             }
           },
-          "202": { description: "Accepted for asynchronous processing" },
-          "400": { description: "Invalid request" },
-          "401": { description: "Authentication required" },
-          "403": { description: "Tenant entitlement or authorization denied" },
-          "404": { description: "Resource not found" }
+          202: { description: "Accepted for asynchronous processing" },
+          400: { description: "Invalid request" },
+          401: { description: "Authentication required" },
+          403: { description: "Tenant entitlement or authorization denied" },
+          404: { description: "Resource not found" }
         },
     "x-pollek-interfaces": interfaceIds,
     "x-pollek-direction": direction,
@@ -268,9 +277,12 @@ export function buildOpenApi(contract) {
     info: {
       title: "Pollek Cloud Contract Hub API",
       version: contract.contract_version,
-      description: "Local development OpenAPI artifact generated from the Contract Hub discovery contract."
+      description:
+        "Local development OpenAPI artifact generated from the Contract Hub discovery contract."
     },
-    servers: [{ url: "http://127.0.0.1:8790", description: "Local Pollek Cloud development server" }],
+    servers: [
+      { url: "http://127.0.0.1:8790", description: "Local Pollek Cloud development server" }
+    ],
     paths,
     components: {
       securitySchemes: {

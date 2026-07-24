@@ -50,63 +50,80 @@ results.push(await request("cloud_health", `${cloudUrl}/health`));
 results.push(await request("cloud_contract", `${cloudUrl}/.well-known/pollek-contract`));
 results.push(await request("lcp_contract", `${lcpUrl}/.well-known/pollek-contract`));
 
-results.push(await request("lcp_configure_cloud_profile", `${lcpUrl}/v1/tenants/local/pdp/cloud`, {
-  method: "PATCH",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({
-    tenant_id: "local",
-    device_id: "local",
-    pdp_endpoint: cloudUrl,
-    contract_version: "2026.06.29",
-    auth_method: "spiffe-oauth-mtls-dev",
-    status: "configured",
-    manual_override_enabled: false,
-    health: {
+results.push(
+  await request("lcp_configure_cloud_profile", `${lcpUrl}/v1/tenants/local/pdp/cloud`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      tenant_id: "local",
+      device_id: "local",
+      pdp_endpoint: cloudUrl,
+      contract_version: "2026.06.29",
+      auth_method: "spiffe-oauth-mtls-dev",
       status: "configured",
-      detail: "Configured by scripts/test-lcp-connection.mjs"
-    }
-  })
-}));
-
-results.push(await request("lcp_probe_cloud_contract", `${lcpUrl}/v1/tenants/local/pdp/cloud/probe`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: "{}"
-}));
-
-results.push(await request("lcp_capability_snapshot_v2", `${lcpUrl}/v1/tenants/local/devices/local/capability-snapshot-v2`));
-
-results.push(await request("cloud_telemetry_batch", `${cloudUrl}/v1/telemetry/batches`, {
-  method: "POST",
-  headers: {
-    "content-type": "application/json",
-    "x-pollek-tenant-id": "local",
-    "x-pollek-device-id": "local"
-  },
-  body: JSON.stringify({
-    schema_version: "telemetry-batch.v1",
-    tenant_id: "local",
-    device_id: "local",
-    batch_id: `batch_${Date.now()}`,
-    events: [
-      {
-        event_id: `evt_${Date.now()}`,
-        schema_version: "1.0",
-        event_type: "policy.decision.v1",
-        severity: "info",
-        payload: {
-          source: "local-protocol-test",
-          cloud_url: cloudUrl,
-          lcp_url: lcpUrl
-        }
+      manual_override_enabled: false,
+      health: {
+        status: "configured",
+        detail: "Configured by scripts/test-lcp-connection.mjs"
       }
-    ]
+    })
   })
-}));
+);
+
+results.push(
+  await request("lcp_probe_cloud_contract", `${lcpUrl}/v1/tenants/local/pdp/cloud/probe`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}"
+  })
+);
+
+results.push(
+  await request(
+    "lcp_capability_snapshot_v2",
+    `${lcpUrl}/v1/tenants/local/devices/local/capability-snapshot-v2`
+  )
+);
+
+results.push(
+  await request("cloud_telemetry_batch", `${cloudUrl}/v1/telemetry/batches`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-pollek-tenant-id": "local",
+      "x-pollek-device-id": "local"
+    },
+    body: JSON.stringify({
+      schema_version: "telemetry-batch.v1",
+      tenant_id: "local",
+      device_id: "local",
+      batch_id: `batch_${Date.now()}`,
+      events: [
+        {
+          event_id: `evt_${Date.now()}`,
+          schema_version: "1.0",
+          event_type: "policy.decision.v1",
+          severity: "info",
+          payload: {
+            source: "local-protocol-test",
+            cloud_url: cloudUrl,
+            lcp_url: lcpUrl
+          }
+        }
+      ]
+    })
+  })
+);
 
 const failed = results.filter((result) => !result.ok);
 console.log("");
-console.log(JSON.stringify({ ok: failed.length === 0, failed: failed.map((item) => item.name), results }, null, 2));
+console.log(
+  JSON.stringify(
+    { ok: failed.length === 0, failed: failed.map((item) => item.name), results },
+    null,
+    2
+  )
+);
 
 if (failed.length > 0) {
   process.exitCode = 1;

@@ -24,10 +24,18 @@ npm run dev        # start the server at http://127.0.0.1:8790
 npm run audit:foundation
 ```
 
-It syntax-checks the server modules and the web bundle, verifies the Contract Hub
-artifacts are in sync, and runs the full test suite. CI runs the same command, so a green
-local gate means a green CI. PostgreSQL integration tests are skipped unless `PG_TEST_URL`
-(and, for the row-level-security assertions, a non-superuser `PG_TEST_APP_URL`) are set.
+It runs ESLint and Prettier's format check, syntax-checks the server modules and the web
+bundle, verifies the Contract Hub artifacts are in sync, and runs the full test suite. CI runs
+the same command, so a green local gate means a green CI. PostgreSQL integration tests are
+skipped unless `PG_TEST_URL` (and, for the row-level-security assertions, a non-superuser
+`PG_TEST_APP_URL`) are set.
+
+## Linting & formatting
+
+- ESLint (flat config in `eslint.config.js`): `npm run lint` (or `npm run lint:fix`).
+- Prettier (config in `.prettierrc.json`, scoped to JS/MJS): `npm run format` to write,
+  `npm run format:check` to verify. Generated artifacts and HTML/CSS/JSON/Markdown are in
+  `.prettierignore`.
 
 ## Core principles (please preserve them)
 
