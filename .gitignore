@@ -1,9 +1,29 @@
+# Dependencies
 node_modules/
-.turbo/
+
+# Build / tooling output
 dist/
 coverage/
+*.tsbuildinfo
+
+# Environment (keep .env.example)
 .env
 .env.*
 !.env.example
+
+# Logs
 *.log
+
+# Local runtime state (dev file-snapshot persistence)
 pollek-cloud-dev-state.json
+pollek-cloud-dev-state.json.tmp
+
+# Local Postgres data used for integration testing
+pgdata/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
