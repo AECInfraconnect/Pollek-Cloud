@@ -71,49 +71,62 @@ test("postgres: runtime store round-trips the snapshot", { skip: !runDb }, async
   assert.equal(loaded.devices[0][0], "dev_a");
 });
 
-test("postgres: items are tagged with the owning tenant, system rows shared", { skip: !runDb }, async () => {
-  await db.persistSnapshot(sampleSnapshot(), persistedFleetKeys);
-  const rows = await db.withTenant(db._internals.ALL_TENANTS, async (client) =>
-    (await client.query("SELECT collection, tenant_id FROM runtime_items")).rows);
-  const byTenant = (t) => rows.filter((r) => r.tenant_id === t).length;
-  assert.ok(byTenant("tenant_a") >= 1, "tenant_a rows tagged");
-  assert.ok(byTenant("tenant_b") >= 1, "tenant_b rows tagged");
-  // Non-tenant config (bundleGeneration/trustRevocations/tenant) lands in __system__.
-  assert.ok(byTenant(db._internals.SYSTEM_TENANT) >= 1, "system rows present");
-});
-
-test("postgres: RLS isolates tenants for a non-superuser role", { skip: !runDb || !APP_URL }, async () => {
-  await db.persistSnapshot(sampleSnapshot(), persistedFleetKeys);
-  const pg = (await import("pg")).default;
-  const appPool = new pg.Pool({ connectionString: APP_URL, ssl: false });
-  const scopedTenants = async (tenantId) => {
-    const client = await appPool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
-      const res = await client.query("SELECT DISTINCT tenant_id FROM runtime_items");
-      await client.query("COMMIT");
-      return res.rows.map((r) => r.tenant_id);
-    } finally {
-      client.release();
-    }
-  };
-  try {
-    const a = await scopedTenants("tenant_a");
-    assert.ok(a.includes("tenant_a"), "tenant_a sees its own rows");
-    assert.ok(!a.includes("tenant_b"), "tenant_a cannot see tenant_b rows");
-    assert.ok(a.includes(db._internals.SYSTEM_TENANT), "tenant_a sees shared system rows");
-
-    const b = await scopedTenants("tenant_b");
-    assert.ok(b.includes("tenant_b"));
-    assert.ok(!b.includes("tenant_a"), "tenant_b cannot see tenant_a rows");
-
-    const none = await scopedTenants("");
-    assert.ok(!none.includes("tenant_a") && !none.includes("tenant_b"), "unscoped session sees no tenant data (fail-closed)");
-  } finally {
-    await appPool.end();
+test(
+  "postgres: items are tagged with the owning tenant, system rows shared",
+  { skip: !runDb },
+  async () => {
+    await db.persistSnapshot(sampleSnapshot(), persistedFleetKeys);
+    const rows = await db.withTenant(
+      db._internals.ALL_TENANTS,
+      async (client) => (await client.query("SELECT collection, tenant_id FROM runtime_items")).rows
+    );
+    const byTenant = (t) => rows.filter((r) => r.tenant_id === t).length;
+    assert.ok(byTenant("tenant_a") >= 1, "tenant_a rows tagged");
+    assert.ok(byTenant("tenant_b") >= 1, "tenant_b rows tagged");
+    // Non-tenant config (bundleGeneration/trustRevocations/tenant) lands in __system__.
+    assert.ok(byTenant(db._internals.SYSTEM_TENANT) >= 1, "system rows present");
   }
-});
+);
+
+test(
+  "postgres: RLS isolates tenants for a non-superuser role",
+  { skip: !runDb || !APP_URL },
+  async () => {
+    await db.persistSnapshot(sampleSnapshot(), persistedFleetKeys);
+    const pg = (await import("pg")).default;
+    const appPool = new pg.Pool({ connectionString: APP_URL, ssl: false });
+    const scopedTenants = async (tenantId) => {
+      const client = await appPool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+        const res = await client.query("SELECT DISTINCT tenant_id FROM runtime_items");
+        await client.query("COMMIT");
+        return res.rows.map((r) => r.tenant_id);
+      } finally {
+        client.release();
+      }
+    };
+    try {
+      const a = await scopedTenants("tenant_a");
+      assert.ok(a.includes("tenant_a"), "tenant_a sees its own rows");
+      assert.ok(!a.includes("tenant_b"), "tenant_a cannot see tenant_b rows");
+      assert.ok(a.includes(db._internals.SYSTEM_TENANT), "tenant_a sees shared system rows");
+
+      const b = await scopedTenants("tenant_b");
+      assert.ok(b.includes("tenant_b"));
+      assert.ok(!b.includes("tenant_a"), "tenant_b cannot see tenant_a rows");
+
+      const none = await scopedTenants("");
+      assert.ok(
+        !none.includes("tenant_a") && !none.includes("tenant_b"),
+        "unscoped session sees no tenant data (fail-closed)"
+      );
+    } finally {
+      await appPool.end();
+    }
+  }
+);
 
 test.after(async () => {
   if (db) await db.close();

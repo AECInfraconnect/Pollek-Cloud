@@ -14,8 +14,9 @@ let jwksCache = { url: null, fetchedAt: 0, keys: new Map() };
 
 export function config() {
   const issuer = process.env.KEYCLOAK_ISSUER_URL || process.env.OIDC_ISSUER || null;
-  const jwksUrl = process.env.KEYCLOAK_JWKS_URL
-    || (issuer ? `${issuer.replace(/\/+$/, "")}/protocol/openid-connect/certs` : null);
+  const jwksUrl =
+    process.env.KEYCLOAK_JWKS_URL ||
+    (issuer ? `${issuer.replace(/\/+$/, "")}/protocol/openid-connect/certs` : null);
   const mode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_KEYCLOAK_JWT_MODE || "")
     ? process.env.POLLEK_KEYCLOAK_JWT_MODE
     : "off";
@@ -38,10 +39,18 @@ function decodeSegment(segment) {
 
 async function loadJwks(url, force = false) {
   const now = Date.now();
-  if (!force && jwksCache.url === url && jwksCache.keys.size && now - jwksCache.fetchedAt < JWKS_TTL_MS) {
+  if (
+    !force &&
+    jwksCache.url === url &&
+    jwksCache.keys.size &&
+    now - jwksCache.fetchedAt < JWKS_TTL_MS
+  ) {
     return jwksCache.keys;
   }
-  const response = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { accept: "application/json" } });
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(4000),
+    headers: { accept: "application/json" }
+  });
   if (!response.ok) throw new Error(`jwks_http_${response.status}`);
   const doc = await response.json();
   const keys = new Map();
@@ -80,7 +89,10 @@ export async function verifyToken(token, cfg = config()) {
   try {
     keys = await loadJwks(cfg.jwksUrl);
   } catch (error) {
-    return { valid: false, reason: `jwks_unavailable:${error instanceof Error ? error.message : "error"}` };
+    return {
+      valid: false,
+      reason: `jwks_unavailable:${error instanceof Error ? error.message : "error"}`
+    };
   }
   let key = keys.get(header.kid);
   if (!key) {
@@ -105,9 +117,11 @@ export async function verifyToken(token, cfg = config()) {
   const now = Math.floor(Date.now() / 1000);
   // Fail closed on a missing or non-numeric expiry: a token without a valid numeric `exp`
   // has no enforceable lifetime and must never be accepted before production enforcement.
-  if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) return { valid: false, reason: "missing_exp" };
+  if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp))
+    return { valid: false, reason: "missing_exp" };
   if (payload.exp < now) return { valid: false, reason: "expired" };
-  if (payload.nbf !== undefined && (typeof payload.nbf !== "number" || payload.nbf > now + 60)) return { valid: false, reason: "not_yet_valid" };
+  if (payload.nbf !== undefined && (typeof payload.nbf !== "number" || payload.nbf > now + 60))
+    return { valid: false, reason: "not_yet_valid" };
   if (cfg.issuer && payload.iss !== cfg.issuer) return { valid: false, reason: "issuer_mismatch" };
   if (cfg.audience) {
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
@@ -129,4 +143,10 @@ export function status(cfg = config()) {
   };
 }
 
-export const _internals = { loadJwks, decodeSegment, resetCache: () => { jwksCache = { url: null, fetchedAt: 0, keys: new Map() }; } };
+export const _internals = {
+  loadJwks,
+  decodeSegment,
+  resetCache: () => {
+    jwksCache = { url: null, fetchedAt: 0, keys: new Map() };
+  }
+};

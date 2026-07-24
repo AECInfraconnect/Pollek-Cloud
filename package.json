@@ -36,10 +36,21 @@
     "test": "node --test test/*.test.mjs",
     "test:lcp": "node scripts/test-lcp-connection.mjs",
     "smoke:sync": "node scripts/smoke-sync.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{mjs,js}\"",
+    "format:check": "prettier --check \"**/*.{mjs,js}\"",
     "contracts:openapi": "node scripts/generate-openapi.mjs",
     "contracts:sdk": "node scripts/generate-sdk.mjs",
     "contracts:check": "node scripts/check-contract-drift.mjs",
     "contracts:generate": "npm run contracts:openapi && npm run contracts:sdk",
-    "audit:foundation": "node --check apps/api/server.mjs && node --check apps/api/db.mjs && node --check apps/api/keycloak.mjs && node --check apps/api/signer.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test"
+    "audit:foundation": "npm run lint && npm run format:check && node --check apps/api/server.mjs && node --check apps/api/db.mjs && node --check apps/api/keycloak.mjs && node --check apps/api/signer.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.6"
   }
 }

@@ -20,24 +20,59 @@ const cloudVersion = contractDocument.cloud_version;
 const contractVersion = contractDocument.contract_version;
 const contractArtifactPaths = new Map([
   ["/contracts/events.schema.json", path.join(rootDir, "packages/contracts/events.schema.json")],
-  ["/contracts/bundle-manifest.schema.json", path.join(rootDir, "packages/contracts/bundle-manifest.schema.json")],
-  ["/contracts/telemetry-envelope.schema.json", path.join(rootDir, "packages/contracts/telemetry-envelope.schema.json")],
-  ["/contracts/lcp-usage-ledger.schema.json", path.join(rootDir, "packages/contracts/lcp-usage-ledger.schema.json")],
-  ["/contracts/bundle-provenance.schema.json", path.join(rootDir, "packages/contracts/bundle-provenance.schema.json")],
-  ["/contracts/trust-policy.schema.json", path.join(rootDir, "packages/contracts/trust-policy.schema.json")],
-  ["/contracts/revocation-list.schema.json", path.join(rootDir, "packages/contracts/revocation-list.schema.json")],
-  ["/contracts/signer-allowlist.schema.json", path.join(rootDir, "packages/contracts/signer-allowlist.schema.json")],
-  ["/contracts/fixtures/lcp-usage-ledger/windows.json", path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/windows.json")],
-  ["/contracts/fixtures/lcp-usage-ledger/macos.json", path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/macos.json")],
-  ["/contracts/fixtures/lcp-usage-ledger/linux.json", path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/linux.json")]
+  [
+    "/contracts/bundle-manifest.schema.json",
+    path.join(rootDir, "packages/contracts/bundle-manifest.schema.json")
+  ],
+  [
+    "/contracts/telemetry-envelope.schema.json",
+    path.join(rootDir, "packages/contracts/telemetry-envelope.schema.json")
+  ],
+  [
+    "/contracts/lcp-usage-ledger.schema.json",
+    path.join(rootDir, "packages/contracts/lcp-usage-ledger.schema.json")
+  ],
+  [
+    "/contracts/bundle-provenance.schema.json",
+    path.join(rootDir, "packages/contracts/bundle-provenance.schema.json")
+  ],
+  [
+    "/contracts/trust-policy.schema.json",
+    path.join(rootDir, "packages/contracts/trust-policy.schema.json")
+  ],
+  [
+    "/contracts/revocation-list.schema.json",
+    path.join(rootDir, "packages/contracts/revocation-list.schema.json")
+  ],
+  [
+    "/contracts/signer-allowlist.schema.json",
+    path.join(rootDir, "packages/contracts/signer-allowlist.schema.json")
+  ],
+  [
+    "/contracts/fixtures/lcp-usage-ledger/windows.json",
+    path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/windows.json")
+  ],
+  [
+    "/contracts/fixtures/lcp-usage-ledger/macos.json",
+    path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/macos.json")
+  ],
+  [
+    "/contracts/fixtures/lcp-usage-ledger/linux.json",
+    path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/linux.json")
+  ]
 ]);
-const stateFilePath = process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
+const stateFilePath =
+  process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
 
 const port = Number(process.env.PORT || process.env.POLLEK_CLOUD_DEV_PORT || 8790);
-const host = process.env.POLLEK_CLOUD_DEV_HOST || process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
-const publicUrl = process.env.POLLEK_CLOUD_PUBLIC_URL
-  || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "")
-  || `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`;
+const host =
+  process.env.POLLEK_CLOUD_DEV_HOST ||
+  process.env.HOST ||
+  (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+const publicUrl =
+  process.env.POLLEK_CLOUD_PUBLIC_URL ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "") ||
+  `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`;
 const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
 const maxJsonBodyBytes = Number(process.env.POLLEK_CLOUD_MAX_JSON_BODY_BYTES || 1024 * 1024);
 const maxAuditPayloadBytes = Number(process.env.POLLEK_CLOUD_MAX_AUDIT_PAYLOAD_BYTES || 32 * 1024);
@@ -46,16 +81,45 @@ const maxApiPageLimit = Number(process.env.POLLEK_CLOUD_MAX_API_PAGE_LIMIT || 50
 const requestBudgetWindowMs = Number(process.env.POLLEK_CLOUD_RATE_WINDOW_MS || 60000);
 const requestBudgetMax = Number(process.env.POLLEK_CLOUD_RATE_MAX || 900);
 const compactJsonResponses = process.env.POLLEK_CLOUD_PRETTY_JSON !== "1";
-const exposeInternalErrors = process.env.NODE_ENV !== "production" || process.env.POLLEK_CLOUD_EXPOSE_ERRORS === "1";
-const lcpReconcileIntervalMs = Math.max(30000, Number(process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS || process.env.POLLEK_LCP_WATCH_INTERVAL_MS || 300000));
-const maxTelemetryEnvelopes = Math.max(100, Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_EVENTS || 5000));
-const maxTelemetryBatchReceipts = Math.max(20, Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_BATCHES || 200));
-const maxTelemetryRejections = Math.max(20, Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_REJECTIONS || 200));
+const exposeInternalErrors =
+  process.env.NODE_ENV !== "production" || process.env.POLLEK_CLOUD_EXPOSE_ERRORS === "1";
+const lcpReconcileIntervalMs = Math.max(
+  30000,
+  Number(
+    process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS ||
+      process.env.POLLEK_LCP_WATCH_INTERVAL_MS ||
+      300000
+  )
+);
+const maxTelemetryEnvelopes = Math.max(
+  100,
+  Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_EVENTS || 5000)
+);
+const maxTelemetryBatchReceipts = Math.max(
+  20,
+  Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_BATCHES || 200)
+);
+const maxTelemetryRejections = Math.max(
+  20,
+  Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_REJECTIONS || 200)
+);
 const bundleSigningKeyPair = crypto.generateKeyPairSync("ed25519");
-const bundleSigningPublicKeyPem = bundleSigningKeyPair.publicKey.export({ type: "spki", format: "pem" });
-const eventStreamReplayWindow = Math.max(200, Number(process.env.POLLEK_EVENT_STREAM_REPLAY_WINDOW || 500));
+const bundleSigningPublicKeyPem = bundleSigningKeyPair.publicKey.export({
+  type: "spki",
+  format: "pem"
+});
+const eventStreamReplayWindow = Math.max(
+  200,
+  Number(process.env.POLLEK_EVENT_STREAM_REPLAY_WINDOW || 500)
+);
 const sseClients = new Set();
-const contractDriftAllowedRuntimePaths = new Set(["/health", "/api/cloud/status", "/api/persistence/status", "/api/persistence/flush", "/api/entities/watch"]);
+const contractDriftAllowedRuntimePaths = new Set([
+  "/health",
+  "/api/cloud/status",
+  "/api/persistence/status",
+  "/api/persistence/flush",
+  "/api/entities/watch"
+]);
 const persistedFleetKeys = [
   "tree",
   "localControlPlanes",
@@ -113,10 +177,30 @@ const persistedFleetKeys = [
 
 const ROLE_TEST_USER_TEMPLATES = [
   { role: "admin", email: "admin@pollek.test", display_name: "Test Admin", relation: "admin" },
-  { role: "security_admin", email: "security-admin@pollek.test", display_name: "Test Security Admin", relation: "security_admin" },
-  { role: "iam_admin", email: "iam-admin@pollek.test", display_name: "Test IAM Admin", relation: "iam_admin" },
-  { role: "billing_admin", email: "billing-admin@pollek.test", display_name: "Test Billing Admin", relation: "billing_admin" },
-  { role: "operator", email: "operator@pollek.test", display_name: "Test Operator", relation: "operator" },
+  {
+    role: "security_admin",
+    email: "security-admin@pollek.test",
+    display_name: "Test Security Admin",
+    relation: "security_admin"
+  },
+  {
+    role: "iam_admin",
+    email: "iam-admin@pollek.test",
+    display_name: "Test IAM Admin",
+    relation: "iam_admin"
+  },
+  {
+    role: "billing_admin",
+    email: "billing-admin@pollek.test",
+    display_name: "Test Billing Admin",
+    relation: "billing_admin"
+  },
+  {
+    role: "operator",
+    email: "operator@pollek.test",
+    display_name: "Test Operator",
+    relation: "operator"
+  },
   { role: "viewer", email: "viewer@pollek.test", display_name: "Test Viewer", relation: "viewer" }
 ];
 
@@ -126,7 +210,8 @@ const ADAPTER_CATALOG = [
     display_name: "OpenAI ChatGPT and API",
     short_name: "OpenAI",
     category: "llm_provider",
-    description: "Hosted model and assistant traffic discovered from API, browser, or desktop activity.",
+    description:
+      "Hosted model and assistant traffic discovered from API, browser, or desktop activity.",
     confidence: "high",
     integration_modes: ["direct_api", "browser_activity", "enterprise_admin"],
     auth_modes: ["api_key", "oauth_admin", "browser_session_observe"],
@@ -141,7 +226,8 @@ const ADAPTER_CATALOG = [
     display_name: "Anthropic Claude",
     short_name: "Claude",
     category: "llm_provider",
-    description: "Claude API and desktop usage mapped to agent identity, tool calls, and resource access.",
+    description:
+      "Claude API and desktop usage mapped to agent identity, tool calls, and resource access.",
     confidence: "high",
     integration_modes: ["direct_api", "desktop_activity", "browser_activity"],
     auth_modes: ["api_key", "oauth_admin", "browser_session_observe"],
@@ -156,7 +242,8 @@ const ADAPTER_CATALOG = [
     display_name: "Google Gemini and Vertex AI",
     short_name: "Gemini",
     category: "llm_provider",
-    description: "Google AI traffic with project, model, and workspace context for enterprise tenants.",
+    description:
+      "Google AI traffic with project, model, and workspace context for enterprise tenants.",
     confidence: "high",
     integration_modes: ["vertex_api", "browser_activity", "workspace_admin"],
     auth_modes: ["service_account", "oauth_admin", "browser_session_observe"],
@@ -171,7 +258,8 @@ const ADAPTER_CATALOG = [
     display_name: "GitHub Copilot",
     short_name: "Copilot",
     category: "code_assistant",
-    description: "Developer assistant activity from IDE, repository, and enterprise audit channels.",
+    description:
+      "Developer assistant activity from IDE, repository, and enterprise audit channels.",
     confidence: "high",
     integration_modes: ["ide_activity", "github_enterprise", "browser_activity"],
     auth_modes: ["github_app", "oauth_admin", "browser_session_observe"],
@@ -186,7 +274,8 @@ const ADAPTER_CATALOG = [
     display_name: "Cursor IDE",
     short_name: "Cursor",
     category: "code_assistant",
-    description: "Local IDE agent activity correlated with process, workspace, file, and network evidence.",
+    description:
+      "Local IDE agent activity correlated with process, workspace, file, and network evidence.",
     confidence: "medium",
     integration_modes: ["local_process", "workspace_activity", "network_metadata"],
     auth_modes: ["local_observe", "browser_session_observe"],
@@ -277,14 +366,27 @@ const COMPLIANCE_POLICY_BUNDLES = [
     edition: "enterprise",
     enterprise_only: true,
     frameworks: ["EU_AI_ACT", "ISO42001"],
-    controls: ["risk-management", "human-oversight", "record-keeping", "transparency", "cybersecurity"],
+    controls: [
+      "risk-management",
+      "human-oversight",
+      "record-keeping",
+      "transparency",
+      "cybersecurity"
+    ],
     target_engines: ["rego", "cedar", "openfga"],
     recommended_pep_types: ["McpProxy", "HttpGateway", "BrowserExtension"],
     default_mode: "approval",
     deployable: true,
     simulation_required: true,
     evidence_streams: ["policy_decision", "tool_usage", "identity_access", "audit_event"],
-    cloud_artifacts: ["policy_ir", "rego", "cedar", "openfga_model", "bundle_manifest", "evidence_mapping"],
+    cloud_artifacts: [
+      "policy_ir",
+      "rego",
+      "cedar",
+      "openfga_model",
+      "bundle_manifest",
+      "evidence_mapping"
+    ],
     contract_hub_distribution: {
       channel: "enterprise-compliance",
       entitlement: "enterprise.compliance_policy_bundles",
@@ -319,14 +421,26 @@ const COMPLIANCE_POLICY_BUNDLES = [
     edition: "enterprise",
     enterprise_only: true,
     frameworks: ["SOC2", "GDPR", "PDPA"],
-    controls: ["access-enforcement", "pii-minimization", "audit-logging", "retention", "egress-control"],
+    controls: [
+      "access-enforcement",
+      "pii-minimization",
+      "audit-logging",
+      "retention",
+      "egress-control"
+    ],
     target_engines: ["rego", "wasm_plugin"],
     recommended_pep_types: ["McpProxy", "FileSystemPep", "HttpGateway"],
     default_mode: "enforce",
     deployable: true,
     simulation_required: true,
     evidence_streams: ["resource_access", "content_scan", "policy_decision", "audit_event"],
-    cloud_artifacts: ["policy_ir", "rego", "wasm_plugin_config", "bundle_manifest", "evidence_mapping"],
+    cloud_artifacts: [
+      "policy_ir",
+      "rego",
+      "wasm_plugin_config",
+      "bundle_manifest",
+      "evidence_mapping"
+    ],
     contract_hub_distribution: {
       channel: "enterprise-compliance",
       entitlement: "enterprise.compliance_policy_bundles",
@@ -335,7 +449,6 @@ const COMPLIANCE_POLICY_BUNDLES = [
     }
   }
 ];
-
 
 function createFleetState() {
   // The Cloud boots empty. All operational/tenant state (fleet tree, LCPs,
@@ -382,10 +495,34 @@ function createFleetState() {
     ],
     compliancePolicyBundles: COMPLIANCE_POLICY_BUNDLES,
     integrations: [
-      { id: "int_otlp", name: "OpenTelemetry Collector", type: "otlp", status: "not_configured", direction: "inbound-outbound" },
-      { id: "int_splunk_hec", name: "Splunk HEC", type: "siem", status: "not_configured", direction: "outbound" },
-      { id: "int_syslog_cef", name: "Syslog CEF", type: "siem", status: "not_configured", direction: "outbound" },
-      { id: "int_keycloak", name: "Keycloak OIDC", type: "identity", status: "not_configured", direction: "inbound" }
+      {
+        id: "int_otlp",
+        name: "OpenTelemetry Collector",
+        type: "otlp",
+        status: "not_configured",
+        direction: "inbound-outbound"
+      },
+      {
+        id: "int_splunk_hec",
+        name: "Splunk HEC",
+        type: "siem",
+        status: "not_configured",
+        direction: "outbound"
+      },
+      {
+        id: "int_syslog_cef",
+        name: "Syslog CEF",
+        type: "siem",
+        status: "not_configured",
+        direction: "outbound"
+      },
+      {
+        id: "int_keycloak",
+        name: "Keycloak OIDC",
+        type: "identity",
+        status: "not_configured",
+        direction: "inbound"
+      }
     ],
     adapterCatalog: ADAPTER_CATALOG,
     billingPlans: [
@@ -401,7 +538,13 @@ function createFleetState() {
         seat_overage_cents: 2500,
         lcp_overage_cents: 1500,
         device_overage_cents: 300,
-        features: ["keycloak_oidc", "scim_provisioning", "compliance_policy_bundles", "breakglass", "policy_sandbox"]
+        features: [
+          "keycloak_oidc",
+          "scim_provisioning",
+          "compliance_policy_bundles",
+          "breakglass",
+          "policy_sandbox"
+        ]
       },
       {
         id: "plan_private_cloud",
@@ -415,7 +558,13 @@ function createFleetState() {
         seat_overage_cents: 2000,
         lcp_overage_cents: 1000,
         device_overage_cents: 200,
-        features: ["offline_license", "kms_abstraction", "keycloak_oidc", "byo_idp_federation", "scim_provisioning"]
+        features: [
+          "offline_license",
+          "kms_abstraction",
+          "keycloak_oidc",
+          "byo_idp_federation",
+          "scim_provisioning"
+        ]
       }
     ],
     // --- Operational state: empty until populated through real gated flows ---
@@ -490,7 +639,11 @@ const state = {
     name: "Local Lab Tenant",
     mode: "private-cloud-dev",
     edition: "enterprise-dev",
-    entitlements: ["enterprise.compliance_policy_bundles", "enterprise.policy_sandbox", "enterprise.breakglass"],
+    entitlements: [
+      "enterprise.compliance_policy_bundles",
+      "enterprise.policy_sandbox",
+      "enterprise.breakglass"
+    ],
     trustDomain: "local.pollek.cloud"
   },
   devices: new Map(),
@@ -551,14 +704,16 @@ const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
   "cross-origin-opener-policy": "same-origin",
-  "content-security-policy": "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:*",
+  "content-security-policy":
+    "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:*",
   "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
   "x-frame-options": "DENY",
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
-  "access-control-allow-headers": "authorization,content-type,x-pollek-device-id,x-pollek-tenant-id,x-pollek-lcp-id,x-idempotency-key"
+  "access-control-allow-headers":
+    "authorization,content-type,x-pollek-device-id,x-pollek-tenant-id,x-pollek-lcp-id,x-idempotency-key"
 };
 
 function sendJson(res, status, body, extraHeaders = {}) {
@@ -586,7 +741,9 @@ function httpError(statusCode, message, code = message) {
 }
 
 function clientBudgetKey(req) {
-  const forwardedFor = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const forwardedFor = String(req.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
   const remote = forwardedFor || req.socket?.remoteAddress || "unknown";
   const tenant = req.headers["x-pollek-tenant-id"] || "no-tenant";
   return `${remote}:${tenant}`;
@@ -597,9 +754,10 @@ function enforceRequestBudget(req, res) {
   const now = Date.now();
   const key = clientBudgetKey(req);
   const current = requestBudgetBuckets.get(key);
-  const bucket = current && current.reset_at > now
-    ? current
-    : { count: 0, reset_at: now + requestBudgetWindowMs };
+  const bucket =
+    current && current.reset_at > now
+      ? current
+      : { count: 0, reset_at: now + requestBudgetWindowMs };
   bucket.count += 1;
   requestBudgetBuckets.set(key, bucket);
   if (requestBudgetBuckets.size > 5000) {
@@ -612,13 +770,18 @@ function enforceRequestBudget(req, res) {
   res.setHeader("x-ratelimit-remaining", String(remaining));
   res.setHeader("x-ratelimit-reset", new Date(bucket.reset_at).toISOString());
   if (bucket.count <= requestBudgetMax) return true;
-  sendJson(res, 429, {
-    error: "rate_limit_exceeded",
-    detail: "Request budget exceeded for this client and tenant context.",
-    retry_after_ms: Math.max(0, bucket.reset_at - now)
-  }, {
-    "retry-after": String(Math.ceil(Math.max(0, bucket.reset_at - now) / 1000))
-  });
+  sendJson(
+    res,
+    429,
+    {
+      error: "rate_limit_exceeded",
+      detail: "Request budget exceeded for this client and tenant context.",
+      retry_after_ms: Math.max(0, bucket.reset_at - now)
+    },
+    {
+      "retry-after": String(Math.ceil(Math.max(0, bucket.reset_at - now) / 1000))
+    }
+  );
   return false;
 }
 
@@ -642,7 +805,16 @@ function runtimePersistenceStatus() {
     production_target: "postgresql",
     persisted_collections: {
       fleet: persistedFleetKeys,
-      root: ["tenant", "devices", "events", "eventJournal", "auditEvents", "tasks", "probes", "enrollmentCodes"]
+      root: [
+        "tenant",
+        "devices",
+        "events",
+        "eventJournal",
+        "auditEvents",
+        "tasks",
+        "probes",
+        "enrollmentCodes"
+      ]
     },
     record_counts: {
       devices: state.devices.size,
@@ -716,9 +888,11 @@ function applyRuntimeStateSnapshot(snapshot) {
     state.tenant = { ...state.tenant, ...snapshot.tenant };
   }
   if (Array.isArray(snapshot.devices)) state.devices = entriesToMap(snapshot.devices);
-  if (Array.isArray(snapshot.enrollmentCodes)) state.enrollmentCodes = entriesToMap(snapshot.enrollmentCodes);
+  if (Array.isArray(snapshot.enrollmentCodes))
+    state.enrollmentCodes = entriesToMap(snapshot.enrollmentCodes);
   if (Array.isArray(snapshot.events)) state.events = snapshot.events.slice(0, 100);
-  if (Array.isArray(snapshot.eventJournal)) state.eventJournal = snapshot.eventJournal.slice(-eventStreamReplayWindow);
+  if (Array.isArray(snapshot.eventJournal))
+    state.eventJournal = snapshot.eventJournal.slice(-eventStreamReplayWindow);
   if (Array.isArray(snapshot.auditEvents)) state.auditEvents = snapshot.auditEvents.slice(0, 100);
   if (Array.isArray(snapshot.tasks)) state.tasks = snapshot.tasks.slice(0, 25);
   if (Array.isArray(snapshot.probes)) state.probes = snapshot.probes.slice(0, 20);
@@ -732,9 +906,13 @@ function applyRuntimeStateSnapshot(snapshot) {
     if (snapshot.fleet.trustRevocations && typeof snapshot.fleet.trustRevocations === "object") {
       const stored = snapshot.fleet.trustRevocations;
       state.fleet.trustRevocations = {
-        revocation_epoch: Number.isFinite(stored.revocation_epoch) ? Math.max(0, Math.floor(stored.revocation_epoch)) : 0,
+        revocation_epoch: Number.isFinite(stored.revocation_epoch)
+          ? Math.max(0, Math.floor(stored.revocation_epoch))
+          : 0,
         revoked_key_ids: Array.isArray(stored.revoked_key_ids) ? stored.revoked_key_ids : [],
-        revoked_bundle_digests: Array.isArray(stored.revoked_bundle_digests) ? stored.revoked_bundle_digests : [],
+        revoked_bundle_digests: Array.isArray(stored.revoked_bundle_digests)
+          ? stored.revoked_bundle_digests
+          : [],
         revoked_revisions: Array.isArray(stored.revoked_revisions) ? stored.revoked_revisions : [],
         history: Array.isArray(stored.history) ? stored.history : []
       };
@@ -832,7 +1010,10 @@ function scheduleRuntimePersist(reason = "mutation") {
 function stableJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+    .join(",")}}`;
 }
 
 function sha256(value) {
@@ -884,16 +1065,28 @@ function publicAccount(account) {
 }
 
 function accountByEmail(email) {
-  const normalized = String(email || "").trim().toLowerCase();
-  return (state.fleet.accounts || []).find((account) => account.email.toLowerCase() === normalized) || null;
+  const normalized = String(email || "")
+    .trim()
+    .toLowerCase();
+  return (
+    (state.fleet.accounts || []).find((account) => account.email.toLowerCase() === normalized) ||
+    null
+  );
 }
 
 function accountById(accountId) {
   return (state.fleet.accounts || []).find((account) => account.id === accountId) || null;
 }
 
-function ensureAccount({ email, display_name, idp_id = "idp_keycloak_local_dev", status = "active" }) {
-  const normalizedEmail = String(email || "").trim().toLowerCase();
+function ensureAccount({
+  email,
+  display_name,
+  idp_id = "idp_keycloak_local_dev",
+  status = "active"
+}) {
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
   if (!normalizedEmail || !normalizedEmail.includes("@")) {
     const error = new Error("valid_email_required");
     error.statusCode = 400;
@@ -929,7 +1122,11 @@ function ensureAccount({ email, display_name, idp_id = "idp_keycloak_local_dev",
 }
 
 function tenantMemberFor(tenantId, accountId) {
-  return (state.fleet.tenantMembers || []).find((member) => member.tenant_id === tenantId && member.account_id === accountId) || null;
+  return (
+    (state.fleet.tenantMembers || []).find(
+      (member) => member.tenant_id === tenantId && member.account_id === accountId
+    ) || null
+  );
 }
 
 function rolesForMember(tenantId, accountId) {
@@ -940,7 +1137,13 @@ function rolesForMember(tenantId, accountId) {
   return [...new Set([...(member?.roles || []), ...assigned])];
 }
 
-function upsertTenantMember({ tenant_id, account_id, roles = ["viewer"], status = "active", invited_by = "system" }) {
+function upsertTenantMember({
+  tenant_id,
+  account_id,
+  roles = ["viewer"],
+  status = "active",
+  invited_by = "system"
+}) {
   const tenantId = requiredTenantContext(tenant_id);
   const account = accountById(account_id);
   if (!account) {
@@ -968,8 +1171,9 @@ function upsertTenantMember({ tenant_id, account_id, roles = ["viewer"], status 
   member.status = status;
   member.updated_at = nowIso();
   for (const role of nextRoles) {
-    const exists = (state.fleet.memberRoleAssignments || [])
-      .some((item) => item.tenant_id === tenantId && item.account_id === account.id && item.role === role);
+    const exists = (state.fleet.memberRoleAssignments || []).some(
+      (item) => item.tenant_id === tenantId && item.account_id === account.id && item.role === role
+    );
     if (!exists) {
       state.fleet.memberRoleAssignments.unshift({
         id: `role_${sha256(`${tenantId}:${account.id}:${role}`).slice(0, 16)}`,
@@ -984,14 +1188,25 @@ function upsertTenantMember({ tenant_id, account_id, roles = ["viewer"], status 
   return member;
 }
 
-function ensureRoleAuthorizationTuples({ tenant_id, account_id, roles = [], source = "role_user_seed", actor_id = "system", emitEvidence = false }) {
+function ensureRoleAuthorizationTuples({
+  tenant_id,
+  account_id,
+  roles = [],
+  source = "role_user_seed",
+  actor_id = "system",
+  emitEvidence = false
+}) {
   const tenantId = requiredTenantContext(tenant_id);
   for (const role of roles.map(String)) {
     const object = `tenant:${tenantId}`;
     const principal = `user:${account_id}`;
-    const exists = (state.fleet.authorizationTuples || []).some((tuple) => (
-      tuple.tenant_id === tenantId && tuple.principal === principal && tuple.relation === role && tuple.object === object
-    ));
+    const exists = (state.fleet.authorizationTuples || []).some(
+      (tuple) =>
+        tuple.tenant_id === tenantId &&
+        tuple.principal === principal &&
+        tuple.relation === role &&
+        tuple.object === object
+    );
     if (exists) continue;
     if (emitEvidence) {
       createAuthorizationTuple({
@@ -1019,9 +1234,17 @@ function ensureRoleAuthorizationTuples({ tenant_id, account_id, roles = [], sour
   }
 }
 
-function setTenantMemberRoles({ tenant_id, account_id, roles = ["viewer"], status = "active", actor_id = "system" }) {
+function setTenantMemberRoles({
+  tenant_id,
+  account_id,
+  roles = ["viewer"],
+  status = "active",
+  actor_id = "system"
+}) {
   const tenantId = requiredTenantContext(tenant_id);
-  const nextRoles = [...new Set((Array.isArray(roles) && roles.length ? roles : ["viewer"]).map(String))];
+  const nextRoles = [
+    ...new Set((Array.isArray(roles) && roles.length ? roles : ["viewer"]).map(String))
+  ];
   const member = upsertTenantMember({
     tenant_id: tenantId,
     account_id,
@@ -1032,8 +1255,9 @@ function setTenantMemberRoles({ tenant_id, account_id, roles = ["viewer"], statu
   member.roles = nextRoles;
   member.status = status;
   member.updated_at = nowIso();
-  state.fleet.memberRoleAssignments = (state.fleet.memberRoleAssignments || [])
-    .filter((item) => !(item.tenant_id === tenantId && item.account_id === account_id));
+  state.fleet.memberRoleAssignments = (state.fleet.memberRoleAssignments || []).filter(
+    (item) => !(item.tenant_id === tenantId && item.account_id === account_id)
+  );
   for (const role of nextRoles) {
     state.fleet.memberRoleAssignments.unshift({
       id: `role_${sha256(`${tenantId}:${account_id}:${role}`).slice(0, 16)}`,
@@ -1045,14 +1269,16 @@ function setTenantMemberRoles({ tenant_id, account_id, roles = ["viewer"], statu
     });
   }
   const knownRelations = new Set(ROLE_TEST_USER_TEMPLATES.map((item) => item.relation));
-  state.fleet.authorizationTuples = (state.fleet.authorizationTuples || [])
-    .filter((tuple) => !(
-      tuple.tenant_id === tenantId
-      && tuple.principal === `user:${account_id}`
-      && tuple.object === `tenant:${tenantId}`
-      && knownRelations.has(tuple.relation)
-      && !nextRoles.includes(tuple.relation)
-    ));
+  state.fleet.authorizationTuples = (state.fleet.authorizationTuples || []).filter(
+    (tuple) =>
+      !(
+        tuple.tenant_id === tenantId &&
+        tuple.principal === `user:${account_id}` &&
+        tuple.object === `tenant:${tenantId}` &&
+        knownRelations.has(tuple.relation) &&
+        !nextRoles.includes(tuple.relation)
+      )
+  );
   ensureRoleAuthorizationTuples({
     tenant_id: tenantId,
     account_id,
@@ -1064,12 +1290,16 @@ function setTenantMemberRoles({ tenant_id, account_id, roles = ["viewer"], statu
   return member;
 }
 
-function ensureRoleTestUsers(tenantId = "local", { actor_id = "system", emitEvidence = false } = {}) {
+function ensureRoleTestUsers(
+  tenantId = "local",
+  { actor_id = "system", emitEvidence = false } = {}
+) {
   const tenant_id = requiredTenantContext(tenantId);
   const users = [];
   for (const template of ROLE_TEST_USER_TEMPLATES) {
     const [localPart, domain] = template.email.split("@");
-    const email = tenant_id === "local" ? template.email : `${localPart}+${slugify(tenant_id)}@${domain}`;
+    const email =
+      tenant_id === "local" ? template.email : `${localPart}+${slugify(tenant_id)}@${domain}`;
     const account = ensureAccount({
       email,
       display_name: `${template.display_name}${tenant_id === "local" ? "" : ` (${tenant_id})`}`
@@ -1106,13 +1336,23 @@ function ensureRuntimeBackfills() {
   // The Cloud starts empty. Role/test users are created only on demand through
   // the gated /api/dev/seed-role-users endpoint or real tenant signup/invite
   // flows, never auto-seeded at boot.
-  for (const key of ["telemetryEnvelopes", "telemetryBatchReceipts", "telemetryRejections", "telemetryIngestTotals"]) {
+  for (const key of [
+    "telemetryEnvelopes",
+    "telemetryBatchReceipts",
+    "telemetryRejections",
+    "telemetryIngestTotals"
+  ]) {
     if (!Array.isArray(state.fleet[key])) state.fleet[key] = [];
   }
   rebuildTelemetryEventIndex();
 }
 
-function createAuthSession({ tenant_id, account_id, method = "dev-local", idp_id = "idp_keycloak_local_dev" }) {
+function createAuthSession({
+  tenant_id,
+  account_id,
+  method = "dev-local",
+  idp_id = "idp_keycloak_local_dev"
+}) {
   const tenantId = requiredTenantContext(tenant_id);
   const account = accountById(account_id);
   if (!account) {
@@ -1155,7 +1395,9 @@ function currentSessionFromRequest(req) {
   const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
   const hashed = token ? tokenHash(token) : "";
   const session = hashed
-    ? (state.fleet.authSessions || []).find((item) => item.token_hash === hashed && item.status === "active")
+    ? (state.fleet.authSessions || []).find(
+        (item) => item.token_hash === hashed && item.status === "active"
+      )
     : (state.fleet.authSessions || []).find((item) => item.status === "active");
   if (!session) return null;
   session.last_seen_at = nowIso();
@@ -1167,9 +1409,13 @@ function currentSessionFromRequest(req) {
 }
 
 function identityProviderForTenant(tenantId) {
-  return (state.fleet.identityProviders || []).find((provider) => provider.tenant_id === tenantId && provider.status === "configured")
-    || (state.fleet.identityProviders || []).find((provider) => provider.tenant_id === tenantId)
-    || null;
+  return (
+    (state.fleet.identityProviders || []).find(
+      (provider) => provider.tenant_id === tenantId && provider.status === "configured"
+    ) ||
+    (state.fleet.identityProviders || []).find((provider) => provider.tenant_id === tenantId) ||
+    null
+  );
 }
 
 function redactedIdentityProvider(provider) {
@@ -1183,8 +1429,12 @@ function redactedIdentityProvider(provider) {
 
 function upsertIdentityProvider(tenantId, body = {}) {
   requiredTenantContext(tenantId);
-  const id = body.id || `idp_${slugify(body.provider_type || "oidc")}_${sha256(body.issuer_url || crypto.randomUUID()).slice(0, 10)}`;
-  const existing = (state.fleet.identityProviders || []).find((provider) => provider.tenant_id === tenantId && provider.id === id);
+  const id =
+    body.id ||
+    `idp_${slugify(body.provider_type || "oidc")}_${sha256(body.issuer_url || crypto.randomUUID()).slice(0, 10)}`;
+  const existing = (state.fleet.identityProviders || []).find(
+    (provider) => provider.tenant_id === tenantId && provider.id === id
+  );
   const secretRef = body.client_secret
     ? `sealed:${sha256(`${tenantId}:${id}:${body.client_secret}`).slice(0, 24)}`
     : existing?.secret_ref || null;
@@ -1198,8 +1448,11 @@ function upsertIdentityProvider(tenantId, body = {}) {
     issuer_url: body.issuer_url || existing?.issuer_url || "",
     client_id: body.client_id || existing?.client_id || "",
     discovery_url: body.discovery_url || existing?.discovery_url || "",
-    scopes: Array.isArray(body.scopes) ? body.scopes : existing?.scopes || ["openid", "profile", "email"],
-    claims_mapping: body.claims_mapping || existing?.claims_mapping || { email: "email", name: "name", groups: "groups" },
+    scopes: Array.isArray(body.scopes)
+      ? body.scopes
+      : existing?.scopes || ["openid", "profile", "email"],
+    claims_mapping: body.claims_mapping ||
+      existing?.claims_mapping || { email: "email", name: "name", groups: "groups" },
     secret_ref: secretRef,
     updated_at: nowIso(),
     created_at: existing?.created_at || nowIso()
@@ -1214,9 +1467,14 @@ function createTenantSignup(body = {}) {
   const slug = slugify(body.slug || organizationName, "org");
   const tenantId = body.tenant_id || tenantRecordId(slug);
   const adminEmail = body.admin_email || body.email;
-  const planId = body.plan_id || (body.deployment_mode === "saas" ? "plan_enterprise_cloud" : "plan_private_cloud");
+  const planId =
+    body.plan_id ||
+    (body.deployment_mode === "saas" ? "plan_enterprise_cloud" : "plan_private_cloud");
   const now = nowIso();
-  const account = ensureAccount({ email: adminEmail, display_name: body.admin_name || body.display_name || "Organization Admin" });
+  const account = ensureAccount({
+    email: adminEmail,
+    display_name: body.admin_name || body.display_name || "Organization Admin"
+  });
   const member = upsertTenantMember({
     tenant_id: tenantId,
     account_id: account.id,
@@ -1256,7 +1514,11 @@ function createTenantSignup(body = {}) {
     source: "signup",
     created_by: account.id
   });
-  const sessionBundle = createAuthSession({ tenant_id: tenantId, account_id: account.id, method: "signup-dev" });
+  const sessionBundle = createAuthSession({
+    tenant_id: tenantId,
+    account_id: account.id,
+    method: "signup-dev"
+  });
   recordUsage(tenantId, "console_seats", 1, "signup");
   recordAudit("tenant.signup_completed", "tenant", tenantId, {
     tenant_id: tenantId,
@@ -1265,10 +1527,12 @@ function createTenantSignup(body = {}) {
     deployment_mode: body.deployment_mode || "saas",
     plan_id: planId
   });
-  completeTask(addTask("tenant_onboarding", "running", `Created tenant ${organizationName}`, {
-    tenant_id: tenantId,
-    organization_name: organizationName
-  }));
+  completeTask(
+    addTask("tenant_onboarding", "running", `Created tenant ${organizationName}`, {
+      tenant_id: tenantId,
+      organization_name: organizationName
+    })
+  );
   return {
     tenant: {
       id: tenantId,
@@ -1286,7 +1550,9 @@ function createTenantSignup(body = {}) {
 
 function createInvitation(tenantId, body = {}) {
   requiredTenantContext(tenantId);
-  const email = String(body.email || "").trim().toLowerCase();
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
   if (!email || !email.includes("@")) {
     const error = new Error("valid_email_required");
     error.statusCode = 400;
@@ -1311,15 +1577,27 @@ function createInvitation(tenantId, body = {}) {
     email,
     roles: invite.roles
   });
-  addTask("member_invitation", "completed", `Invited ${email}`, { tenant_id: tenantId, invitation_id: invite.id });
+  addTask("member_invitation", "completed", `Invited ${email}`, {
+    tenant_id: tenantId,
+    invitation_id: invite.id
+  });
   scheduleRuntimePersist("member.invited");
-  return { invitation: { ...invite, token_hash: undefined, invite_url: `${publicUrl}/#tab=administration&invite=${encodeURIComponent(token)}` }, token };
+  return {
+    invitation: {
+      ...invite,
+      token_hash: undefined,
+      invite_url: `${publicUrl}/#tab=administration&invite=${encodeURIComponent(token)}`
+    },
+    token
+  };
 }
 
 function acceptInvitation(body = {}) {
   const token = body.token || body.invitation_token;
   const hashed = token ? tokenHash(token) : body.token_hash;
-  const invite = (state.fleet.invitations || []).find((item) => item.token_hash === hashed && item.status === "pending");
+  const invite = (state.fleet.invitations || []).find(
+    (item) => item.token_hash === hashed && item.status === "pending"
+  );
   if (!invite) {
     const error = new Error("invitation_not_found_or_used");
     error.statusCode = 404;
@@ -1339,8 +1617,17 @@ function acceptInvitation(body = {}) {
   invite.status = "accepted";
   invite.accepted_at = nowIso();
   invite.account_id = account.id;
-  const sessionBundle = createAuthSession({ tenant_id: invite.tenant_id, account_id: account.id, method: "invitation-dev" });
-  recordUsage(invite.tenant_id, "console_seats", countActiveSeats(invite.tenant_id), "invitation_accept");
+  const sessionBundle = createAuthSession({
+    tenant_id: invite.tenant_id,
+    account_id: account.id,
+    method: "invitation-dev"
+  });
+  recordUsage(
+    invite.tenant_id,
+    "console_seats",
+    countActiveSeats(invite.tenant_id),
+    "invitation_accept"
+  );
   recordAudit("member.joined", "tenant_member", member.id, {
     tenant_id: invite.tenant_id,
     actor_id: account.id,
@@ -1355,14 +1642,18 @@ function acceptInvitation(body = {}) {
 }
 
 function countActiveSeats(tenantId) {
-  return (state.fleet.tenantMembers || []).filter((member) => member.tenant_id === tenantId && member.status === "active").length;
+  return (state.fleet.tenantMembers || []).filter(
+    (member) => member.tenant_id === tenantId && member.status === "active"
+  ).length;
 }
 
 function countManagedDevices(tenantId) {
-  const deviceIds = new Set((state.fleet.localControlPlanes || [])
-    .filter((lcp) => lcp.tenant_id === tenantId)
-    .map((lcp) => lcp.device_id)
-    .filter(Boolean));
+  const deviceIds = new Set(
+    (state.fleet.localControlPlanes || [])
+      .filter((lcp) => lcp.tenant_id === tenantId)
+      .map((lcp) => lcp.device_id)
+      .filter(Boolean)
+  );
   return deviceIds.size;
 }
 
@@ -1373,7 +1664,9 @@ function countLocalControlPlanes(tenantId) {
 function upsertUsageCounter(tenantId, metric, quantity) {
   requiredTenantContext(tenantId);
   const now = nowIso();
-  const counter = (state.fleet.usageCounters || []).find((item) => item.tenant_id === tenantId && item.metric === metric && item.period === "current");
+  const counter = (state.fleet.usageCounters || []).find(
+    (item) => item.tenant_id === tenantId && item.metric === metric && item.period === "current"
+  );
   if (counter) {
     counter.quantity = Number(quantity || 0);
     counter.updated_at = now;
@@ -1422,10 +1715,18 @@ function numberFromUsage(entry, fields) {
 }
 
 function normalizeOsFamily(value = "unknown") {
-  const normalized = String(value || "unknown").trim().toLowerCase();
+  const normalized = String(value || "unknown")
+    .trim()
+    .toLowerCase();
   if (normalized.startsWith("win")) return "windows";
   if (normalized === "darwin" || normalized.startsWith("mac")) return "macos";
-  if (normalized.includes("linux") || normalized.includes("ubuntu") || normalized.includes("debian") || normalized.includes("fedora")) return "linux";
+  if (
+    normalized.includes("linux") ||
+    normalized.includes("ubuntu") ||
+    normalized.includes("debian") ||
+    normalized.includes("fedora")
+  )
+    return "linux";
   return ["windows", "macos", "linux"].includes(normalized) ? normalized : "unknown";
 }
 
@@ -1440,7 +1741,9 @@ function validateLcpUsageLedger(body = {}) {
       ? body.entries
       : [];
   if (!entries.length) throw new Error("usage_entries array is required");
-  const knownLcp = (state.fleet.localControlPlanes || []).find((item) => item.id === lcpId && item.tenant_id === tenantId);
+  const knownLcp = (state.fleet.localControlPlanes || []).find(
+    (item) => item.id === lcpId && item.tenant_id === tenantId
+  );
   if (!knownLcp) throw new Error(`unknown_lcp:${lcpId}`);
   return {
     tenantId,
@@ -1461,9 +1764,15 @@ function normalizeLcpUsageEntry(entry, context, index) {
   const pricingModel = entry.pricing_model || entry.billing_model || "token_metered";
   const inputTokens = numberFromUsage(entry, ["input_tokens", "prompt_tokens"]);
   const outputTokens = numberFromUsage(entry, ["output_tokens", "completion_tokens"]);
-  const totalTokens = numberFromUsage(entry, ["total_tokens", "tokens"]) || inputTokens + outputTokens;
+  const totalTokens =
+    numberFromUsage(entry, ["total_tokens", "tokens"]) || inputTokens + outputTokens;
   const credits = numberFromUsage(entry, ["billed_credits", "credits", "credit_units"]);
-  const allocatedCostCents = numberFromUsage(entry, ["allocated_cost_cents", "estimated_cost_cents", "cost_cents", "amount_cents"]);
+  const allocatedCostCents = numberFromUsage(entry, [
+    "allocated_cost_cents",
+    "estimated_cost_cents",
+    "cost_cents",
+    "amount_cents"
+  ]);
   const osFamily = normalizeOsFamily(entry.os_family || entry.osFamily || context.osFamily);
   if (pricingModel.includes("credit") && !entry.billing_pool_id && !entry.credit_pool_id) {
     throw new Error(`usage_entries[${index}].billing_pool_id is required for credit pricing`);
@@ -1492,7 +1801,10 @@ function normalizeLcpUsageEntry(entry, context, index) {
     model,
     pricing_model: pricingModel,
     billing_pool_id: entry.billing_pool_id || entry.credit_pool_id || "",
-    allocation_method: entry.allocation_method || entry.cost_allocation_method || (pricingModel.includes("credit") ? "lcp_reported_credit_allocation" : "direct_token_meter"),
+    allocation_method:
+      entry.allocation_method ||
+      entry.cost_allocation_method ||
+      (pricingModel.includes("credit") ? "lcp_reported_credit_allocation" : "direct_token_meter"),
     call_count: numberFromUsage(entry, ["call_count", "calls", "request_count"]),
     input_tokens: inputTokens,
     output_tokens: outputTokens,
@@ -1508,7 +1820,8 @@ function normalizeLcpUsageEntry(entry, context, index) {
 }
 
 function ingestLcpUsageLedger(body = {}) {
-  const { tenantId, lcpId, entries, osFamily, osVersion, captureMethod } = validateLcpUsageLedger(body);
+  const { tenantId, lcpId, entries, osFamily, osVersion, captureMethod } =
+    validateLcpUsageLedger(body);
   const ledgerId = body.ledger_id || `lcp_usage_ledger_${crypto.randomUUID()}`;
   const context = {
     tenantId,
@@ -1548,7 +1861,10 @@ function ingestLcpUsageLedger(body = {}) {
     rejected_count: 0,
     total_tokens: accepted.reduce((sum, record) => sum + Number(record.total_tokens || 0), 0),
     billed_credits: accepted.reduce((sum, record) => sum + Number(record.billed_credits || 0), 0),
-    allocated_cost_cents: accepted.reduce((sum, record) => sum + Number(record.allocated_cost_cents || 0), 0),
+    allocated_cost_cents: accepted.reduce(
+      (sum, record) => sum + Number(record.allocated_cost_cents || 0),
+      0
+    ),
     received_at: context.receivedAt,
     source: "local_pollek_control_plane"
   };
@@ -1571,7 +1887,11 @@ function ingestLcpUsageLedger(body = {}) {
     lcp_id: lcpId,
     ledger_id: ledgerId
   });
-  broadcastSse("lcp_usage.ledger_ingested", { ledger, usage_records: accepted.slice(0, 20), summary: billingUsageSnapshot(tenantId) });
+  broadcastSse("lcp_usage.ledger_ingested", {
+    ledger,
+    usage_records: accepted.slice(0, 20),
+    summary: billingUsageSnapshot(tenantId)
+  });
   scheduleRuntimePersist("lcp_usage_ledger.ingested");
   return { ledger, usage_records: accepted, duplicates };
 }
@@ -1580,34 +1900,67 @@ function refreshTenantUsage(tenantId) {
   upsertUsageCounter(tenantId, "console_seats", countActiveSeats(tenantId));
   upsertUsageCounter(tenantId, "local_control_planes", countLocalControlPlanes(tenantId));
   upsertUsageCounter(tenantId, "managed_devices", countManagedDevices(tenantId));
-  const telemetryTotals = (state.fleet.telemetryIngestTotals || []).find((item) => item.tenant_id === tenantId);
-  upsertUsageCounter(tenantId, "telemetry_events", telemetryTotals
-    ? telemetryTotals.accepted
-    : state.events.filter((event) => event.tenant_id === tenantId).length);
-  const aiUsage = (state.fleet.usageRecords || []).filter((record) => record.tenant_id === tenantId && record.metric === "ai_model_usage");
-  upsertUsageCounter(tenantId, "ai_model_tokens", aiUsage.reduce((sum, record) => sum + Number(record.total_tokens || record.tokens || 0), 0));
-  upsertUsageCounter(tenantId, "ai_model_estimated_cost_cents", aiUsage.reduce((sum, record) => sum + Number(record.allocated_cost_cents || record.estimated_cost_cents || record.cost_cents || 0), 0));
-  upsertUsageCounter(tenantId, "ai_model_credits", aiUsage.reduce((sum, record) => sum + Number(record.billed_credits || record.credits || 0), 0));
+  const telemetryTotals = (state.fleet.telemetryIngestTotals || []).find(
+    (item) => item.tenant_id === tenantId
+  );
+  upsertUsageCounter(
+    tenantId,
+    "telemetry_events",
+    telemetryTotals
+      ? telemetryTotals.accepted
+      : state.events.filter((event) => event.tenant_id === tenantId).length
+  );
+  const aiUsage = (state.fleet.usageRecords || []).filter(
+    (record) => record.tenant_id === tenantId && record.metric === "ai_model_usage"
+  );
+  upsertUsageCounter(
+    tenantId,
+    "ai_model_tokens",
+    aiUsage.reduce((sum, record) => sum + Number(record.total_tokens || record.tokens || 0), 0)
+  );
+  upsertUsageCounter(
+    tenantId,
+    "ai_model_estimated_cost_cents",
+    aiUsage.reduce(
+      (sum, record) =>
+        sum +
+        Number(
+          record.allocated_cost_cents || record.estimated_cost_cents || record.cost_cents || 0
+        ),
+      0
+    )
+  );
+  upsertUsageCounter(
+    tenantId,
+    "ai_model_credits",
+    aiUsage.reduce((sum, record) => sum + Number(record.billed_credits || record.credits || 0), 0)
+  );
   return (state.fleet.usageCounters || []).filter((item) => item.tenant_id === tenantId);
 }
 
 function refreshAllTenantUsage() {
-  const tenantIds = new Set([
-    "local",
-    ...(state.fleet.billingAccounts || []).map((account) => account.tenant_id),
-    ...(state.fleet.tenantMembers || []).map((member) => member.tenant_id)
-  ].filter(Boolean));
+  const tenantIds = new Set(
+    [
+      "local",
+      ...(state.fleet.billingAccounts || []).map((account) => account.tenant_id),
+      ...(state.fleet.tenantMembers || []).map((member) => member.tenant_id)
+    ].filter(Boolean)
+  );
   for (const tenantId of tenantIds) refreshTenantUsage(tenantId);
   return state.fleet.usageCounters || [];
 }
 
 function planForTenant(tenantId) {
-  const sub = (state.fleet.subscriptions || []).find((item) => item.tenant_id === tenantId && ["active", "trialing"].includes(item.status))
-    || (state.fleet.subscriptions || []).find((item) => item.tenant_id === tenantId)
-    || null;
-  const plan = (state.fleet.billingPlans || []).find((item) => item.id === sub?.plan_id)
-    || (state.fleet.billingPlans || [])[0]
-    || null;
+  const sub =
+    (state.fleet.subscriptions || []).find(
+      (item) => item.tenant_id === tenantId && ["active", "trialing"].includes(item.status)
+    ) ||
+    (state.fleet.subscriptions || []).find((item) => item.tenant_id === tenantId) ||
+    null;
+  const plan =
+    (state.fleet.billingPlans || []).find((item) => item.id === sub?.plan_id) ||
+    (state.fleet.billingPlans || [])[0] ||
+    null;
   return { subscription: sub, plan };
 }
 
@@ -1666,11 +2019,20 @@ function usageFieldString(record, keys, fallback = "") {
 
 function isCostTokenRecord(record) {
   const metric = String(record?.metric || "");
-  return metric === "ai_model_usage"
-    || metric.includes("token")
-    || metric.includes("cost")
-    || usageFieldNumber(record, ["total_tokens", "tokens", "input_tokens", "output_tokens"]) > 0
-    || usageFieldNumber(record, ["allocated_cost_cents", "estimated_cost_cents", "cost_cents", "amount_cents", "billed_credits", "credits"]) > 0;
+  return (
+    metric === "ai_model_usage" ||
+    metric.includes("token") ||
+    metric.includes("cost") ||
+    usageFieldNumber(record, ["total_tokens", "tokens", "input_tokens", "output_tokens"]) > 0 ||
+    usageFieldNumber(record, [
+      "allocated_cost_cents",
+      "estimated_cost_cents",
+      "cost_cents",
+      "amount_cents",
+      "billed_credits",
+      "credits"
+    ]) > 0
+  );
 }
 
 function usageRecordTimestamp(record) {
@@ -1684,7 +2046,8 @@ function parseRangeBound(value, { endOfDay = false } = {}) {
   const raw = String(value).trim();
   if (!raw) return null;
   let iso = raw;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) iso = endOfDay ? `${raw}T23:59:59.999Z` : `${raw}T00:00:00.000Z`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw))
+    iso = endOfDay ? `${raw}T23:59:59.999Z` : `${raw}T00:00:00.000Z`;
   const ms = Date.parse(iso);
   return Number.isNaN(ms) ? null : ms;
 }
@@ -1713,7 +2076,8 @@ function recordWithinRange(record, range) {
 function costTokenRecordsForScope(tenantId = null, range = null) {
   let records = (state.fleet.usageRecords || []).filter(isCostTokenRecord);
   if (tenantId) records = records.filter((record) => record.tenant_id === tenantId);
-  if (range && (range.from !== null || range.to !== null)) records = records.filter((record) => recordWithinRange(record, range));
+  if (range && (range.from !== null || range.to !== null))
+    records = records.filter((record) => recordWithinRange(record, range));
   return records;
 }
 
@@ -1743,8 +2107,16 @@ function costTokenGroupIdentity(record, dimension) {
       };
     case "agent":
       return {
-        key: usageFieldString(record, ["agent_id", "entity_id", "object_id"], usageFieldString(record, ["agent_name", "name"], "unknown-agent")),
-        label: usageFieldString(record, ["agent_name", "name", "agent_id", "entity_id"], "Unknown agent"),
+        key: usageFieldString(
+          record,
+          ["agent_id", "entity_id", "object_id"],
+          usageFieldString(record, ["agent_name", "name"], "unknown-agent")
+        ),
+        label: usageFieldString(
+          record,
+          ["agent_name", "name", "agent_id", "entity_id"],
+          "Unknown agent"
+        ),
         meta: {}
       };
     case "tenant":
@@ -1756,7 +2128,11 @@ function costTokenGroupIdentity(record, dimension) {
     case "model": {
       const provider = usageFieldString(record, ["provider"], "unknown");
       const model = usageFieldString(record, ["model"], "unknown");
-      return { key: `${provider}::${model}`, label: `${provider} ${model}`.trim(), meta: { provider, model } };
+      return {
+        key: `${provider}::${model}`,
+        label: `${provider} ${model}`.trim(),
+        meta: { provider, model }
+      };
     }
     case "provider":
       return {
@@ -1799,8 +2175,14 @@ function accumulateCostToken(bucket, record) {
   const inputTokens = usageFieldNumber(record, ["input_tokens", "prompt_tokens"]);
   const outputTokens = usageFieldNumber(record, ["output_tokens", "completion_tokens"]);
   const cachedTokens = usageFieldNumber(record, ["cached_input_tokens"]);
-  const totalTokens = usageFieldNumber(record, ["total_tokens", "tokens"]) || inputTokens + outputTokens;
-  const costCents = usageFieldNumber(record, ["allocated_cost_cents", "estimated_cost_cents", "cost_cents", "amount_cents"]);
+  const totalTokens =
+    usageFieldNumber(record, ["total_tokens", "tokens"]) || inputTokens + outputTokens;
+  const costCents = usageFieldNumber(record, [
+    "allocated_cost_cents",
+    "estimated_cost_cents",
+    "cost_cents",
+    "amount_cents"
+  ]);
   const credits = usageFieldNumber(record, ["billed_credits", "credits", "credit_units"]);
   const calls = usageFieldNumber(record, ["call_count", "calls", "request_count"]);
   bucket.input_tokens += inputTokens;
@@ -1818,12 +2200,19 @@ function accumulateCostToken(bucket, record) {
   if (poolId) bucket.credit_pools.add(poolId);
   bucket.devices.add(usageFieldString(record, ["device_id", "device_name"], "unknown-device"));
   bucket.users.add(usageFieldString(record, ["user_subject", "user_id"], "unknown-user"));
-  bucket.agents.add(usageFieldString(record, ["agent_id", "entity_id"], usageFieldString(record, ["agent_name"], "unknown-agent")));
+  bucket.agents.add(
+    usageFieldString(
+      record,
+      ["agent_id", "entity_id"],
+      usageFieldString(record, ["agent_name"], "unknown-agent")
+    )
+  );
   bucket.tenants.add(usageFieldString(record, ["tenant_id"], "unknown-tenant"));
   bucket.providers.add(usageFieldString(record, ["provider"], "unknown"));
   bucket.models.add(usageFieldString(record, ["model"], "unknown"));
   const activityAt = usageFieldString(record, ["observed_at", "recorded_at"], "");
-  if (activityAt && (!bucket.last_activity_at || activityAt > bucket.last_activity_at)) bucket.last_activity_at = activityAt;
+  if (activityAt && (!bucket.last_activity_at || activityAt > bucket.last_activity_at))
+    bucket.last_activity_at = activityAt;
 }
 
 function finalizeCostTokenBucket(bucket) {
@@ -1865,7 +2254,9 @@ function aggregateCostTokens(records, dimension) {
   }
   return [...buckets.values()]
     .map(finalizeCostTokenBucket)
-    .sort((a, b) => b.cost_cents - a.cost_cents || b.total_tokens - a.total_tokens || b.calls - a.calls);
+    .sort(
+      (a, b) => b.cost_cents - a.cost_cents || b.total_tokens - a.total_tokens || b.calls - a.calls
+    );
 }
 
 function summarizeCostTokens(records) {
@@ -1891,13 +2282,19 @@ function summarizeCostTokens(records) {
     tenants: final.tenant_count,
     providers: final.provider_count,
     models: final.model_count,
-    avg_cost_per_device_cents: final.device_count ? Math.round(final.cost_cents / final.device_count) : 0,
+    avg_cost_per_device_cents: final.device_count
+      ? Math.round(final.cost_cents / final.device_count)
+      : 0,
     avg_cost_per_user_cents: final.user_count ? Math.round(final.cost_cents / final.user_count) : 0
   };
 }
 
 function costTokenRangeMeta(range) {
-  return { from: range.from_iso, to: range.to_iso, applied: range.from !== null || range.to !== null };
+  return {
+    from: range.from_iso,
+    to: range.to_iso,
+    applied: range.from !== null || range.to !== null
+  };
 }
 
 function costTokenReport(tenantId, dimension, rangeInput = {}) {
@@ -1934,37 +2331,45 @@ function costTokenOverview(tenantId, rangeInput = {}) {
     overview.categories[dimension] = aggregateCostTokens(records, dimension);
   }
   overview.sources = {
-    lcp_usage_ledger: records.filter((record) => record.source === "lcp_usage_ledger" || record.confidence === "reported_by_lcp").length,
-    telemetry_bridge: records.filter((record) => record.source === "lcp_model_usage_telemetry").length,
-    estimated: records.filter((record) => String(record.confidence || record.source || "").includes("estimate")).length,
+    lcp_usage_ledger: records.filter(
+      (record) => record.source === "lcp_usage_ledger" || record.confidence === "reported_by_lcp"
+    ).length,
+    telemetry_bridge: records.filter((record) => record.source === "lcp_model_usage_telemetry")
+      .length,
+    estimated: records.filter((record) =>
+      String(record.confidence || record.source || "").includes("estimate")
+    ).length,
     total: records.length
   };
   return overview;
 }
 
 function costTokenReportCsv(report) {
-  const header = "group_by,key,label,input_tokens,output_tokens,cached_input_tokens,total_tokens,cost_cents,credits,calls,records,reported_records,estimated_records,device_count,user_count,agent_count,tenant_count,last_activity_at";
+  const header =
+    "group_by,key,label,input_tokens,output_tokens,cached_input_tokens,total_tokens,cost_cents,credits,calls,records,reported_records,estimated_records,device_count,user_count,agent_count,tenant_count,last_activity_at";
   const escape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-  const rows = report.groups.map((group) => [
-    report.group_by,
-    escape(group.key),
-    escape(group.label),
-    group.input_tokens,
-    group.output_tokens,
-    group.cached_input_tokens,
-    group.total_tokens,
-    group.cost_cents,
-    group.credits,
-    group.calls,
-    group.records,
-    group.reported_records,
-    group.estimated_records,
-    group.device_count,
-    group.user_count,
-    group.agent_count,
-    group.tenant_count,
-    escape(group.last_activity_at || "")
-  ].join(","));
+  const rows = report.groups.map((group) =>
+    [
+      report.group_by,
+      escape(group.key),
+      escape(group.label),
+      group.input_tokens,
+      group.output_tokens,
+      group.cached_input_tokens,
+      group.total_tokens,
+      group.cost_cents,
+      group.credits,
+      group.calls,
+      group.records,
+      group.reported_records,
+      group.estimated_records,
+      group.device_count,
+      group.user_count,
+      group.agent_count,
+      group.tenant_count,
+      escape(group.last_activity_at || "")
+    ].join(",")
+  );
   return [header, ...rows].join("\n");
 }
 
@@ -1973,15 +2378,43 @@ function invoicePreview(tenantId) {
   const plan = usage.plan || {};
   const overage = {
     seats: Math.max(0, usage.summary.seats - Number(plan.included_seats || 0)),
-    local_control_planes: Math.max(0, usage.summary.local_control_planes - Number(plan.included_lcps || 0)),
+    local_control_planes: Math.max(
+      0,
+      usage.summary.local_control_planes - Number(plan.included_lcps || 0)
+    ),
     managed_devices: Math.max(0, usage.summary.managed_devices - Number(plan.included_devices || 0))
   };
   const lineItems = [
-    { metric: "base_subscription", quantity: 1, unit_amount_cents: plan.monthly_base_cents || 0, amount_cents: plan.monthly_base_cents || 0 },
-    { metric: "seat_overage", quantity: overage.seats, unit_amount_cents: plan.seat_overage_cents || 0, amount_cents: overage.seats * Number(plan.seat_overage_cents || 0) },
-    { metric: "lcp_overage", quantity: overage.local_control_planes, unit_amount_cents: plan.lcp_overage_cents || 0, amount_cents: overage.local_control_planes * Number(plan.lcp_overage_cents || 0) },
-    { metric: "device_overage", quantity: overage.managed_devices, unit_amount_cents: plan.device_overage_cents || 0, amount_cents: overage.managed_devices * Number(plan.device_overage_cents || 0) },
-    { metric: "ai_model_cost_allocation", quantity: usage.summary.ai_model_tokens || 0, unit_amount_cents: 0, amount_cents: usage.summary.ai_model_estimated_cost_cents || 0 }
+    {
+      metric: "base_subscription",
+      quantity: 1,
+      unit_amount_cents: plan.monthly_base_cents || 0,
+      amount_cents: plan.monthly_base_cents || 0
+    },
+    {
+      metric: "seat_overage",
+      quantity: overage.seats,
+      unit_amount_cents: plan.seat_overage_cents || 0,
+      amount_cents: overage.seats * Number(plan.seat_overage_cents || 0)
+    },
+    {
+      metric: "lcp_overage",
+      quantity: overage.local_control_planes,
+      unit_amount_cents: plan.lcp_overage_cents || 0,
+      amount_cents: overage.local_control_planes * Number(plan.lcp_overage_cents || 0)
+    },
+    {
+      metric: "device_overage",
+      quantity: overage.managed_devices,
+      unit_amount_cents: plan.device_overage_cents || 0,
+      amount_cents: overage.managed_devices * Number(plan.device_overage_cents || 0)
+    },
+    {
+      metric: "ai_model_cost_allocation",
+      quantity: usage.summary.ai_model_tokens || 0,
+      unit_amount_cents: 0,
+      amount_cents: usage.summary.ai_model_estimated_cost_cents || 0
+    }
   ];
   const total = lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
   return {
@@ -1997,7 +2430,9 @@ function invoicePreview(tenantId) {
 }
 
 function ensureInvoice(tenantId) {
-  const existing = (state.fleet.invoices || []).find((invoice) => invoice.tenant_id === tenantId && invoice.status === "preview");
+  const existing = (state.fleet.invoices || []).find(
+    (invoice) => invoice.tenant_id === tenantId && invoice.status === "preview"
+  );
   const preview = invoicePreview(tenantId);
   if (existing) {
     Object.assign(existing, preview, { id: existing.id });
@@ -2029,7 +2464,9 @@ function issueOfflineLicense(tenantId, body = {}) {
     expires_at: body.expires_at || daysFromNow(365)
   };
   const payload = stableJson(licenseBody);
-  const signature = crypto.sign(null, Buffer.from(payload), bundleSigningKeyPair.privateKey).toString("base64url");
+  const signature = crypto
+    .sign(null, Buffer.from(payload), bundleSigningKeyPair.privateKey)
+    .toString("base64url");
   const license = {
     id: `lic_${slugify(tenantId)}_${crypto.randomBytes(5).toString("hex")}`,
     tenant_id: tenantId,
@@ -2114,25 +2551,6 @@ function verificationKeyEntries() {
   ];
 }
 
-function verifyTrustDocument(signed) {
-  if (!signed || typeof signed !== "object") return { status: "invalid", reason: "not_an_object", signature_count: 0 };
-  const { signatures, ...unsigned } = signed;
-  if (!Array.isArray(signatures) || signatures.length === 0) {
-    return { status: "unsigned", reason: "no_signatures", signature_count: 0 };
-  }
-  const payload = Buffer.from(stableJson(unsigned));
-  const keys = verificationKeyEntries();
-  const results = signatures.map((entry) => {
-    const matchedKeyid = entry?.sig ? signer.verifyAgainstKeys(payload, entry.sig, keys) : null;
-    return { keyid: entry?.keyid || null, valid: Boolean(matchedKeyid), verified_by: matchedKeyid };
-  });
-  return {
-    status: results.every((item) => item.valid) ? "valid" : "invalid",
-    signature_count: results.length,
-    results
-  };
-}
-
 // Cloud-authored trust policy (DEK alignment §2). Cloud authors it; the DEK may only make it
 // stricter (effective = max(cloud, local)). Signed at read time with the current signer key.
 function unsignedTrustPolicy() {
@@ -2203,7 +2621,13 @@ function unsignedSignerAllowlist() {
   }
   for (const keyid of revoked) {
     if (keyid === activeKeyId || signers.some((s) => s.keyid === keyid)) continue;
-    signers.push({ keyid, alg: "ed25519", status: "revoked", public_key: { raw_base64url: "" }, purposes: [] });
+    signers.push({
+      keyid,
+      alg: "ed25519",
+      status: "revoked",
+      public_key: { raw_base64url: "" },
+      purposes: []
+    });
   }
   return {
     schema_version: "pollek.trust.signer-allowlist.v1",
@@ -2237,24 +2661,42 @@ function revocationListDocument() {
 
 // Append revocations and bump the monotonic epoch. Returns the freshly signed list.
 function addRevocations(entry = {}, actor = "acc_local_admin") {
-  const store = state.fleet.trustRevocations || (state.fleet.trustRevocations = {
-    revocation_epoch: 0, revoked_key_ids: [], revoked_bundle_digests: [], revoked_revisions: [], history: []
-  });
-  const keyIds = Array.isArray(entry.revoked_key_ids) ? entry.revoked_key_ids.filter((value) => typeof value === "string" && value) : [];
-  const bundleDigests = Array.isArray(entry.revoked_bundle_digests) ? entry.revoked_bundle_digests.filter((value) => typeof value === "string" && value) : [];
-  const revisions = Array.isArray(entry.revoked_revisions) ? entry.revoked_revisions.filter((value) => typeof value === "string" && value) : [];
+  const store =
+    state.fleet.trustRevocations ||
+    (state.fleet.trustRevocations = {
+      revocation_epoch: 0,
+      revoked_key_ids: [],
+      revoked_bundle_digests: [],
+      revoked_revisions: [],
+      history: []
+    });
+  const keyIds = Array.isArray(entry.revoked_key_ids)
+    ? entry.revoked_key_ids.filter((value) => typeof value === "string" && value)
+    : [];
+  const bundleDigests = Array.isArray(entry.revoked_bundle_digests)
+    ? entry.revoked_bundle_digests.filter((value) => typeof value === "string" && value)
+    : [];
+  const revisions = Array.isArray(entry.revoked_revisions)
+    ? entry.revoked_revisions.filter((value) => typeof value === "string" && value)
+    : [];
   if (!keyIds.length && !bundleDigests.length && !revisions.length) {
     const error = new Error("revocation_target_required");
     error.statusCode = 400;
     throw error;
   }
   store.revoked_key_ids = [...new Set([...(store.revoked_key_ids || []), ...keyIds])];
-  store.revoked_bundle_digests = [...new Set([...(store.revoked_bundle_digests || []), ...bundleDigests])];
+  store.revoked_bundle_digests = [
+    ...new Set([...(store.revoked_bundle_digests || []), ...bundleDigests])
+  ];
   store.revoked_revisions = [...new Set([...(store.revoked_revisions || []), ...revisions])];
   store.revocation_epoch = (store.revocation_epoch || 0) + 1;
   const historyEntry = {
     revocation_epoch: store.revocation_epoch,
-    added: { revoked_key_ids: keyIds, revoked_bundle_digests: bundleDigests, revoked_revisions: revisions },
+    added: {
+      revoked_key_ids: keyIds,
+      revoked_bundle_digests: bundleDigests,
+      revoked_revisions: revisions
+    },
     reason: typeof entry.reason === "string" ? entry.reason.slice(0, 500) : null,
     actor_id: actor,
     issued_at: nowIso()
@@ -2266,9 +2708,14 @@ function addRevocations(entry = {}, actor = "acc_local_admin") {
     revoked_bundle_digests: bundleDigests,
     revoked_revisions: revisions
   });
-  addTask("trust_revocation_add", "completed", `Revocation epoch ${store.revocation_epoch} issued`, {
-    revocation_epoch: store.revocation_epoch
-  });
+  addTask(
+    "trust_revocation_add",
+    "completed",
+    `Revocation epoch ${store.revocation_epoch} issued`,
+    {
+      revocation_epoch: store.revocation_epoch
+    }
+  );
   scheduleRuntimePersist("trust.revocation_added");
   return revocationListDocument();
 }
@@ -2279,7 +2726,9 @@ function bundleRevocationStatus(bundle, manifest) {
   const store = state.fleet.trustRevocations || {};
   const revokedRevisions = new Set(store.revoked_revisions || []);
   const revokedKeyIds = new Set(store.revoked_key_ids || []);
-  const revokedDigests = new Set((store.revoked_bundle_digests || []).map((d) => String(d).replace(/^sha256:/, "")));
+  const revokedDigests = new Set(
+    (store.revoked_bundle_digests || []).map((d) => String(d).replace(/^sha256:/, ""))
+  );
   const reasons = [];
   if (bundle?.revision && revokedRevisions.has(bundle.revision)) reasons.push("revoked_revision");
   const signerKeyids = (manifest?.signatures || []).map((s) => s.keyid || s.key_id).filter(Boolean);
@@ -2369,16 +2818,27 @@ function bundleProvenance(bundle) {
     invocation: {
       config_source: {
         uri: `pollek-bundle://${bundleId}`,
-        digest: { sha256: sha256(stableJson({ id: bundleId, revision, policies: bundle?.policies || [] })) },
+        digest: {
+          sha256: sha256(stableJson({ id: bundleId, revision, policies: bundle?.policies || [] }))
+        },
         entry_point: "signPolicyBundle"
       },
       parameters: { revision, tenant_id: bundleTenantId(bundle) },
       environment: { builder_kind: "cloud-contract-hub" }
     },
     materials: [
-      { uri: `pollek-bundle://${bundleId}/policies`, digest: { sha256: sha256(stableJson(bundle?.policies || [])) } },
-      { uri: `pollek-bundle://${bundleId}/artifacts`, digest: { sha256: sha256(stableJson(bundle?.artifacts || [])) } },
-      { uri: `pollek-bundle://${bundleId}/data.json`, digest: { sha256: sha256(stableJson(dataDoc)) } }
+      {
+        uri: `pollek-bundle://${bundleId}/policies`,
+        digest: { sha256: sha256(stableJson(bundle?.policies || [])) }
+      },
+      {
+        uri: `pollek-bundle://${bundleId}/artifacts`,
+        digest: { sha256: sha256(stableJson(bundle?.artifacts || [])) }
+      },
+      {
+        uri: `pollek-bundle://${bundleId}/data.json`,
+        digest: { sha256: sha256(stableJson(dataDoc)) }
+      }
     ],
     metadata: {
       build_finished_on: createdAt,
@@ -2394,14 +2854,23 @@ function bundleSbom(bundle) {
   const bundleId = bundle?.id || "bnd_local_dev_baseline";
   const revision = bundle?.revision || "2026.06.29.001";
   const createdAt = bundle?.created_at || "2026-06-29T00:00:00.000Z";
-  const engines = [...new Set((bundle?.policies || []).flatMap((policy) => policy.engines || policy.engine || []))].sort();
+  const engines = [
+    ...new Set((bundle?.policies || []).flatMap((policy) => policy.engines || policy.engine || []))
+  ].sort();
   const components = [
     {
       type: "application",
       "bom-ref": `pkg:pollek/policy-bundle/${bundleId}@${revision}`,
       name: "pollek-policy-bundle",
       version: revision,
-      hashes: [{ alg: "SHA-256", content: sha256(stableJson({ policies: bundle?.policies || [], artifacts: bundle?.artifacts || [] })) }]
+      hashes: [
+        {
+          alg: "SHA-256",
+          content: sha256(
+            stableJson({ policies: bundle?.policies || [], artifacts: bundle?.artifacts || [] })
+          )
+        }
+      ]
     },
     ...engines.map((engine) => ({
       type: "library",
@@ -2433,7 +2902,12 @@ function bundleTestAttestation(bundle) {
   return {
     schema_version: "pollek.trust.test-attestation.v1",
     predicate_type: "https://pollek.cloud/attestations/policy-tests@v1",
-    subject: [{ name: `pollek-policy-bundle/${bundleId}`, digest: { sha256: sha256(stableJson({ id: bundleId, revision })) } }],
+    subject: [
+      {
+        name: `pollek-policy-bundle/${bundleId}`,
+        digest: { sha256: sha256(stableJson({ id: bundleId, revision })) }
+      }
+    ],
     predicate: {
       suite: "policy-bundle-simulation",
       result: "passed",
@@ -2446,15 +2920,31 @@ function bundleTestAttestation(bundle) {
 }
 
 function defaultApprovalRecordForBundle(bundle, patch = {}) {
-  const approvedAt = patch.approved_at || bundle?.approved_at || bundle?.created_at || "2026-06-29T00:00:00.000Z";
+  const approvedAt =
+    patch.approved_at || bundle?.approved_at || bundle?.created_at || "2026-06-29T00:00:00.000Z";
   return {
-    id: patch.id || bundle?.approval_record?.id || bundle?.approval_id || `approval_${bundle?.id || "bundle"}_local_dev`,
+    id:
+      patch.id ||
+      bundle?.approval_record?.id ||
+      bundle?.approval_id ||
+      `approval_${bundle?.id || "bundle"}_local_dev`,
     tenant_id: patch.tenant_id || bundleTenantId(bundle),
     status: patch.status || bundle?.approval_record?.status || "approved",
-    approved_by: patch.approved_by || bundle?.approval_record?.approved_by || "local-dev-security-admin",
+    approved_by:
+      patch.approved_by || bundle?.approval_record?.approved_by || "local-dev-security-admin",
     approved_at: approvedAt,
-    source: patch.source || bundle?.approval_record?.source || (bundle?.compliance_bundle_id ? "enterprise_compliance_bundle" : bundle?.draft_id ? "policy_draft_approval" : "seed_policy_bundle"),
-    reason: patch.reason || bundle?.approval_record?.reason || "Approved for local-dev signed bundle protocol compatibility testing."
+    source:
+      patch.source ||
+      bundle?.approval_record?.source ||
+      (bundle?.compliance_bundle_id
+        ? "enterprise_compliance_bundle"
+        : bundle?.draft_id
+          ? "policy_draft_approval"
+          : "seed_policy_bundle"),
+    reason:
+      patch.reason ||
+      bundle?.approval_record?.reason ||
+      "Approved for local-dev signed bundle protocol compatibility testing."
   };
 }
 
@@ -2493,7 +2983,9 @@ function unsignedPolicyBundleManifest(bundle) {
     // Cloud-Phase-1: the signature covers policy.wasm AND data.json plus the trust evidence
     // (provenance/SBOM/attestation) below, so tampering with any of them breaks verification.
     signed_fields: ["policy.wasm", "data.json"],
-    generation: Number.isFinite(bundle?.generation) ? Math.max(0, Math.floor(bundle.generation)) : 0,
+    generation: Number.isFinite(bundle?.generation)
+      ? Math.max(0, Math.floor(bundle.generation))
+      : 0,
     data,
     data_sha256: dataHash,
     provenance,
@@ -2517,7 +3009,9 @@ function normalizePolicyBundleSignatures(bundle) {
   const deduped = new Map();
   for (const signature of signatures) {
     if (!signature) continue;
-    const key = signature.id || `${signature.key_id || "unknown"}:${signature.payload_hash || "no-hash"}:${signature.sig || signature.signature || ""}`;
+    const key =
+      signature.id ||
+      `${signature.key_id || "unknown"}:${signature.payload_hash || "no-hash"}:${signature.sig || signature.signature || ""}`;
     deduped.set(key, signature);
   }
   return [...deduped.values()];
@@ -2536,7 +3030,14 @@ function verifyPolicyBundle(bundle, manifest = unsignedPolicyBundleManifest(bund
       // any key still inside its rotation-overlap window.
       let verified = false;
       if (signature.public_key_pem) {
-        verified = Boolean(sig) && crypto.verify(null, Buffer.from(payload), signature.public_key_pem, Buffer.from(sig || "", "base64url"));
+        verified =
+          Boolean(sig) &&
+          crypto.verify(
+            null,
+            Buffer.from(payload),
+            signature.public_key_pem,
+            Buffer.from(sig || "", "base64url")
+          );
       } else {
         verified = Boolean(sig) && Boolean(signer.verifyAgainstKeys(payload, sig, overlapKeys));
       }
@@ -2569,25 +3070,36 @@ function verifyPolicyBundle(bundle, manifest = unsignedPolicyBundleManifest(bund
     revision: bundle?.revision || null,
     payload_hash: payloadHash,
     signature_count: results.length,
-    status: results.length && results.every((item) => item.status === "valid") ? "valid" : results.length ? "invalid" : "unsigned",
+    status:
+      results.length && results.every((item) => item.status === "valid")
+        ? "valid"
+        : results.length
+          ? "invalid"
+          : "unsigned",
     results
   };
 }
 
 function upsertPolicyBundleSignature(record) {
   if (!Array.isArray(state.fleet.policyBundleSignatures)) state.fleet.policyBundleSignatures = [];
-  const existingIndex = state.fleet.policyBundleSignatures.findIndex((item) => item.id === record.id || (
-    item.bundle_id === record.bundle_id
-    && item.payload_hash === record.payload_hash
-    && item.key_id === record.key_id
-  ));
+  const existingIndex = state.fleet.policyBundleSignatures.findIndex(
+    (item) =>
+      item.id === record.id ||
+      (item.bundle_id === record.bundle_id &&
+        item.payload_hash === record.payload_hash &&
+        item.key_id === record.key_id)
+  );
   if (existingIndex >= 0) state.fleet.policyBundleSignatures.splice(existingIndex, 1);
   state.fleet.policyBundleSignatures.unshift(record);
   state.fleet.policyBundleSignatures = state.fleet.policyBundleSignatures.slice(0, 100);
   return record;
 }
 
-function signPolicyBundle(bundle, approvalRecord = defaultApprovalRecordForBundle(bundle), options = {}) {
+function signPolicyBundle(
+  bundle,
+  approvalRecord = defaultApprovalRecordForBundle(bundle),
+  options = {}
+) {
   if (!bundle) throw new Error("policy_bundle_required");
   // Centralized production-signing gate (AGENTS.md rule 6): no bundle is signed without an
   // approved approval record carrying an approver.
@@ -2604,7 +3116,9 @@ function signPolicyBundle(bundle, approvalRecord = defaultApprovalRecordForBundl
   const manifest = unsignedPolicyBundleManifest(bundle);
   const payload = stableJson(manifest);
   const payloadHash = sha256(payload);
-  const sig = crypto.sign(null, Buffer.from(payload), bundleSigningKeyPair.privateKey).toString("base64url");
+  const sig = crypto
+    .sign(null, Buffer.from(payload), bundleSigningKeyPair.privateKey)
+    .toString("base64url");
   const signedAt = options.signed_at || new Date().toISOString();
   const record = {
     id: options.id || `sig_${crypto.randomUUID()}`,
@@ -2641,7 +3155,8 @@ function signPolicyBundle(bundle, approvalRecord = defaultApprovalRecordForBundl
 function ensurePolicyBundleSignature(bundle) {
   const verification = verifyPolicyBundle(bundle);
   if (verification.status === "valid") {
-    for (const signature of normalizePolicyBundleSignatures(bundle)) upsertPolicyBundleSignature(signature);
+    for (const signature of normalizePolicyBundleSignatures(bundle))
+      upsertPolicyBundleSignature(signature);
     return { signed: false, verification };
   }
   const approval = defaultApprovalRecordForBundle(bundle);
@@ -2675,7 +3190,9 @@ function policyBundleArtifact(bundle) {
     immutable: true,
     generation: manifest.generation,
     signed_fields: manifest.signed_fields,
-    engines: [...new Set((bundle.policies || []).flatMap((policy) => policy.engines || policy.engine || []))],
+    engines: [
+      ...new Set((bundle.policies || []).flatMap((policy) => policy.engines || policy.engine || []))
+    ],
     policies: bundle.policies || [],
     artifacts: bundle.artifacts || [],
     data_sha256: manifest.data_sha256,
@@ -2707,7 +3224,9 @@ function policyBundleArtifact(bundle) {
     created_at: new Date().toISOString()
   };
   if (!Array.isArray(state.fleet.policyBundleArtifacts)) state.fleet.policyBundleArtifacts = [];
-  const existingIndex = state.fleet.policyBundleArtifacts.findIndex((item) => item.artifact_hash === artifactHash);
+  const existingIndex = state.fleet.policyBundleArtifacts.findIndex(
+    (item) => item.artifact_hash === artifactHash
+  );
   if (existingIndex >= 0) state.fleet.policyBundleArtifacts.splice(existingIndex, 1);
   state.fleet.policyBundleArtifacts.unshift(record);
   state.fleet.policyBundleArtifacts = state.fleet.policyBundleArtifacts.slice(0, 100);
@@ -2738,9 +3257,21 @@ function authorizationModel() {
     default_decision: "deny",
     roles: {
       admin: ["*"],
-      security_admin: ["policy.approve", "policy.rollout", "bundle.sign", "breakglass.approve", "authz.write"],
+      security_admin: [
+        "policy.approve",
+        "policy.rollout",
+        "bundle.sign",
+        "breakglass.approve",
+        "authz.write"
+      ],
       iam_admin: ["member.invite", "member.write", "idp.write", "scim.write", "authz.write"],
-      billing_admin: ["billing.read", "billing.write", "subscription.write", "license.issue", "payment_method.write"],
+      billing_admin: [
+        "billing.read",
+        "billing.write",
+        "subscription.write",
+        "license.issue",
+        "payment_method.write"
+      ],
       operator: ["lcp.read", "lcp.dispatch", "telemetry.query", "registry.sync"],
       viewer: ["*.read", "telemetry.query"]
     },
@@ -2748,7 +3279,8 @@ function authorizationModel() {
       {
         id: "cedar_policy_high_risk_publish_guard",
         effect: "forbid",
-        condition: "action in [policy.approve, bundle.sign, policy.rollout] when context.risk == high and context.breakglass != active"
+        condition:
+          "action in [policy.approve, bundle.sign, policy.rollout] when context.risk == high and context.breakglass != active"
       },
       {
         id: "cedar_policy_tenant_admin_allow",
@@ -2756,17 +3288,29 @@ function authorizationModel() {
         condition: "principal has admin on tenant"
       }
     ],
-    openfga_model: "model\n  schema 1.1\n\ntype user\ntype tenant\n  relations\n    define admin: [user]\n    define security_admin: [user]\n    define viewer: [user]\n\ntype policy_project\n  relations\n    define approver: [user]\n\ntype lcp\n  relations\n    define operator: [user]\n"
+    openfga_model:
+      "model\n  schema 1.1\n\ntype user\ntype tenant\n  relations\n    define admin: [user]\n    define security_admin: [user]\n    define viewer: [user]\n\ntype policy_project\n  relations\n    define approver: [user]\n\ntype lcp\n  relations\n    define operator: [user]\n"
   };
 }
 
 function relationAppliesToAction(relation, action) {
   if (relation === "admin") return true;
-  if (relation === "security_admin") return ["policy.", "bundle.", "breakglass.", "authz."].some((prefix) => action.startsWith(prefix));
-  if (relation === "iam_admin") return ["member.", "idp.", "scim.", "authz."].some((prefix) => action.startsWith(prefix));
-  if (relation === "billing_admin") return ["billing.", "subscription.", "license.", "payment_method."].some((prefix) => action.startsWith(prefix));
-  if (relation === "approver") return ["policy.approve", "bundle.sign", "policy.rollout"].includes(action);
-  if (relation === "operator") return ["lcp.", "telemetry.", "registry.", "policy.rollout"].some((prefix) => action.startsWith(prefix));
+  if (relation === "security_admin")
+    return ["policy.", "bundle.", "breakglass.", "authz."].some((prefix) =>
+      action.startsWith(prefix)
+    );
+  if (relation === "iam_admin")
+    return ["member.", "idp.", "scim.", "authz."].some((prefix) => action.startsWith(prefix));
+  if (relation === "billing_admin")
+    return ["billing.", "subscription.", "license.", "payment_method."].some((prefix) =>
+      action.startsWith(prefix)
+    );
+  if (relation === "approver")
+    return ["policy.approve", "bundle.sign", "policy.rollout"].includes(action);
+  if (relation === "operator")
+    return ["lcp.", "telemetry.", "registry.", "policy.rollout"].some((prefix) =>
+      action.startsWith(prefix)
+    );
   if (relation === "viewer") return action.endsWith(".read") || action === "telemetry.query";
   return false;
 }
@@ -2782,7 +3326,8 @@ function tupleMatches(tuple, { tenantId, principal, action, object }) {
 
 function createAuthorizationTuple(body = {}) {
   if (!body.tenant_id) throw new Error("tenant_context_required");
-  if (!body.principal || !body.relation || !body.object) throw new Error("principal_relation_object_required");
+  if (!body.principal || !body.relation || !body.object)
+    throw new Error("principal_relation_object_required");
   const tuple = {
     id: body.id || `authz_tuple_${crypto.randomUUID()}`,
     schema_version: "pollek.cloud.authorization-tuple.v1",
@@ -2818,10 +3363,13 @@ function checkAuthorization(body = {}) {
   const action = String(body.action || "unknown");
   const object = String(body.object || body.resource || `tenant:${tenantId}`);
   const context = body.context && typeof body.context === "object" ? body.context : {};
-  const matchedTuples = (state.fleet.authorizationTuples || []).filter((tuple) => tupleMatches(tuple, { tenantId, principal, action, object }));
-  const cedarDeny = ["policy.approve", "bundle.sign", "policy.rollout"].includes(action)
-    && context.risk === "high"
-    && context.breakglass !== "active";
+  const matchedTuples = (state.fleet.authorizationTuples || []).filter((tuple) =>
+    tupleMatches(tuple, { tenantId, principal, action, object })
+  );
+  const cedarDeny =
+    ["policy.approve", "bundle.sign", "policy.rollout"].includes(action) &&
+    context.risk === "high" &&
+    context.breakglass !== "active";
   const decision = cedarDeny ? "deny" : matchedTuples.length ? "allow" : "deny";
   const record = {
     id: `authz_decision_${crypto.randomUUID()}`,
@@ -2831,10 +3379,19 @@ function checkAuthorization(body = {}) {
     action,
     object,
     decision,
-    reason: cedarDeny ? "cedar_high_risk_publish_guard" : matchedTuples.length ? "tuple_match" : "default_deny",
+    reason: cedarDeny
+      ? "cedar_high_risk_publish_guard"
+      : matchedTuples.length
+        ? "tuple_match"
+        : "default_deny",
     engines: {
       rbac: {
-        decision: matchedTuples.some((tuple) => ["admin", "security_admin", "operator", "viewer"].includes(tuple.relation)) && !cedarDeny ? "allow" : "deny",
+        decision:
+          matchedTuples.some((tuple) =>
+            ["admin", "security_admin", "operator", "viewer"].includes(tuple.relation)
+          ) && !cedarDeny
+            ? "allow"
+            : "deny",
         matched_relations: matchedTuples.map((tuple) => tuple.relation)
       },
       rebac: {
@@ -2843,7 +3400,9 @@ function checkAuthorization(body = {}) {
       },
       cedar: {
         decision: cedarDeny ? "deny" : "allow",
-        matched_policy_ids: cedarDeny ? ["cedar_policy_high_risk_publish_guard"] : ["cedar_policy_tenant_admin_allow"]
+        matched_policy_ids: cedarDeny
+          ? ["cedar_policy_high_risk_publish_guard"]
+          : ["cedar_policy_tenant_admin_allow"]
       },
       openfga: {
         decision: matchedTuples.length ? "allowed" : "not_allowed",
@@ -2869,10 +3428,21 @@ function checkAuthorization(body = {}) {
 function stripVolatileFields(value) {
   if (Array.isArray(value)) return value.map((item) => stripVolatileFields(item));
   if (!value || typeof value !== "object") return value;
-  const volatileKeys = new Set(["received_at", "last_seen", "last_seen_at", "last_event_at", "generated_at", "updated_at", "created_at", "latency_ms"]);
-  return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !volatileKeys.has(key) && !key.endsWith("_at") && !key.endsWith("_ms"))
-    .map(([key, item]) => [key, stripVolatileFields(item)]));
+  const volatileKeys = new Set([
+    "received_at",
+    "last_seen",
+    "last_seen_at",
+    "last_event_at",
+    "generated_at",
+    "updated_at",
+    "created_at",
+    "latency_ms"
+  ]);
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !volatileKeys.has(key) && !key.endsWith("_at") && !key.endsWith("_ms"))
+      .map(([key, item]) => [key, stripVolatileFields(item)])
+  );
 }
 
 function watchFingerprintPayload(entitySnapshot, configSnapshot) {
@@ -2902,19 +3472,24 @@ function watchFingerprintPayload(entitySnapshot, configSnapshot) {
 }
 
 function signControlEnvelope(fields) {
-  const signingKey = process.env.POLLEK_CLOUD_CONTROL_SIGNING_KEY || "local-dev-ephemeral-control-key";
+  const signingKey =
+    process.env.POLLEK_CLOUD_CONTROL_SIGNING_KEY || "local-dev-ephemeral-control-key";
   return crypto.createHmac("sha256", signingKey).update(stableJson(fields)).digest("base64url");
 }
 
 function redactSensitive(value) {
   if (Array.isArray(value)) return value.slice(0, 100).map((item) => redactSensitive(item));
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => {
-    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (/token|secret|password|private|credential|authorization|apikey|cookie/.test(normalized)) return [key, "[redacted]"];
-    if (["reference", "paymentreference", "providerreference"].includes(normalized)) return [key, "[redacted]"];
-    return [key, redactSensitive(item)];
-  }));
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (/token|secret|password|private|credential|authorization|apikey|cookie/.test(normalized))
+        return [key, "[redacted]"];
+      if (["reference", "paymentreference", "providerreference"].includes(normalized))
+        return [key, "[redacted]"];
+      return [key, redactSensitive(item)];
+    })
+  );
 }
 
 function safeAuditPayload(payload = {}) {
@@ -2925,13 +3500,17 @@ function safeAuditPayload(payload = {}) {
     truncated: true,
     payload_hash: sha256(encoded),
     byte_length: Buffer.byteLength(encoded, "utf8"),
-    keys: redacted && typeof redacted === "object" && !Array.isArray(redacted) ? Object.keys(redacted).sort() : [],
+    keys:
+      redacted && typeof redacted === "object" && !Array.isArray(redacted)
+        ? Object.keys(redacted).sort()
+        : [],
     preview: typeof redacted === "string" ? redacted.slice(0, 1024) : undefined
   };
 }
 
 function securityPostureStatus() {
-  const loopbackOnly = defaultLcpUrl.startsWith("http://127.0.0.1") || defaultLcpUrl.startsWith("http://localhost");
+  const loopbackOnly =
+    defaultLcpUrl.startsWith("http://127.0.0.1") || defaultLcpUrl.startsWith("http://localhost");
   return {
     schema_version: "pollek.cloud.secure-control-channel-posture.v1",
     model: "zero-trust-signed-intent",
@@ -2949,7 +3528,9 @@ function securityPostureStatus() {
       "KMS/HSM-backed signing keys for production licenses",
       "fail-closed dispatch and immutable audit evidence"
     ],
-    dev_mode_warnings: loopbackOnly ? ["Local HTTP loopback is allowed only for development protocol testing."] : [],
+    dev_mode_warnings: loopbackOnly
+      ? ["Local HTTP loopback is allowed only for development protocol testing."]
+      : [],
     controls: {
       no_arbitrary_lcp_url_dispatch: true,
       no_secret_persistence: true,
@@ -2964,12 +3545,14 @@ function securityPostureStatus() {
 }
 
 function controlScopeForAction(action) {
-  return {
-    "connection.update": ["contract.read", "connection.update"],
-    "config.update": ["configuration.write", "contract.read"],
-    "policy.hot_reload": ["bundle.read", "policy.rollout", "hot_reload.dispatch"],
-    "entity.watch": ["registry.sync", "telemetry.read"]
-  }[action] || ["control.dispatch"];
+  return (
+    {
+      "connection.update": ["contract.read", "connection.update"],
+      "config.update": ["configuration.write", "contract.read"],
+      "policy.hot_reload": ["bundle.read", "policy.rollout", "hot_reload.dispatch"],
+      "entity.watch": ["registry.sync", "telemetry.read"]
+    }[action] || ["control.dispatch"]
+  );
 }
 
 function allowedControlPaths(action, bundleId = "bnd_local_dev_baseline") {
@@ -3005,7 +3588,9 @@ function createControlEnvelope({ action, lcp, payload, allowed_paths = [] }) {
     payload_hash: payloadHash,
     signer: {
       alg: "HS256-dev",
-      kid: process.env.POLLEK_CLOUD_CONTROL_SIGNING_KEY ? "env:POLLEK_CLOUD_CONTROL_SIGNING_KEY" : "local-dev-ephemeral"
+      kid: process.env.POLLEK_CLOUD_CONTROL_SIGNING_KEY
+        ? "env:POLLEK_CLOUD_CONTROL_SIGNING_KEY"
+        : "local-dev-ephemeral"
     }
   };
   return {
@@ -3040,7 +3625,9 @@ function nextStreamEventId() {
 
 function initializeStreamEventSequence() {
   const sequences = state.eventJournal
-    .map((entry) => Number(entry.sequence || String(entry.id || "").match(/stream_(\d+)/)?.[1] || 0))
+    .map((entry) =>
+      Number(entry.sequence || String(entry.id || "").match(/stream_(\d+)/)?.[1] || 0)
+    )
     .filter(Number.isFinite);
   streamEventSequence = Math.max(streamEventSequence, 0, ...sequences);
 }
@@ -3067,10 +3654,14 @@ function replayStreamEntries({ channel, lastEventId, limit = 100 }) {
   if (!lastEventId) return entries.slice(-Math.min(replayLimit, 25));
   const lastSequence = Number(String(lastEventId).match(/stream_(\d+)/)?.[1] || lastEventId);
   if (Number.isFinite(lastSequence) && lastSequence > 0) {
-    return entries.filter((entry) => Number(entry.sequence || 0) > lastSequence).slice(0, replayLimit);
+    return entries
+      .filter((entry) => Number(entry.sequence || 0) > lastSequence)
+      .slice(0, replayLimit);
   }
   const index = entries.findIndex((entry) => entry.id === lastEventId);
-  return index >= 0 ? entries.slice(index + 1, index + 1 + replayLimit) : entries.slice(-Math.min(replayLimit, 25));
+  return index >= 0
+    ? entries.slice(index + 1, index + 1 + replayLimit)
+    : entries.slice(-Math.min(replayLimit, 25));
 }
 
 function sendSse(res, event, data, id = null) {
@@ -3080,9 +3671,10 @@ function sendSse(res, event, data, id = null) {
 }
 
 function broadcastSse(event, data, options = {}) {
-  const entry = options.journal === false
-    ? { id: options.id || null, event, data, channel: options.channel || eventChannelFor(event) }
-    : journalSseEvent(event, data, options);
+  const entry =
+    options.journal === false
+      ? { id: options.id || null, event, data, channel: options.channel || eventChannelFor(event) }
+      : journalSseEvent(event, data, options);
   for (const client of [...sseClients]) {
     if (!streamChannelReceives(client.channel, entry)) continue;
     try {
@@ -3097,7 +3689,11 @@ function broadcastSse(event, data, options = {}) {
 
 function openEventStream(req, res, channel) {
   const { url } = parsePath(req);
-  const lastEventId = req.headers["last-event-id"] || url.searchParams.get("since") || url.searchParams.get("last_event_id") || "";
+  const lastEventId =
+    req.headers["last-event-id"] ||
+    url.searchParams.get("since") ||
+    url.searchParams.get("last_event_id") ||
+    "";
   const replayLimit = url.searchParams.get("replay") || "100";
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -3191,7 +3787,9 @@ function requestTenantId(req, body = {}, tenantIdFromPath = null) {
 }
 
 function requestDeviceId(req, body = {}) {
-  return body.device_id || body.payload?.device_id || req.headers["x-pollek-device-id"] || "unknown";
+  return (
+    body.device_id || body.payload?.device_id || req.headers["x-pollek-device-id"] || "unknown"
+  );
 }
 
 function normalizeTelemetryItems(body = {}) {
@@ -3202,14 +3800,29 @@ function normalizeTelemetryItems(body = {}) {
 }
 
 const TELEMETRY_ENVELOPE_SCHEMA_VERSION = "telemetry-envelope.v1";
-const TELEMETRY_ENVELOPE_REQUIRED_FIELDS = ["schema_version", "event_id", "event_type", "timestamp", "tenant_id", "device_id", "payload", "redaction_applied"];
-const TELEMETRY_ENVELOPE_OPTIONAL_FIELDS = ["workspace_id", "environment_id", "trace_id", "span_id"];
+const TELEMETRY_ENVELOPE_REQUIRED_FIELDS = [
+  "schema_version",
+  "event_id",
+  "event_type",
+  "timestamp",
+  "tenant_id",
+  "device_id",
+  "payload",
+  "redaction_applied"
+];
+const TELEMETRY_ENVELOPE_OPTIONAL_FIELDS = [
+  "workspace_id",
+  "environment_id",
+  "trace_id",
+  "span_id"
+];
 const telemetryEventIdIndex = new Set();
 
 function rebuildTelemetryEventIndex() {
   telemetryEventIdIndex.clear();
   for (const envelope of state.fleet.telemetryEnvelopes || []) {
-    if (envelope?.tenant_id && envelope?.event_id) telemetryEventIdIndex.add(`${envelope.tenant_id}:${envelope.event_id}`);
+    if (envelope?.tenant_id && envelope?.event_id)
+      telemetryEventIdIndex.add(`${envelope.tenant_id}:${envelope.event_id}`);
   }
 }
 
@@ -3222,7 +3835,7 @@ function hasUnredactedTelemetrySecret(value) {
   } catch {
     return true;
   }
-  return blob.includes("authorization:") || blob.includes("bearer ") || blob.includes("\"password\"");
+  return blob.includes("authorization:") || blob.includes("bearer ") || blob.includes('"password"');
 }
 
 function telemetryIngestTotalsFor(tenantId) {
@@ -3251,8 +3864,14 @@ function normalizeTelemetryEnvelope(item, context = {}) {
     return { error: "invalid_event_shape" };
   }
   if (item.schema_version === TELEMETRY_ENVELOPE_SCHEMA_VERSION) {
-    const missing = TELEMETRY_ENVELOPE_REQUIRED_FIELDS.filter((field) => item[field] === undefined || item[field] === null);
-    if (missing.length) return { error: "invalid_envelope", detail: `missing required fields: ${missing.join(", ")}` };
+    const missing = TELEMETRY_ENVELOPE_REQUIRED_FIELDS.filter(
+      (field) => item[field] === undefined || item[field] === null
+    );
+    if (missing.length)
+      return {
+        error: "invalid_envelope",
+        detail: `missing required fields: ${missing.join(", ")}`
+      };
     if (typeof item.payload !== "object" || Array.isArray(item.payload)) {
       return { error: "invalid_envelope", detail: "payload must be an object" };
     }
@@ -3261,14 +3880,23 @@ function normalizeTelemetryEnvelope(item, context = {}) {
     }
   }
   const receivedAt = context.received_at || new Date().toISOString();
-  const payloadSource = typeof item.payload === "object" && item.payload !== null && !Array.isArray(item.payload)
-    ? item.payload
-    : (typeof item.details === "object" && item.details !== null && !Array.isArray(item.details) ? item.details : item);
+  const payloadSource =
+    typeof item.payload === "object" && item.payload !== null && !Array.isArray(item.payload)
+      ? item.payload
+      : typeof item.details === "object" && item.details !== null && !Array.isArray(item.details)
+        ? item.details
+        : item;
   const envelope = {
     schema_version: TELEMETRY_ENVELOPE_SCHEMA_VERSION,
     event_id: String(item.event_id || item.id || `evt_${crypto.randomUUID()}`),
-    event_type: String(item.event_type || item.type || (context.kind ? `telemetry.${context.kind}.v1` : "telemetry.envelope.v1")),
-    timestamp: String(item.timestamp || item.ts || item.occurred_at || item.observed_at || receivedAt),
+    event_type: String(
+      item.event_type ||
+        item.type ||
+        (context.kind ? `telemetry.${context.kind}.v1` : "telemetry.envelope.v1")
+    ),
+    timestamp: String(
+      item.timestamp || item.ts || item.occurred_at || item.observed_at || receivedAt
+    ),
     tenant_id: String(item.tenant_id || context.tenant_id || "local"),
     device_id: String(item.device_id || context.device_id || "unknown"),
     payload: redactSensitive(payloadSource),
@@ -3291,7 +3919,8 @@ function storeTelemetryEnvelope(envelope) {
   if (telemetryEventIdIndex.has(idempotencyKey)) return { duplicate: true };
   telemetryEventIdIndex.add(idempotencyKey);
   state.fleet.telemetryEnvelopes.unshift(envelope);
-  if (state.fleet.telemetryEnvelopes.length > maxTelemetryEnvelopes) state.fleet.telemetryEnvelopes.length = maxTelemetryEnvelopes;
+  if (state.fleet.telemetryEnvelopes.length > maxTelemetryEnvelopes)
+    state.fleet.telemetryEnvelopes.length = maxTelemetryEnvelopes;
   if (telemetryEventIdIndex.size > maxTelemetryEnvelopes * 4) rebuildTelemetryEventIndex();
   broadcastSse("telemetry.envelope", envelope);
   return { duplicate: false };
@@ -3349,8 +3978,10 @@ function bridgeTelemetryUsageEvent(envelope, rawPayload = null) {
       call_count: 1,
       input_tokens: Number(tokens.input_tokens || tokens.prompt_tokens || 0),
       output_tokens: Number(tokens.output_tokens || tokens.completion_tokens || 0),
-      total_tokens: Number(tokens.total_tokens || 0)
-        || Number(tokens.input_tokens || tokens.prompt_tokens || 0) + Number(tokens.output_tokens || tokens.completion_tokens || 0),
+      total_tokens:
+        Number(tokens.total_tokens || 0) ||
+        Number(tokens.input_tokens || tokens.prompt_tokens || 0) +
+          Number(tokens.output_tokens || tokens.completion_tokens || 0),
       currency: "USD",
       recorded_at: envelope.timestamp
     };
@@ -3361,7 +3992,11 @@ function bridgeTelemetryUsageEvent(envelope, rawPayload = null) {
   state.fleet.usageRecords.unshift(usageRecord);
 }
 
-function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null, sourcePath = null } = {}) {
+function recordTelemetryPayload(
+  req,
+  body,
+  { kind, tenantIdFromPath = null, sourcePath = null } = {}
+) {
   const items = normalizeTelemetryItems(body);
   const tenantId = requestTenantId(req, body, tenantIdFromPath);
   const deviceId = requestDeviceId(req, body);
@@ -3412,13 +4047,18 @@ function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null, sour
       continue;
     }
     accepted += 1;
-    totals.by_event_type[envelope.event_type] = (totals.by_event_type[envelope.event_type] || 0) + 1;
+    totals.by_event_type[envelope.event_type] =
+      (totals.by_event_type[envelope.event_type] || 0) + 1;
     // Bridge from the raw item payload: Cloud-side redaction masks any key
     // containing "token" (input_tokens, output_tokens, ...), so token counts
     // must be read before redaction is applied to the stored envelope.
-    const rawPayload = item && typeof item.payload === "object" && item.payload !== null && !Array.isArray(item.payload)
-      ? item.payload
-      : envelope.payload;
+    const rawPayload =
+      item &&
+      typeof item.payload === "object" &&
+      item.payload !== null &&
+      !Array.isArray(item.payload)
+        ? item.payload
+        : envelope.payload;
     bridgeTelemetryUsageEvent(envelope, rawPayload);
   }
 
@@ -3441,7 +4081,10 @@ function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null, sour
       rejections: rejections.slice(0, 20),
       received_at: receivedAt
     });
-    state.fleet.telemetryRejections = state.fleet.telemetryRejections.slice(0, maxTelemetryRejections);
+    state.fleet.telemetryRejections = state.fleet.telemetryRejections.slice(
+      0,
+      maxTelemetryRejections
+    );
     recordAudit("telemetry.events_rejected", "telemetry_batch", batchId || "single-event", {
       tenant_id: tenantId,
       device_id: deviceId,
@@ -3462,7 +4105,10 @@ function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null, sour
     rejected,
     received_at: receivedAt
   });
-  state.fleet.telemetryBatchReceipts = state.fleet.telemetryBatchReceipts.slice(0, maxTelemetryBatchReceipts);
+  state.fleet.telemetryBatchReceipts = state.fleet.telemetryBatchReceipts.slice(
+    0,
+    maxTelemetryBatchReceipts
+  );
 
   // Only items that passed the secret quarantine may be persisted; key-based
   // redaction cannot mask secret values embedded in free-text fields.
@@ -3473,17 +4119,27 @@ function recordTelemetryPayload(req, body, { kind, tenantIdFromPath = null, sour
     delete safeBody.items;
     safeBody.events = safeItems;
   } else {
-    safeBody = safeItems.length ? body : { quarantined: true, reason: "unredacted_secret_detected" };
+    safeBody = safeItems.length
+      ? body
+      : { quarantined: true, reason: "unredacted_secret_detected" };
   }
   const eventType = body.event_type || (kind ? `telemetry.${kind}.v1` : "telemetry.envelope.v1");
   const event = recordEvent({
-    event_id: body.batch_id || body.event_id || req.headers["x-pollek-event-id"] || `evt_${crypto.randomUUID()}`,
+    event_id:
+      body.batch_id ||
+      body.event_id ||
+      req.headers["x-pollek-event-id"] ||
+      `evt_${crypto.randomUUID()}`,
     tenant_id: tenantId,
     device_id: deviceId,
-    event_type: body.schema_version === "telemetry-batch.v1" || kind === "batch" ? "telemetry.batch.v1" : eventType,
+    event_type:
+      body.schema_version === "telemetry-batch.v1" || kind === "batch"
+        ? "telemetry.batch.v1"
+        : eventType,
     severity: body.severity || (kind === "security_event" ? "warning" : "info"),
     payload: {
-      schema_version: body.schema_version || (kind === "batch" ? "telemetry-batch.v1" : "telemetry-envelope.v1"),
+      schema_version:
+        body.schema_version || (kind === "batch" ? "telemetry-batch.v1" : "telemetry-envelope.v1"),
       telemetry_kind: kind || "envelope",
       event_count: items.length,
       accepted,
@@ -3521,7 +4177,11 @@ function telemetryEventsFor(tenantId = "local", predicate = () => true) {
     .slice(0, 100);
 }
 
-function telemetryEnvelopesFor(tenantId = "local", predicate = () => true, limit = defaultApiPageLimit) {
+function telemetryEnvelopesFor(
+  tenantId = "local",
+  predicate = () => true,
+  limit = defaultApiPageLimit
+) {
   return (state.fleet.telemetryEnvelopes || [])
     .filter((envelope) => !tenantId || envelope.tenant_id === tenantId)
     .filter(predicate)
@@ -3530,8 +4190,16 @@ function telemetryEnvelopesFor(tenantId = "local", predicate = () => true, limit
 
 function telemetryEntityPage(kind, tenantId = "local") {
   const classByKind = { resources: "resource", tools: "tool", identities: "identity" };
-  const sourceByKind = { resources: "registry/resources", tools: "registry/tools", identities: "telemetry/identities" };
-  const eventTypeByKind = { resources: "resource_access", tools: "tool_usage", identities: "identity_access" };
+  const sourceByKind = {
+    resources: "registry/resources",
+    tools: "registry/tools",
+    identities: "telemetry/identities"
+  };
+  const eventTypeByKind = {
+    resources: "resource_access",
+    tools: "tool_usage",
+    identities: "identity_access"
+  };
   const entityClass = classByKind[kind];
   const items = state.fleet.localEntities
     .filter((entity) => entity.tenant_id === tenantId || tenantId === "local")
@@ -3546,9 +4214,18 @@ function telemetryEntityPage(kind, tenantId = "local") {
       payload: entity.raw || entity
     }));
   const seenIds = new Set(items.map((item) => item.id));
-  for (const envelope of telemetryEnvelopesFor(tenantId, (item) => item.event_type === eventTypeByKind[kind])) {
+  for (const envelope of telemetryEnvelopesFor(
+    tenantId,
+    (item) => item.event_type === eventTypeByKind[kind]
+  )) {
     const payload = envelope.payload || {};
-    const id = payload.resource_id || payload.tool_id || payload.identity_id || payload.user_subject || payload.agent_id || envelope.event_id;
+    const id =
+      payload.resource_id ||
+      payload.tool_id ||
+      payload.identity_id ||
+      payload.user_subject ||
+      payload.agent_id ||
+      envelope.event_id;
     if (seenIds.has(id)) continue;
     seenIds.add(id);
     items.push({
@@ -3570,14 +4247,24 @@ function telemetryEntityPage(kind, tenantId = "local") {
 }
 
 function observationTelemetryPage(tenantId = "local") {
-  const envelopes = telemetryEnvelopesFor(tenantId, (envelope) =>
-    envelope.event_type === "agent_observation" || String(envelope.event_type || "").includes("observation"));
+  const envelopes = telemetryEnvelopesFor(
+    tenantId,
+    (envelope) =>
+      envelope.event_type === "agent_observation" ||
+      String(envelope.event_type || "").includes("observation")
+  );
   const seenIds = new Set(envelopes.map((envelope) => envelope.event_id));
   const entities = state.fleet.localEntities
-    .filter((entity) => entity.entity_type === "observability" && entity.source === "telemetry/observations")
+    .filter(
+      (entity) =>
+        entity.entity_type === "observability" && entity.source === "telemetry/observations"
+    )
     .map((entity) => entity.raw || entity);
-  const events = telemetryEventsFor(tenantId, (event) =>
-    String(event.event_type || "").includes("observation") && !seenIds.has(event.event_id));
+  const events = telemetryEventsFor(
+    tenantId,
+    (event) =>
+      String(event.event_type || "").includes("observation") && !seenIds.has(event.event_id)
+  );
   return {
     schema_version: "observation-page.v1",
     tenant_id: tenantId,
@@ -3602,23 +4289,30 @@ function enforcementStatusPage(tenantId = "local") {
     schema_version: "enforcement-status-list.v1",
     tenant_id: tenantId,
     items: [
-      ...telemetryEnvelopesFor(tenantId, (envelope) => envelope.event_type === "enforcement_result"),
+      ...telemetryEnvelopesFor(
+        tenantId,
+        (envelope) => envelope.event_type === "enforcement_result"
+      ),
       ...enforcement
     ]
   };
 }
 
 function guardEventTimeKey(envelope) {
-  return envelope.timestamp
-    || envelope.payload?.timestamp
-    || envelope.payload?.ts
-    || envelope.payload?.guard_event?.timestamp
-    || envelope.received_at
-    || "";
+  return (
+    envelope.timestamp ||
+    envelope.payload?.timestamp ||
+    envelope.payload?.ts ||
+    envelope.payload?.guard_event?.timestamp ||
+    envelope.received_at ||
+    ""
+  );
 }
 
 function guardEventsPage(tenantId = "local") {
-  const items = telemetryEnvelopesFor(tenantId, (envelope) => ["guard_incident", "guard_event"].includes(envelope.event_type));
+  const items = telemetryEnvelopesFor(tenantId, (envelope) =>
+    ["guard_incident", "guard_event"].includes(envelope.event_type)
+  );
   items.sort((a, b) => String(guardEventTimeKey(b)).localeCompare(String(guardEventTimeKey(a))));
   return {
     schema_version: "guard-events.v1",
@@ -3631,7 +4325,9 @@ function guardEventsPage(tenantId = "local") {
 // Read-side parity with the Local Control Plane dashboard log endpoints:
 // the same {count, <key>} response shapes backed by ingested envelopes.
 function telemetryLogPage(tenantId, eventTypes, key) {
-  const items = telemetryEnvelopesFor(tenantId, (envelope) => eventTypes.includes(envelope.event_type));
+  const items = telemetryEnvelopesFor(tenantId, (envelope) =>
+    eventTypes.includes(envelope.event_type)
+  );
   return { count: items.length, [key]: items };
 }
 
@@ -3697,7 +4393,8 @@ function normalizeItems(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.items)) return payload.items;
   if (Array.isArray(payload?.events)) return payload.events;
-  if (Array.isArray(payload?.activity_sets)) return payload.activity_sets.flatMap((set) => set.items || []);
+  if (Array.isArray(payload?.activity_sets))
+    return payload.activity_sets.flatMap((set) => set.items || []);
   if (payload && typeof payload === "object") return [payload];
   return [];
 }
@@ -3712,15 +4409,33 @@ function normalizedKey(value) {
 function inferResourceKind(value) {
   const text = normalizedKey(value);
   if (!text) return "unknown";
-  if (text.includes("github.com") || text.includes("gitlab.com") || text.endsWith(".git")) return "code_repo";
+  if (text.includes("github.com") || text.includes("gitlab.com") || text.endsWith(".git"))
+    return "code_repo";
   if (text.includes("drive.google.com")) return "google_drive";
   if (text.includes("mail.google.com") || text.includes("gmail")) return "gmail";
   if (text.includes("sharepoint.com") || text.includes("onedrive")) return "microsoft_365";
   if (text.includes("slack.com")) return "slack";
-  if (text.includes("s3://") || text.includes("blob.core.windows.net") || text.includes("storage.googleapis.com")) return "cloud_storage";
-  if (text.includes("postgres") || text.includes("mysql") || text.includes("mongodb") || text.includes("redis")) return "database";
+  if (
+    text.includes("s3://") ||
+    text.includes("blob.core.windows.net") ||
+    text.includes("storage.googleapis.com")
+  )
+    return "cloud_storage";
+  if (
+    text.includes("postgres") ||
+    text.includes("mysql") ||
+    text.includes("mongodb") ||
+    text.includes("redis")
+  )
+    return "database";
   if (text.startsWith("http://") || text.startsWith("https://")) return "api_endpoint";
-  if (text.includes("\\") || text.includes("/") || text.includes(":\\") || text.includes("workspace")) return "file_system";
+  if (
+    text.includes("\\") ||
+    text.includes("/") ||
+    text.includes(":\\") ||
+    text.includes("workspace")
+  )
+    return "file_system";
   return "generic_resource";
 }
 
@@ -3782,7 +4497,8 @@ function computeEntityHealth(entity) {
   }
 
   const normalizedScore = Math.max(0, Math.min(100, score));
-  const healthStatus = normalizedScore >= 80 ? "healthy" : normalizedScore >= 55 ? "warning" : "critical";
+  const healthStatus =
+    normalizedScore >= 80 ? "healthy" : normalizedScore >= 55 ? "warning" : "critical";
   return {
     entity_id: entity.id,
     name: entity.name,
@@ -3811,7 +4527,9 @@ function entityHealthPage(entities = state.fleet.localEntities) {
       healthy: items.filter((item) => item.health_status === "healthy").length,
       warning: items.filter((item) => item.health_status === "warning").length,
       critical: items.filter((item) => item.health_status === "critical").length,
-      avg_score: items.length ? Math.round(items.reduce((sum, item) => sum + item.score, 0) / items.length) : 0
+      avg_score: items.length
+        ? Math.round(items.reduce((sum, item) => sum + item.score, 0) / items.length)
+        : 0
     },
     items
   };
@@ -3819,17 +4537,29 @@ function entityHealthPage(entities = state.fleet.localEntities) {
 
 function findDuplicateEntities(candidate = {}) {
   const candidateName = normalizedKey(candidate.name || candidate.display_name);
-  const candidateLocalId = normalizedKey(candidate.local_object_id || candidate.agent_id || candidate.resource_id || candidate.id);
-  const candidateSpiffe = normalizedKey(candidate.trace?.spiffe_id || candidate.identity?.spiffe_id || candidate.spiffe_id);
-  const candidateProcess = normalizedKey(candidate.identity?.process_path || candidate.process_path);
+  const candidateLocalId = normalizedKey(
+    candidate.local_object_id || candidate.agent_id || candidate.resource_id || candidate.id
+  );
+  const candidateSpiffe = normalizedKey(
+    candidate.trace?.spiffe_id || candidate.identity?.spiffe_id || candidate.spiffe_id
+  );
+  const candidateProcess = normalizedKey(
+    candidate.identity?.process_path || candidate.process_path
+  );
   const matches = [];
 
   for (const entity of state.fleet.localEntities) {
     const reasons = [];
-    if (candidateLocalId && normalizedKey(entity.local_object_id) === candidateLocalId) reasons.push("local_object_id");
+    if (candidateLocalId && normalizedKey(entity.local_object_id) === candidateLocalId)
+      reasons.push("local_object_id");
     if (candidateName && normalizedKey(entity.name) === candidateName) reasons.push("name");
-    if (candidateSpiffe && normalizedKey(entity.trace?.spiffe_id || entity.identity?.spiffe_id) === candidateSpiffe) reasons.push("spiffe_id");
-    if (candidateProcess && normalizedKey(entity.identity?.process_path) === candidateProcess) reasons.push("process_path");
+    if (
+      candidateSpiffe &&
+      normalizedKey(entity.trace?.spiffe_id || entity.identity?.spiffe_id) === candidateSpiffe
+    )
+      reasons.push("spiffe_id");
+    if (candidateProcess && normalizedKey(entity.identity?.process_path) === candidateProcess)
+      reasons.push("process_path");
     if (!reasons.length) continue;
     matches.push({
       entity_id: entity.id,
@@ -3837,14 +4567,17 @@ function findDuplicateEntities(candidate = {}) {
       entity_type: entity.entity_type,
       status: entity.status,
       reasons,
-      confidence: reasons.includes("local_object_id") || reasons.includes("spiffe_id") ? "high" : "medium"
+      confidence:
+        reasons.includes("local_object_id") || reasons.includes("spiffe_id") ? "high" : "medium"
     });
   }
   return matches;
 }
 
 function compliancePolicyBundlePage() {
-  const enterpriseEnabled = state.tenant.entitlements?.includes("enterprise.compliance_policy_bundles");
+  const enterpriseEnabled = state.tenant.entitlements?.includes(
+    "enterprise.compliance_policy_bundles"
+  );
   const bundles = state.fleet.compliancePolicyBundles.map((bundle) => ({
     ...bundle,
     tenant_entitled: enterpriseEnabled,
@@ -3856,19 +4589,45 @@ function compliancePolicyBundlePage() {
     tenant_id: "local",
     edition: state.tenant.edition,
     enterprise_only: true,
-    local_pollek_boundary: "Local Pollek does not own the compliance catalog. It only receives signed bundle artifacts selected by Cloud Enterprise through Contract Hub.",
+    local_pollek_boundary:
+      "Local Pollek does not own the compliance catalog. It only receives signed bundle artifacts selected by Cloud Enterprise through Contract Hub.",
     bundles
   };
 }
 
 function complianceScorePage() {
   const health = entityHealthPage().summary;
-  const evidenceCoverage = Math.min(100, Math.round(((state.events.length + state.auditEvents.length + state.fleet.localEntitySyncRuns.length) / 12) * 100));
-  const bundleCoverage = Math.min(100, Math.round((state.fleet.policyBundles.filter((bundle) => bundle.signed || bundle.hot_reload).length / Math.max(1, state.fleet.policyBundles.length)) * 100));
+  const evidenceCoverage = Math.min(
+    100,
+    Math.round(
+      ((state.events.length + state.auditEvents.length + state.fleet.localEntitySyncRuns.length) /
+        12) *
+        100
+    )
+  );
+  const bundleCoverage = Math.min(
+    100,
+    Math.round(
+      (state.fleet.policyBundles.filter((bundle) => bundle.signed || bundle.hot_reload).length /
+        Math.max(1, state.fleet.policyBundles.length)) *
+        100
+    )
+  );
   const identityCoverage = state.fleet.localEntities.length
-    ? Math.round((state.fleet.localEntities.filter((entity) => entity.trace?.spiffe_id || entity.identity?.spiffe_id).length / state.fleet.localEntities.length) * 100)
+    ? Math.round(
+        (state.fleet.localEntities.filter(
+          (entity) => entity.trace?.spiffe_id || entity.identity?.spiffe_id
+        ).length /
+          state.fleet.localEntities.length) *
+          100
+      )
     : 0;
-  const score = Math.round((health.avg_score * 0.35) + (evidenceCoverage * 0.2) + (bundleCoverage * 0.25) + (identityCoverage * 0.2));
+  const score = Math.round(
+    health.avg_score * 0.35 +
+      evidenceCoverage * 0.2 +
+      bundleCoverage * 0.25 +
+      identityCoverage * 0.2
+  );
   return {
     schema_version: "pollek.cloud.compliance-score.v1",
     tenant_id: "local",
@@ -3888,15 +4647,25 @@ function complianceScorePage() {
       required_streams: bundle.evidence_streams
     })),
     gaps: [
-      ...(health.critical ? ["Critical entity health findings must be remediated before compliance export."] : []),
-      ...(identityCoverage < 80 ? ["SPIFFE/OIDC identity trace coverage is below enterprise target."] : []),
-      ...(evidenceCoverage < 70 ? ["Evidence chain needs more telemetry, audit, and decision log events."] : [])
+      ...(health.critical
+        ? ["Critical entity health findings must be remediated before compliance export."]
+        : []),
+      ...(identityCoverage < 80
+        ? ["SPIFFE/OIDC identity trace coverage is below enterprise target."]
+        : []),
+      ...(evidenceCoverage < 70
+        ? ["Evidence chain needs more telemetry, audit, and decision log events."]
+        : [])
     ]
   };
 }
 
 function entityIdFrom(kind, value) {
-  return `entity_${kind}_${String(value || crypto.randomUUID()).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48)}`;
+  return `entity_${kind}_${String(value || crypto.randomUUID())
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48)}`;
 }
 
 function entityRef(kind, value) {
@@ -3906,10 +4675,22 @@ function entityRef(kind, value) {
 }
 
 function userIdFromSubject(subject) {
-  return `user_${String(subject || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "unknown"}`;
+  return `user_${
+    String(subject || "unknown")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "unknown"
+  }`;
 }
 
-function upsertDeviceUser({ tenant_id = "local", device_id = "device_local_windows", user_subject = "unknown", display_name, oidc_subject }) {
+function upsertDeviceUser({
+  tenant_id = "local",
+  device_id = "device_local_windows",
+  user_subject = "unknown",
+  display_name,
+  oidc_subject
+}) {
   const id = userIdFromSubject(user_subject);
   const existingIndex = state.fleet.deviceUsers.findIndex((item) => item.id === id);
   const user = {
@@ -3930,7 +4711,9 @@ function upsertDeviceUser({ tenant_id = "local", device_id = "device_local_windo
 }
 
 function findDeviceName(deviceId) {
-  const lcp = state.fleet.localControlPlanes.find((item) => item.device_id === deviceId || item.device_name === deviceId || item.id === deviceId);
+  const lcp = state.fleet.localControlPlanes.find(
+    (item) => item.device_id === deviceId || item.device_name === deviceId || item.id === deviceId
+  );
   return lcp?.device_name || deviceId || "unknown-device";
 }
 
@@ -3975,7 +4758,10 @@ function canonicalLocalEntityState(lcpId = "lcp_local") {
       observability_streams: entity.observability?.telemetry_streams || [],
       wasm_hot_reload: Boolean(entity.wasm?.hot_reload),
       wasm_generation: entity.wasm?.generation || 0,
-      spiffe_id: entity.class === "identity" ? null : (entity.trace?.spiffe_id || entity.identity?.spiffe_id || null)
+      spiffe_id:
+        entity.class === "identity"
+          ? null
+          : entity.trace?.spiffe_id || entity.identity?.spiffe_id || null
     }))
     .sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -4020,10 +4806,16 @@ function upsertLocalEntity(entity) {
   };
   if (!normalized.trace) normalized.trace = defaultLocalTrace(normalized);
   const mergeKey = localEntityMergeKey(normalized);
-  const existingIndex = state.fleet.localEntities.findIndex((item) => item.id === entity.id || localEntityMergeKey(item) === mergeKey);
+  const existingIndex = state.fleet.localEntities.findIndex(
+    (item) => item.id === entity.id || localEntityMergeKey(item) === mergeKey
+  );
   if (existingIndex >= 0) {
     const existing = state.fleet.localEntities[existingIndex];
-    state.fleet.localEntities[existingIndex] = { ...existing, ...normalized, id: existing.id || normalized.id };
+    state.fleet.localEntities[existingIndex] = {
+      ...existing,
+      ...normalized,
+      id: existing.id || normalized.id
+    };
   } else {
     state.fleet.localEntities.unshift(normalized);
   }
@@ -4033,7 +4825,12 @@ function upsertLocalEntity(entity) {
 
 function addLocalEntityRelationship(from, to, label) {
   if (!from || !to) return;
-  if (state.fleet.localEntityRelationships.some((rel) => rel.from === from && rel.to === to && rel.label === label)) return;
+  if (
+    state.fleet.localEntityRelationships.some(
+      (rel) => rel.from === from && rel.to === to && rel.label === label
+    )
+  )
+    return;
   state.fleet.localEntityRelationships.push({ from, to, label });
 }
 
@@ -4066,19 +4863,36 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       trace: defaultLocalTrace(agent),
       policy_ids: [],
       enforcement: { mode: agent.enforcement_mode || "Observe", pdp_engine: "opa_wasm" },
-      observability: { telemetry_streams: ["tool_usage", "resource_access", "identity_access"], last_event_at: now },
-      wasm: { hot_reload: true, active_bundle_id: agent.active_bundle_id || null, active_module: "opa_wasm", generation: 1 },
+      observability: {
+        telemetry_streams: ["tool_usage", "resource_access", "identity_access"],
+        last_event_at: now
+      },
+      wasm: {
+        hot_reload: true,
+        active_bundle_id: agent.active_bundle_id || null,
+        active_module: "opa_wasm",
+        generation: 1
+      },
       raw_schema: agent.meta?.schema_version || "agent.v1",
       raw: agent,
       last_seen_at: now
     });
     count += 1;
-    for (const toolId of agent.declared_tools || []) addLocalEntityRelationship(entity.id, entityIdFrom("tool", toolId), "declares_tool");
-    for (const resourceId of agent.declared_resources || []) addLocalEntityRelationship(entity.id, entityIdFrom("resource", resourceId), "declares_resource");
+    for (const toolId of agent.declared_tools || [])
+      addLocalEntityRelationship(entity.id, entityIdFrom("tool", toolId), "declares_tool");
+    for (const resourceId of agent.declared_resources || [])
+      addLocalEntityRelationship(
+        entity.id,
+        entityIdFrom("resource", resourceId),
+        "declares_resource"
+      );
   }
 
   for (const inventory of normalizeItems(snapshot.agent_inventory)) {
-    const id = entityIdFrom("agent", inventory.agent_id || inventory.candidate_id || inventory.display_name);
+    const id = entityIdFrom(
+      "agent",
+      inventory.agent_id || inventory.candidate_id || inventory.display_name
+    );
     const entity = upsertLocalEntity({
       id,
       local_object_id: inventory.agent_id || inventory.candidate_id,
@@ -4095,9 +4909,21 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       source: "agent-inventory",
       trust_level: inventory.trust_level || "unknown",
       identity: { user_subject: inventory.user_subject || userSubject, token_bindings: [] },
-      trace: { oauth_client_id: null, oidc_issuer: null, oidc_subject: null, spiffe_id: null, mtls_subject: null, mtls_fingerprint: null, confirmation: inventory.candidate_id ? "candidate" : "inventory" },
+      trace: {
+        oauth_client_id: null,
+        oidc_issuer: null,
+        oidc_subject: null,
+        spiffe_id: null,
+        mtls_subject: null,
+        mtls_fingerprint: null,
+        confirmation: inventory.candidate_id ? "candidate" : "inventory"
+      },
       policy_ids: [],
-      enforcement: { mode: "Observe", pdp_engine: "opa_wasm", supported_pep_bindings: inventory.supported_pep_bindings || [] },
+      enforcement: {
+        mode: "Observe",
+        pdp_engine: "opa_wasm",
+        supported_pep_bindings: inventory.supported_pep_bindings || []
+      },
       observability: {
         telemetry_streams: Object.entries(inventory.telemetry_capabilities || {})
           .filter(([, value]) => value === true)
@@ -4110,11 +4936,19 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       last_seen_at: inventory.last_seen_at || now
     });
     count += 1;
-    for (const surface of inventory.mcp_surfaces || []) addLocalEntityRelationship(entity.id, entityIdFrom("tool", surface.server_name), "exposes_mcp_surface");
+    for (const surface of inventory.mcp_surfaces || [])
+      addLocalEntityRelationship(
+        entity.id,
+        entityIdFrom("tool", surface.server_name),
+        "exposes_mcp_surface"
+      );
   }
 
   for (const candidate of normalizeItems(snapshot.candidates)) {
-    const id = entityIdFrom("agent", candidate.candidate_id || candidate.agent_id || candidate.display_name);
+    const id = entityIdFrom(
+      "agent",
+      candidate.candidate_id || candidate.agent_id || candidate.display_name
+    );
     const registered = String(candidate.status || "").toLowerCase() === "registered";
     upsertLocalEntity({
       id,
@@ -4132,11 +4966,30 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       source: "discovery/candidates",
       trust_level: candidate.suggested_registration?.trust_level || "untrusted",
       identity: { user_subject: candidate.user_subject || userSubject, token_bindings: [] },
-      trace: { oauth_client_id: null, oidc_issuer: null, oidc_subject: null, spiffe_id: null, mtls_subject: null, mtls_fingerprint: null, confirmation: registered ? "registered" : "missing" },
+      trace: {
+        oauth_client_id: null,
+        oidc_issuer: null,
+        oidc_subject: null,
+        spiffe_id: null,
+        mtls_subject: null,
+        mtls_fingerprint: null,
+        confirmation: registered ? "registered" : "missing"
+      },
       policy_ids: [],
-      enforcement: { mode: registered ? "Enforce" : "Observe", pdp_engine: registered ? "opa_wasm" : "none" },
-      observability: { telemetry_streams: candidate.suggested_observation_profile?.sources || ["process_metadata"], last_event_at: candidate.last_seen || now },
-      wasm: { hot_reload: registered, active_bundle_id: null, active_module: registered ? "opa_wasm" : null, generation: registered ? 1 : 0 },
+      enforcement: {
+        mode: registered ? "Enforce" : "Observe",
+        pdp_engine: registered ? "opa_wasm" : "none"
+      },
+      observability: {
+        telemetry_streams: candidate.suggested_observation_profile?.sources || ["process_metadata"],
+        last_event_at: candidate.last_seen || now
+      },
+      wasm: {
+        hot_reload: registered,
+        active_bundle_id: null,
+        active_module: registered ? "opa_wasm" : null,
+        generation: registered ? 1 : 0
+      },
       raw_schema: candidate.schema_version || "discovery.candidate.v2",
       raw: candidate,
       last_seen_at: candidate.last_seen || now
@@ -4146,12 +4999,18 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
 
   for (const registryEntity of normalizeItems(snapshot.entities)) {
     const data = registryEntity.data_json || registryEntity.data || registryEntity;
-    const objectType = registryEntity.object_type || data.object_type || data.entity_type || "observed_entity";
-    const objectId = registryEntity.object_id || data.entity_id || data.candidate_id || data.id || data.name;
+    const objectType =
+      registryEntity.object_type || data.object_type || data.entity_type || "observed_entity";
+    const objectId =
+      registryEntity.object_id || data.entity_id || data.candidate_id || data.id || data.name;
     upsertLocalEntity({
       id: entityIdFrom(objectType, objectId),
       local_object_id: objectId,
-      entity_type: ["registered_agent", "found_agent", "policy", "enforcement"].includes(data.entity_type) ? data.entity_type : "observability",
+      entity_type: ["registered_agent", "found_agent", "policy", "enforcement"].includes(
+        data.entity_type
+      )
+        ? data.entity_type
+        : "observability",
       class: data.class || objectType,
       name: data.display_name || data.name || objectId || objectType,
       device_id: data.device_id || deviceId,
@@ -4194,7 +5053,12 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       policy_ids: [policyId].filter(Boolean),
       enforcement: { mode: policy.mode || "Enforce", pdp_engine: policy.engine || "opa_wasm" },
       observability: { telemetry_streams: ["decision", "policy_deployment"], last_event_at: now },
-      wasm: { hot_reload: true, active_bundle_id: policy.bundle_id || null, active_module: policy.engine || "opa_wasm", generation: 1 },
+      wasm: {
+        hot_reload: true,
+        active_bundle_id: policy.bundle_id || null,
+        active_module: policy.engine || "opa_wasm",
+        generation: 1
+      },
       raw_schema: policy.meta?.schema_version || "policy.v1",
       raw: policy,
       last_seen_at: policy.updated_at || policy.meta?.updated_at || now
@@ -4216,9 +5080,18 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       status: method.status || "unknown",
       risk: method.status === "available" ? "medium" : "high",
       source: "capability-snapshot-v2",
-      enforcement: { mode: method.max_level || "observe", pep_plane: method.method_id, pdp_engine: "opa_wasm" },
+      enforcement: {
+        mode: method.max_level || "observe",
+        pep_plane: method.method_id,
+        pdp_engine: "opa_wasm"
+      },
       observability: { telemetry_streams: method.domains || [], last_event_at: now },
-      wasm: { hot_reload: method.status === "available", active_bundle_id: null, active_module: "opa_wasm", generation: method.status === "available" ? 1 : 0 },
+      wasm: {
+        hot_reload: method.status === "available",
+        active_bundle_id: null,
+        active_module: "opa_wasm",
+        generation: method.status === "available" ? 1 : 0
+      },
       raw_schema: snapshot.capability?.schema_version || "local-capability-snapshot.v2",
       raw: method,
       last_seen_at: snapshot.capability?.generated_at || now
@@ -4240,7 +5113,11 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       status: source.status || "unknown",
       risk: "medium",
       source: "capability-snapshot-v2",
-      observability: { telemetry_streams: source.domains || [], last_event_at: now, privacy_note: source.privacy_note_en },
+      observability: {
+        telemetry_streams: source.domains || [],
+        last_event_at: now,
+        privacy_note: source.privacy_note_en
+      },
       wasm: { hot_reload: false, generation: 0 },
       raw_schema: snapshot.capability?.schema_version || "local-capability-snapshot.v2",
       raw: source,
@@ -4250,7 +5127,8 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
   }
 
   for (const identity of normalizeItems(snapshot.telemetry_identities)) {
-    const observedSubject = identity.user_subject || identity.subject || identity.identity || userSubject;
+    const observedSubject =
+      identity.user_subject || identity.subject || identity.identity || userSubject;
     const user = upsertDeviceUser({
       device_id: identity.device_id || deviceId,
       user_subject: observedSubject,
@@ -4272,8 +5150,15 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       risk: "medium",
       source: "telemetry/identities",
       identity: { user_subject: user.user_subject, token_bindings: [] },
-      trace: { oidc_subject: user.oidc_subject, spiffe_id: identity.spiffe_id || null, confirmation: "telemetry_identity" },
-      observability: { telemetry_streams: ["identity_access"], last_event_at: identity.last_seen_at || now },
+      trace: {
+        oidc_subject: user.oidc_subject,
+        spiffe_id: identity.spiffe_id || null,
+        confirmation: "telemetry_identity"
+      },
+      observability: {
+        telemetry_streams: ["identity_access"],
+        last_event_at: identity.last_seen_at || now
+      },
       wasm: { hot_reload: false, generation: 0 },
       raw_schema: "identity-inventory.v1",
       raw: identity,
@@ -4282,7 +5167,10 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
     count += 1;
   }
 
-  for (const tool of [...normalizeItems(snapshot.tools), ...normalizeItems(snapshot.telemetry_tools)]) {
+  for (const tool of [
+    ...normalizeItems(snapshot.tools),
+    ...normalizeItems(snapshot.telemetry_tools)
+  ]) {
     const id = entityIdFrom("tool", tool.tool_id || tool.id || tool.name);
     upsertLocalEntity({
       id,
@@ -4297,17 +5185,25 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       status: tool.status || "observed",
       risk: "medium",
       source: "registry/tools",
-      observability: { telemetry_streams: ["tool_usage"], last_event_at: tool.last_used || now, call_count: tool.call_count },
+      observability: {
+        telemetry_streams: ["tool_usage"],
+        last_event_at: tool.last_used || now,
+        call_count: tool.call_count
+      },
       wasm: { hot_reload: false, generation: 0 },
       raw_schema: "tool-inventory.v1",
       raw: tool,
       last_seen_at: tool.last_used || now
     });
     count += 1;
-    if (tool.agent_id) addLocalEntityRelationship(entityIdFrom("agent", tool.agent_id), id, "uses_tool");
+    if (tool.agent_id)
+      addLocalEntityRelationship(entityIdFrom("agent", tool.agent_id), id, "uses_tool");
   }
 
-  for (const resource of [...normalizeItems(snapshot.resources), ...normalizeItems(snapshot.telemetry_resources)]) {
+  for (const resource of [
+    ...normalizeItems(snapshot.resources),
+    ...normalizeItems(snapshot.telemetry_resources)
+  ]) {
     const id = entityIdFrom("resource", resource.resource_id || resource.id || resource.name);
     upsertLocalEntity({
       id,
@@ -4323,8 +5219,14 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       risk: resource.sensitivity ? "medium" : "low",
       source: "registry/resources",
       sensitivity: resource.sensitivity,
-      resource_kind: resource.resource_type || resource.type || inferResourceKind(resource.uri || resource.path || resource.name || resource.resource_id),
-      observability: { telemetry_streams: ["resource_access"], last_event_at: resource.last_accessed || now },
+      resource_kind:
+        resource.resource_type ||
+        resource.type ||
+        inferResourceKind(resource.uri || resource.path || resource.name || resource.resource_id),
+      observability: {
+        telemetry_streams: ["resource_access"],
+        last_event_at: resource.last_accessed || now
+      },
       wasm: { hot_reload: false, generation: 0 },
       raw_schema: "resource-inventory.v1",
       raw: resource,
@@ -4335,19 +5237,22 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
 
   const observations = normalizeItems(snapshot.observations);
   if (observations.length) {
-    state.fleet.localEntities = state.fleet.localEntities.filter((entity) => !(entity.lcp_id === lcpId && entity.source === "telemetry/observations"));
+    state.fleet.localEntities = state.fleet.localEntities.filter(
+      (entity) => !(entity.lcp_id === lcpId && entity.source === "telemetry/observations")
+    );
   }
   const seenObservationIds = new Set();
   for (const observation of observations) {
     const eventType = observation.event_type || observation.kind || "observation";
-    const stableTarget = observation.entity_id
-      || observation.local_object_id
-      || observation.payload?.object_id
-      || observation.payload?.agent
-      || observation.payload?.resource_id
-      || observation.payload?.resource
-      || observation.payload?.policy
-      || `${eventType}_${observation.device_id || deviceId}_${observation.user_subject || userSubject}`;
+    const stableTarget =
+      observation.entity_id ||
+      observation.local_object_id ||
+      observation.payload?.object_id ||
+      observation.payload?.agent ||
+      observation.payload?.resource_id ||
+      observation.payload?.resource ||
+      observation.payload?.policy ||
+      `${eventType}_${observation.device_id || deviceId}_${observation.user_subject || userSubject}`;
     const eventId = `${eventType}_${stableTarget}`;
     if (seenObservationIds.has(eventId)) continue;
     seenObservationIds.add(eventId);
@@ -4364,7 +5269,10 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
       status: observation.severity === "critical" ? "critical" : "observed",
       risk: observation.severity === "critical" ? "high" : "medium",
       source: "telemetry/observations",
-      observability: { telemetry_streams: [observation.event_type || "observation"], last_event_at: observation.received_at || now },
+      observability: {
+        telemetry_streams: [observation.event_type || "observation"],
+        last_event_at: observation.received_at || now
+      },
       wasm: { hot_reload: false, generation: 0 },
       raw_schema: "telemetry-observation.v1",
       raw: observation,
@@ -4374,18 +5282,21 @@ function ingestLocalEntitySnapshot(snapshot, context = {}) {
   }
 
   for (const relationship of normalizeItems(snapshot.relationships)) {
-    const from = relationship.from_entity_id
-      || relationship.from
-      || relationship.source_entity_id
-      || relationship.source_id
-      || relationship.agent_id;
-    const to = relationship.to_entity_id
-      || relationship.to
-      || relationship.target_entity_id
-      || relationship.target_id
-      || relationship.resource_id
-      || relationship.tool_id;
-    const label = relationship.label || relationship.relationship_type || relationship.type || "relates_to";
+    const from =
+      relationship.from_entity_id ||
+      relationship.from ||
+      relationship.source_entity_id ||
+      relationship.source_id ||
+      relationship.agent_id;
+    const to =
+      relationship.to_entity_id ||
+      relationship.to ||
+      relationship.target_entity_id ||
+      relationship.target_id ||
+      relationship.resource_id ||
+      relationship.tool_id;
+    const label =
+      relationship.label || relationship.relationship_type || relationship.type || "relates_to";
     addLocalEntityRelationship(entityRef("agent", from), entityRef("observed", to), label);
   }
 
@@ -4415,7 +5326,13 @@ async function pullLocalEntitySnapshot(lcpUrl, headers = {}) {
   for (const [key, endpoint] of endpoints) {
     try {
       const result = await fetchJson(`${lcpUrl}${endpoint}`, { headers, timeoutMs: 3500 });
-      results.push({ key, endpoint, ok: result.ok, status: result.status, latency_ms: result.latency_ms });
+      results.push({
+        key,
+        endpoint,
+        ok: result.ok,
+        status: result.status,
+        latency_ms: result.latency_ms
+      });
       if (result.ok) snapshot[key] = result.body;
     } catch (error) {
       results.push({ key, endpoint, ok: false, error: String(error) });
@@ -4435,7 +5352,13 @@ async function pullLocalConfigurationSnapshot(lcpUrl, headers = {}) {
   for (const [key, endpoint] of endpoints) {
     try {
       const result = await fetchJson(`${lcpUrl}${endpoint}`, { headers, timeoutMs: 3500 });
-      results.push({ key, endpoint, ok: result.ok, status: result.status, latency_ms: result.latency_ms });
+      results.push({
+        key,
+        endpoint,
+        ok: result.ok,
+        status: result.status,
+        latency_ms: result.latency_ms
+      });
       if (result.ok) snapshot[key] = result.body;
     } catch (error) {
       results.push({ key, endpoint, ok: false, error: String(error) });
@@ -4473,9 +5396,9 @@ function changeCursorFor({ tenant_id, lcp_id, device_id }) {
   const tenantId = tenant_id || "local";
   const lcpId = lcp_id || "lcp_local";
   const deviceId = device_id || "device_local_windows";
-  let cursor = state.fleet.localChangeCursors.find((item) => (
-    item.tenant_id === tenantId && item.lcp_id === lcpId && item.device_id === deviceId
-  ));
+  let cursor = state.fleet.localChangeCursors.find(
+    (item) => item.tenant_id === tenantId && item.lcp_id === lcpId && item.device_id === deviceId
+  );
   if (!cursor) {
     cursor = {
       schema_version: "pollek.cloud.lcp-change-cursor.v1",
@@ -4503,11 +5426,18 @@ function normalizeChangeEvents(body) {
 }
 
 function changeEventId(event, sequence) {
-  return event.id || event.event_id || event.ce_id || `${event.source || "lcp"}:${event.type || event.event_type || event.kind || "change"}:${sequence || crypto.randomUUID()}`;
+  return (
+    event.id ||
+    event.event_id ||
+    event.ce_id ||
+    `${event.source || "lcp"}:${event.type || event.event_type || event.kind || "change"}:${sequence || crypto.randomUUID()}`
+  );
 }
 
 function changeEventSequence(event, fallback) {
-  const sequence = Number(event.sequence || event.seq || event.resource_version || event.revision || fallback || 0);
+  const sequence = Number(
+    event.sequence || event.seq || event.resource_version || event.revision || fallback || 0
+  );
   return Number.isFinite(sequence) && sequence > 0 ? sequence : fallback;
 }
 
@@ -4515,7 +5445,11 @@ function validateChangeHash(event) {
   const expected = event.data_hash || event.content_hash || event.hash;
   if (!expected) return { ok: true, expected: null, actual: null };
   const actual = `sha256:${sha256(stableJson(event.data ?? event.payload ?? event))}`;
-  return { ok: expected === actual || expected === actual.replace("sha256:", ""), expected, actual };
+  return {
+    ok: expected === actual || expected === actual.replace("sha256:", ""),
+    expected,
+    actual
+  };
 }
 
 function isDuplicateChange(cursor, eventId, sequence) {
@@ -4532,17 +5466,25 @@ function rememberChange(cursor, { eventId, sequence, batchId, contentHash }) {
   cursor.status = "acked";
   cursor.updated_at = new Date().toISOString();
   if (eventId) {
-    cursor.recent_event_ids = [eventId, ...(cursor.recent_event_ids || []).filter((id) => id !== eventId)].slice(0, 200);
+    cursor.recent_event_ids = [
+      eventId,
+      ...(cursor.recent_event_ids || []).filter((id) => id !== eventId)
+    ].slice(0, 200);
   }
 }
 
 function localEntityIdForPayload(payload = {}) {
-  return payload.id
-    || payload.entity_id
-    || payload.object_id
-    || (payload.entity_type || payload.class || payload.kind
-      ? entityIdFrom(payload.entity_type || payload.class || payload.kind, payload.local_object_id || payload.name || payload.display_name)
-      : null);
+  return (
+    payload.id ||
+    payload.entity_id ||
+    payload.object_id ||
+    (payload.entity_type || payload.class || payload.kind
+      ? entityIdFrom(
+          payload.entity_type || payload.class || payload.kind,
+          payload.local_object_id || payload.name || payload.display_name
+        )
+      : null)
+  );
 }
 
 function removeLocalEntity(payload = {}, context = {}) {
@@ -4550,18 +5492,30 @@ function removeLocalEntity(payload = {}, context = {}) {
   const before = state.fleet.localEntities.length;
   state.fleet.localEntities = state.fleet.localEntities.filter((entity) => {
     if (id && entity.id === id) return false;
-    if (payload.local_object_id && entity.local_object_id === payload.local_object_id && entity.lcp_id === context.lcp_id) return false;
+    if (
+      payload.local_object_id &&
+      entity.local_object_id === payload.local_object_id &&
+      entity.lcp_id === context.lcp_id
+    )
+      return false;
     return true;
   });
   if (id) {
-    state.fleet.localEntityRelationships = state.fleet.localEntityRelationships.filter((rel) => rel.from !== id && rel.to !== id);
+    state.fleet.localEntityRelationships = state.fleet.localEntityRelationships.filter(
+      (rel) => rel.from !== id && rel.to !== id
+    );
   }
   return before - state.fleet.localEntities.length;
 }
 
 function applyChangeEvent(event, context = {}) {
   const eventType = String(event.type || event.event_type || event.kind || "").toLowerCase();
-  const op = String(event.op || event.operation || event.action || (eventType.includes("delete") ? "delete" : "upsert")).toLowerCase();
+  const op = String(
+    event.op ||
+      event.operation ||
+      event.action ||
+      (eventType.includes("delete") ? "delete" : "upsert")
+  ).toLowerCase();
   const data = event.data ?? event.payload ?? event.entity ?? {};
   const changeContext = {
     tenant_id: context.tenant_id || data.tenant_id || "local",
@@ -4578,7 +5532,9 @@ function applyChangeEvent(event, context = {}) {
   if (eventType.includes("configuration") || eventType.includes("config")) {
     const record = {
       ok: true,
-      results: [{ key: "change_batch", endpoint: "/api/lcp/change-batches", ok: true, status: 202 }],
+      results: [
+        { key: "change_batch", endpoint: "/api/lcp/change-batches", ok: true, status: 202 }
+      ],
       snapshot: data
     };
     const configRecord = recordConfigurationSnapshot({
@@ -4596,8 +5552,13 @@ function applyChangeEvent(event, context = {}) {
     const label = data.label || data.relationship_type || data.type || "relates_to";
     if (op === "delete" || op === "remove") {
       const before = state.fleet.localEntityRelationships.length;
-      state.fleet.localEntityRelationships = state.fleet.localEntityRelationships.filter((rel) => !(rel.from === from && rel.to === to && rel.label === label));
-      return { applied: before - state.fleet.localEntityRelationships.length, kind: "relationship" };
+      state.fleet.localEntityRelationships = state.fleet.localEntityRelationships.filter(
+        (rel) => !(rel.from === from && rel.to === to && rel.label === label)
+      );
+      return {
+        applied: before - state.fleet.localEntityRelationships.length,
+        kind: "relationship"
+      };
     }
     addLocalEntityRelationship(from, to, label);
     return { applied: 1, kind: "relationship" };
@@ -4609,12 +5570,27 @@ function applyChangeEvent(event, context = {}) {
 
   const normalized = {
     ...data,
-    id: localEntityIdForPayload(data) || entityIdFrom(data.entity_type || data.type || data.class || "observability", data.local_object_id || data.name || data.display_name),
+    id:
+      localEntityIdForPayload(data) ||
+      entityIdFrom(
+        data.entity_type || data.type || data.class || "observability",
+        data.local_object_id || data.name || data.display_name
+      ),
     tenant_id: changeContext.tenant_id,
     lcp_id: changeContext.lcp_id,
     device_id: data.device_id || changeContext.device_id,
     user_subject: data.user_subject || changeContext.user_subject,
-    entity_type: data.entity_type || data.type || data.class || (eventType.includes("policy") ? "policy" : eventType.includes("enforcement") ? "enforcement" : eventType.includes("agent") ? "registered_agent" : "observability"),
+    entity_type:
+      data.entity_type ||
+      data.type ||
+      data.class ||
+      (eventType.includes("policy")
+        ? "policy"
+        : eventType.includes("enforcement")
+          ? "enforcement"
+          : eventType.includes("agent")
+            ? "registered_agent"
+            : "observability"),
     source: data.source || `change-batch/${eventType || "entity"}`,
     last_seen_at: data.last_seen_at || event.time || event.created_at || new Date().toISOString()
   };
@@ -4658,7 +5634,13 @@ function ingestLcpChangeBatch(body, { tenantIdFromPath = null } = {}) {
     const eventId = changeEventId(event, sequence);
     const hash = validateChangeHash(event);
     if (!hash.ok) {
-      rejected.push({ event_id: eventId, sequence, reason: "content_hash_mismatch", expected: hash.expected, actual: hash.actual });
+      rejected.push({
+        event_id: eventId,
+        sequence,
+        reason: "content_hash_mismatch",
+        expected: hash.expected,
+        actual: hash.actual
+      });
       return;
     }
     if (isDuplicateChange(cursor, eventId, sequence)) {
@@ -4666,7 +5648,12 @@ function ingestLcpChangeBatch(body, { tenantIdFromPath = null } = {}) {
       return;
     }
     if (sequence <= Number(cursor.last_sequence || 0)) {
-      rejected.push({ event_id: eventId, sequence, reason: "sequence_replay_or_out_of_order", last_sequence: cursor.last_sequence });
+      rejected.push({
+        event_id: eventId,
+        sequence,
+        reason: "sequence_replay_or_out_of_order",
+        last_sequence: cursor.last_sequence
+      });
       return;
     }
     const result = applyChangeEvent(event, {
@@ -4743,7 +5730,9 @@ function ingestLcpChangeBatch(body, { tenantIdFromPath = null } = {}) {
   lcpEntityWatch.last_delta_at = accepted.length ? now : lcpEntityWatch.last_delta_at;
   lcpEntityWatch.last_success_at = now;
   lcpEntityWatch.last_entity_count = state.fleet.localEntities.length;
-  lcpEntityWatch.last_error = rejected.length ? `${rejected.length} rejected change event(s)` : null;
+  lcpEntityWatch.last_error = rejected.length
+    ? `${rejected.length} rejected change event(s)`
+    : null;
 
   recordAudit("local_entities.delta_batch_ingested", "lcp", lcpId, {
     tenant_id: tenantId,
@@ -4760,14 +5749,31 @@ function ingestLcpChangeBatch(body, { tenantIdFromPath = null } = {}) {
     device_id: deviceId,
     event_type: "local_entities.updated.v1",
     severity: rejected.length ? "warning" : "info",
-    payload: { mode: "lcp_delta_push", batch_id: batchId, lcp_id: lcpId, accepted_count: accepted.length, rejected_count: rejected.length, ack_sequence: cursor.last_sequence }
+    payload: {
+      mode: "lcp_delta_push",
+      batch_id: batchId,
+      lcp_id: lcpId,
+      accepted_count: accepted.length,
+      rejected_count: rejected.length,
+      ack_sequence: cursor.last_sequence
+    }
   });
-  addTask("local_entity_delta_push", rejected.length ? "warning" : "completed", `Accepted ${accepted.length} LCP change events`, {
-    batch_id: batchId,
-    lcp_id: lcpId,
-    ack_sequence: cursor.last_sequence
+  addTask(
+    "local_entity_delta_push",
+    rejected.length ? "warning" : "completed",
+    `Accepted ${accepted.length} LCP change events`,
+    {
+      batch_id: batchId,
+      lcp_id: lcpId,
+      ack_sequence: cursor.last_sequence
+    }
+  );
+  broadcastSse("local_entities.updated", {
+    run,
+    watch: lcpWatchStatus(),
+    summary: fleetSummary(),
+    change_batch: record
   });
-  broadcastSse("local_entities.updated", { run, watch: lcpWatchStatus(), summary: fleetSummary(), change_batch: record });
   scheduleRuntimePersist("local_entity_delta_push");
   return { record, run, cursor };
 }
@@ -4778,9 +5784,13 @@ async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
   lcpEntityWatch.poll_count += 1;
   lcpEntityWatch.last_poll_at = new Date().toISOString();
   lcpEntityWatch.last_reconcile_at = lcpEntityWatch.last_poll_at;
-  const localLcp = state.fleet.localControlPlanes.find((item) => item.id === lcpEntityWatch.lcp_id)
-    || state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
-  const lcpUrl = (localLcp?.endpoint || lcpEntityWatch.lcp_url || defaultLcpUrl).replace(/\/+$/, "");
+  const localLcp =
+    state.fleet.localControlPlanes.find((item) => item.id === lcpEntityWatch.lcp_id) ||
+    state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+  const lcpUrl = (localLcp?.endpoint || lcpEntityWatch.lcp_url || defaultLcpUrl).replace(
+    /\/+$/,
+    ""
+  );
   lcpEntityWatch.lcp_url = lcpUrl;
   try {
     const [pulledEntities, pulledConfig] = await Promise.all([
@@ -4788,17 +5798,22 @@ async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
       pullLocalConfigurationSnapshot(lcpUrl)
     ]);
     lcpEntityWatch.status = pulledEntities.ok || pulledConfig.ok ? "reconciled" : "degraded";
-    lcpEntityWatch.last_success_at = pulledEntities.ok || pulledConfig.ok ? new Date().toISOString() : lcpEntityWatch.last_success_at;
+    lcpEntityWatch.last_success_at =
+      pulledEntities.ok || pulledConfig.ok
+        ? new Date().toISOString()
+        : lcpEntityWatch.last_success_at;
     lcpEntityWatch.last_error = null;
     const count = ingestLocalEntitySnapshot(pulledEntities.snapshot, {
       device_id: localLcp?.device_id || "device_local_windows",
       lcp_id: localLcp?.id || lcpEntityWatch.lcp_id,
       user_subject: "unknown"
     });
-    const snapshotHash = sha256(stableJson({
-      entities: canonicalLocalEntityState(localLcp?.id || lcpEntityWatch.lcp_id),
-      configuration: watchFingerprintPayload({}, pulledConfig.snapshot).configuration
-    }));
+    const snapshotHash = sha256(
+      stableJson({
+        entities: canonicalLocalEntityState(localLcp?.id || lcpEntityWatch.lcp_id),
+        configuration: watchFingerprintPayload({}, pulledConfig.snapshot).configuration
+      })
+    );
     lcpEntityWatch.last_entity_count = state.fleet.localEntities.length;
     const changed = force || snapshotHash !== lcpEntityWatch.last_snapshot_hash;
     if (changed) {
@@ -4827,17 +5842,37 @@ async function pollLcpEntityWatch({ force = false, reason = "timer" } = {}) {
       lcpEntityWatch.change_count += 1;
       lcpEntityWatch.last_change_at = run.created_at;
       lcpEntityWatch.last_snapshot_hash = snapshotHash;
-      recordAudit("local_entities.watch_updated", "lcp", run.lcp_id, { status: run.status, entity_count: count, config_snapshot_id: configRecord.id });
+      recordAudit("local_entities.watch_updated", "lcp", run.lcp_id, {
+        status: run.status,
+        entity_count: count,
+        config_snapshot_id: configRecord.id
+      });
       recordEvent({
         event_id: `evt_${crypto.randomUUID()}`,
         tenant_id: "local",
         device_id: run.device_id,
         event_type: "local_entities.updated.v1",
         severity: run.status === "completed" ? "info" : "warning",
-        payload: { run_id: run.id, lcp_id: run.lcp_id, entity_count: count, config_snapshot_id: configRecord.id }
+        payload: {
+          run_id: run.id,
+          lcp_id: run.lcp_id,
+          entity_count: count,
+          config_snapshot_id: configRecord.id
+        }
       });
-      addTask("local_entity_reconcile", run.status, run.status === "completed" ? `LCP snapshot reconcile completed: ${count} records` : "LCP snapshot reconcile failed", { run_id: run.id, lcp_url: lcpUrl });
-      broadcastSse("local_entities.updated", { run, watch: lcpWatchStatus(), summary: fleetSummary() });
+      addTask(
+        "local_entity_reconcile",
+        run.status,
+        run.status === "completed"
+          ? `LCP snapshot reconcile completed: ${count} records`
+          : "LCP snapshot reconcile failed",
+        { run_id: run.id, lcp_url: lcpUrl }
+      );
+      broadcastSse("local_entities.updated", {
+        run,
+        watch: lcpWatchStatus(),
+        summary: fleetSummary()
+      });
       scheduleRuntimePersist("local_entity_watch.updated");
     }
   } catch (error) {
@@ -4864,7 +5899,10 @@ function startLcpEntityWatch() {
     lcpEntityWatch.next_reconcile_at = new Date(Date.now() + delay).toISOString();
     lcpWatchTimer = setTimeout(tick, delay);
   };
-  const firstDelay = process.env.POLLEK_LCP_RECONCILE_IMMEDIATE === "1" ? 1000 : Math.min(15000, nextReconcileDelayMs());
+  const firstDelay =
+    process.env.POLLEK_LCP_RECONCILE_IMMEDIATE === "1"
+      ? 1000
+      : Math.min(15000, nextReconcileDelayMs());
   lcpEntityWatch.next_reconcile_at = new Date(Date.now() + firstDelay).toISOString();
   lcpWatchTimer = setTimeout(tick, firstDelay);
 }
@@ -4875,18 +5913,25 @@ function stopLcpEntityWatch() {
 }
 
 function policySlug(value) {
-  return String(value || "policy")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 42) || "policy";
+  return (
+    String(value || "policy")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 42) || "policy"
+  );
 }
 
 function buildPolicySources({ title, intent, engine }) {
   const safeTitle = title || "AI Assisted Policy";
-  const keyword = intent.toLowerCase().includes("pii") ? "pii" : intent.toLowerCase().includes("secret") ? "secret" : "risk";
-  return {
-    rego: `package pollek.generated.${policySlug(safeTitle)}
+  const keyword = intent.toLowerCase().includes("pii")
+    ? "pii"
+    : intent.toLowerCase().includes("secret")
+      ? "secret"
+      : "risk";
+  return (
+    {
+      rego: `package pollek.generated.${policySlug(safeTitle)}
 
 default decision := "allow"
 
@@ -4895,8 +5940,8 @@ decision := "warn" if {
   contains(lower(input.payload.text), "${keyword}")
 }
 `,
-    cedar: `permit(principal, action, resource) when { context.policy == "${policySlug(safeTitle)}" && context.risk != "high" };`,
-    openfga: `model
+      cedar: `permit(principal, action, resource) when { context.policy == "${policySlug(safeTitle)}" && context.risk != "high" };`,
+      openfga: `model
   schema 1.1
 
 type user
@@ -4905,7 +5950,8 @@ type policy_project
     define author: [user]
     define approver: [user]
 `
-  }[engine] || "";
+    }[engine] || ""
+  );
 }
 
 function aiPolicyProviders() {
@@ -4917,7 +5963,12 @@ function aiPolicyProviders() {
       status: "enabled",
       data_boundary: "no_external_provider",
       supports: ["rego", "cedar", "openfga"],
-      safety_controls: ["secret_redaction", "citation_manifest", "fixture_management", "human_approval_required"]
+      safety_controls: [
+        "secret_redaction",
+        "citation_manifest",
+        "fixture_management",
+        "human_approval_required"
+      ]
     },
     {
       id: "enterprise_provider_adapter",
@@ -4926,7 +5977,12 @@ function aiPolicyProviders() {
       status: "planned",
       data_boundary: "tenant_configured",
       supports: ["rego", "cedar", "openfga", "wasm_config"],
-      safety_controls: ["tenant_kms", "prompt_redaction", "provider_citations", "test_fixture_evidence"]
+      safety_controls: [
+        "tenant_kms",
+        "prompt_redaction",
+        "provider_citations",
+        "test_fixture_evidence"
+      ]
     }
   ];
 }
@@ -4934,26 +5990,61 @@ function aiPolicyProviders() {
 function redactPromptText(text) {
   return String(text || "")
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
-    .replace(/(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+/gi, "$1=[redacted]")
+    .replace(/(api[_-]?key|token|secret|password)\s*[:=]\s*['"]?[^'"\s]+/gi, "$1=[redacted]")
     .replace(/\bsk-[A-Za-z0-9]{12,}\b/g, "sk-[redacted]");
 }
 
 function buildPolicyCitations({ engine, controls = [] }) {
   const citations = [
-    { id: "local-entity-mapping", title: "Local Pollek entity mapping", uri: "docs/research/LOCAL_POLLEK_ENTITY_MAPPING.md", relevance: "registered/found agents, policy, enforcement, observability scope" },
-    { id: "secure-control-channel", title: "Secure bidirectional control channel", uri: "docs/architecture/SECURE_CONTROL_CHANNEL.md", relevance: "signed bundle rollout and audit controls" }
+    {
+      id: "local-entity-mapping",
+      title: "Local Pollek entity mapping",
+      uri: "docs/research/LOCAL_POLLEK_ENTITY_MAPPING.md",
+      relevance: "registered/found agents, policy, enforcement, observability scope"
+    },
+    {
+      id: "secure-control-channel",
+      title: "Secure bidirectional control channel",
+      uri: "docs/architecture/SECURE_CONTROL_CHANNEL.md",
+      relevance: "signed bundle rollout and audit controls"
+    }
   ];
-  if (engine === "cedar") citations.push({ id: "cedar-model", title: "Cedar policy model", uri: "docs/research/RESEARCH_NOTES.md#cedar", relevance: "authorization policy syntax guidance" });
-  if (engine === "openfga") citations.push({ id: "openfga-model", title: "OpenFGA relationship model", uri: "docs/research/RESEARCH_NOTES.md#openfga", relevance: "relationship tuple model guidance" });
-  if (controls.includes("siem-export")) citations.push({ id: "otel-siem", title: "OpenTelemetry/SIEM pipeline notes", uri: "docs/research/RESEARCH_NOTES.md#opentelemetry", relevance: "telemetry evidence export design" });
+  if (engine === "cedar")
+    citations.push({
+      id: "cedar-model",
+      title: "Cedar policy model",
+      uri: "docs/research/RESEARCH_NOTES.md#cedar",
+      relevance: "authorization policy syntax guidance"
+    });
+  if (engine === "openfga")
+    citations.push({
+      id: "openfga-model",
+      title: "OpenFGA relationship model",
+      uri: "docs/research/RESEARCH_NOTES.md#openfga",
+      relevance: "relationship tuple model guidance"
+    });
+  if (controls.includes("siem-export"))
+    citations.push({
+      id: "otel-siem",
+      title: "OpenTelemetry/SIEM pipeline notes",
+      uri: "docs/research/RESEARCH_NOTES.md#opentelemetry",
+      relevance: "telemetry evidence export design"
+    });
   return citations;
 }
 
 function createPolicyFixtures({ tenantId, draftId, intent, decision, fixtures }) {
-  const source = Array.isArray(fixtures) && fixtures.length ? fixtures : [
-    { name: "risky sample is controlled", input: intent, expected: decision || "warn" },
-    { name: "benign sample is allowed", input: "normal low-risk assistant activity", expected: "allow" }
-  ];
+  const source =
+    Array.isArray(fixtures) && fixtures.length
+      ? fixtures
+      : [
+          { name: "risky sample is controlled", input: intent, expected: decision || "warn" },
+          {
+            name: "benign sample is allowed",
+            input: "normal low-risk assistant activity",
+            expected: "allow"
+          }
+        ];
   return source.map((fixture) => {
     const record = {
       id: fixture.id || `fixture_${crypto.randomUUID()}`,
@@ -4972,7 +6063,15 @@ function createPolicyFixtures({ tenantId, draftId, intent, decision, fixtures })
   });
 }
 
-function recordAiPolicyProviderRun({ tenantId, draftId, providerId, originalPrompt, redactedPrompt, engine, citations }) {
+function recordAiPolicyProviderRun({
+  tenantId,
+  draftId,
+  providerId,
+  originalPrompt,
+  redactedPrompt,
+  engine,
+  citations
+}) {
   const run = {
     id: `ai_run_${crypto.randomUUID()}`,
     schema_version: "pollek.cloud.ai-policy-provider-run.v1",
@@ -4993,10 +6092,14 @@ function recordAiPolicyProviderRun({ tenantId, draftId, providerId, originalProm
 }
 
 function createPolicyDraft(body = {}) {
-  const originalIntent = String(body.intent || "Warn on high-risk AI tool activity before deployment.").trim();
+  const originalIntent = String(
+    body.intent || "Warn on high-risk AI tool activity before deployment."
+  ).trim();
   const intent = redactPromptText(originalIntent);
   const title = String(body.title || intent.split(/[.!?]/)[0] || "AI Assisted Policy").slice(0, 80);
-  const engine = ["rego", "cedar", "openfga"].includes(body.engine_hint) ? body.engine_hint : "rego";
+  const engine = ["rego", "cedar", "openfga"].includes(body.engine_hint)
+    ? body.engine_hint
+    : "rego";
   const tenantId = body.tenant_id || "local";
   const providerId = body.provider_id || "local_deterministic_policy_assistant";
   const controls = body.controls || ["human-review", "audit-log", "siem-export"];
@@ -5011,7 +6114,8 @@ function createPolicyDraft(body = {}) {
     original_intent_redacted: originalIntent !== intent,
     engine_hint: body.engine_hint || "auto",
     recommended_engine: engine,
-    provider: aiPolicyProviders().find((provider) => provider.id === providerId) || aiPolicyProviders()[0],
+    provider:
+      aiPolicyProviders().find((provider) => provider.id === providerId) || aiPolicyProviders()[0],
     status: "requires_human_review",
     ai_generated: true,
     policy_ir: {
@@ -5033,7 +6137,13 @@ function createPolicyDraft(body = {}) {
     created_at: now,
     updated_at: now
   };
-  const fixtures = createPolicyFixtures({ tenantId, draftId: draft.id, intent, decision: body.decision, fixtures: body.fixtures });
+  const fixtures = createPolicyFixtures({
+    tenantId,
+    draftId: draft.id,
+    intent,
+    decision: body.decision,
+    fixtures: body.fixtures
+  });
   draft.tests = fixtures.map((fixture) => ({
     id: fixture.id,
     name: fixture.name,
@@ -5053,21 +6163,38 @@ function createPolicyDraft(body = {}) {
   draft.provider_run_id = providerRun.id;
   state.fleet.policyDrafts.unshift(draft);
   state.fleet.policyTestFixtures = state.fleet.policyTestFixtures.slice(0, 200);
-  recordAudit("policy_draft.generated", "policy_draft", draft.id, { title: draft.title, engine, provider_id: draft.provider.id, redaction_applied: providerRun.redaction_applied });
+  recordAudit("policy_draft.generated", "policy_draft", draft.id, {
+    title: draft.title,
+    engine,
+    provider_id: draft.provider.id,
+    redaction_applied: providerRun.redaction_applied
+  });
   recordEvent({
     event_id: `evt_${crypto.randomUUID()}`,
     tenant_id: tenantId,
     event_type: "policy.draft.generated.v1",
     severity: "info",
-    payload: { draft_id: draft.id, title: draft.title, engine, provider_id: draft.provider.id, redaction_applied: providerRun.redaction_applied }
+    payload: {
+      draft_id: draft.id,
+      title: draft.title,
+      engine,
+      provider_id: draft.provider.id,
+      redaction_applied: providerRun.redaction_applied
+    }
   });
-  addTask("policy_ai_assist", "completed", `Generated policy draft: ${draft.title}`, { draft_id: draft.id, provider_run_id: providerRun.id, fixture_count: fixtures.length });
+  addTask("policy_ai_assist", "completed", `Generated policy draft: ${draft.title}`, {
+    draft_id: draft.id,
+    provider_run_id: providerRun.id,
+    fixture_count: fixtures.length
+  });
   return draft;
 }
 
 function simulatePolicyDraft(draft) {
   const now = new Date().toISOString();
-  const fixtures = (state.fleet.policyTestFixtures || []).filter((fixture) => fixture.draft_id === draft.id);
+  const fixtures = (state.fleet.policyTestFixtures || []).filter(
+    (fixture) => fixture.draft_id === draft.id
+  );
   const testCases = fixtures.length ? fixtures : draft.tests;
   const simulation = {
     id: `sim_${crypto.randomUUID()}`,
@@ -5075,7 +6202,12 @@ function simulatePolicyDraft(draft) {
     draft_id: draft.id,
     status: "passed",
     summary: `${testCases.length} fixtures passed, 0 failed. Reviewer approval is still required.`,
-    decisions: testCases.map((test) => ({ ...test, status: "passed", actual: test.expected, fixture_id: test.id || null })),
+    decisions: testCases.map((test) => ({
+      ...test,
+      status: "passed",
+      actual: test.expected,
+      fixture_id: test.id || null
+    })),
     provider_run_id: draft.provider_run_id || null,
     citation_ids: (draft.citations || []).map((citation) => citation.id),
     created_at: now
@@ -5086,22 +6218,31 @@ function simulatePolicyDraft(draft) {
   state.fleet.policySimulations.unshift(simulation);
   state.fleet.policySimulations = state.fleet.policySimulations.slice(0, 25);
   recordAudit("policy_draft.simulated", "policy_draft", draft.id, { simulation_id: simulation.id });
-  addTask("policy_simulation", "completed", `Simulation passed for ${draft.title}`, { draft_id: draft.id });
+  addTask("policy_simulation", "completed", `Simulation passed for ${draft.title}`, {
+    draft_id: draft.id
+  });
   return simulation;
 }
 
 function createPolicySandboxRun(body = {}) {
   const now = new Date().toISOString();
-  const profile = SANDBOX_PROFILES.find((item) => item.id === body.profile_id) || SANDBOX_PROFILES[0];
+  const profile =
+    SANDBOX_PROFILES.find((item) => item.id === body.profile_id) || SANDBOX_PROFILES[0];
   const draft = body.draft_id
     ? state.fleet.policyDrafts.find((item) => item.id === body.draft_id)
     : state.fleet.policyDrafts[0];
-  const selectedEntities = Array.isArray(body.entity_ids) && body.entity_ids.length
-    ? state.fleet.localEntities.filter((entity) => body.entity_ids.includes(entity.id))
-    : state.fleet.localEntities.slice(0, 5);
+  const selectedEntities =
+    Array.isArray(body.entity_ids) && body.entity_ids.length
+      ? state.fleet.localEntities.filter((entity) => body.entity_ids.includes(entity.id))
+      : state.fleet.localEntities.slice(0, 5);
   const results = selectedEntities.map((entity) => {
     const health = computeEntityHealth(entity);
-    const decision = health.health_status === "critical" ? "deny" : health.health_status === "warning" ? "warn" : "allow";
+    const decision =
+      health.health_status === "critical"
+        ? "deny"
+        : health.health_status === "warning"
+          ? "warn"
+          : "allow";
     return {
       entity_id: entity.id,
       entity_name: entity.name,
@@ -5136,8 +6277,16 @@ function createPolicySandboxRun(body = {}) {
   };
   state.fleet.policySandboxes.unshift(run);
   state.fleet.policySandboxes = state.fleet.policySandboxes.slice(0, 25);
-  recordAudit("policy_sandbox.completed", "policy_sandbox", run.id, { draft_id: run.draft_id, blast_radius: run.blast_radius });
-  addTask("policy_sandbox", "completed", `Sandbox simulation completed for ${results.length} entities`, { sandbox_run_id: run.id });
+  recordAudit("policy_sandbox.completed", "policy_sandbox", run.id, {
+    draft_id: run.draft_id,
+    blast_radius: run.blast_radius
+  });
+  addTask(
+    "policy_sandbox",
+    "completed",
+    `Sandbox simulation completed for ${results.length} entities`,
+    { sandbox_run_id: run.id }
+  );
   return run;
 }
 
@@ -5167,8 +6316,13 @@ function createBreakglassRequest(body = {}) {
   };
   state.fleet.breakglassRequests.unshift(request);
   state.fleet.breakglassRequests = state.fleet.breakglassRequests.slice(0, 25);
-  recordAudit("breakglass.requested", "breakglass", request.id, { target_id: request.target_id, reason: request.reason });
-  addTask("breakglass_request", "queued", `Breakglass requested for ${request.target_id}`, { breakglass_id: request.id });
+  recordAudit("breakglass.requested", "breakglass", request.id, {
+    target_id: request.target_id,
+    reason: request.reason
+  });
+  addTask("breakglass_request", "queued", `Breakglass requested for ${request.target_id}`, {
+    breakglass_id: request.id
+  });
   return request;
 }
 
@@ -5178,7 +6332,11 @@ function transitionBreakglass(id, action, body = {}) {
   const now = new Date().toISOString();
   if (action === "approve") {
     request.status = "active";
-    request.approvals.push({ approver: body.approver || "local-dev-security-admin", approved_at: now, note: body.note || "Approved in local dev." });
+    request.approvals.push({
+      approver: body.approver || "local-dev-security-admin",
+      approved_at: now,
+      note: body.note || "Approved in local dev."
+    });
   } else if (action === "reject") {
     request.status = "rejected";
     request.rejected_by = body.rejected_by || "local-dev-security-admin";
@@ -5190,7 +6348,9 @@ function transitionBreakglass(id, action, body = {}) {
   }
   request.updated_at = now;
   recordAudit(`breakglass.${action}`, "breakglass", request.id, { status: request.status });
-  addTask("breakglass_request", "completed", `Breakglass ${action}: ${request.target_id}`, { breakglass_id: request.id });
+  addTask("breakglass_request", "completed", `Breakglass ${action}: ${request.target_id}`, {
+    breakglass_id: request.id
+  });
   return request;
 }
 
@@ -5229,16 +6389,20 @@ function createHotReloadEvent({ rollout, targetId, stageIndex, status = "dispatc
 }
 
 function createRolloutPlan(body = {}) {
-  const targetIds = Array.isArray(body.target_ids) && body.target_ids.length
-    ? body.target_ids
-    : state.fleet.localControlPlanes.filter((lcp) => lcp.status !== "offline").map((lcp) => lcp.id);
-  const stages = Array.isArray(body.stages) && body.stages.length
-    ? body.stages
-    : [
-        { index: 0, label: "Canary", percentage: 10 },
-        { index: 1, label: "Batch", percentage: 50 },
-        { index: 2, label: "Complete", percentage: 100 }
-      ];
+  const targetIds =
+    Array.isArray(body.target_ids) && body.target_ids.length
+      ? body.target_ids
+      : state.fleet.localControlPlanes
+          .filter((lcp) => lcp.status !== "offline")
+          .map((lcp) => lcp.id);
+  const stages =
+    Array.isArray(body.stages) && body.stages.length
+      ? body.stages
+      : [
+          { index: 0, label: "Canary", percentage: 10 },
+          { index: 1, label: "Batch", percentage: 50 },
+          { index: 2, label: "Complete", percentage: 100 }
+        ];
   return {
     id: `rollout_${crypto.randomUUID()}`,
     tenant_id: "local",
@@ -5274,14 +6438,22 @@ function advanceRolloutPlan(rollout) {
     return { rollout, stage: null, events: [] };
   }
   const stage = rollout.stages[nextStage];
-  const targetCount = Math.max(1, Math.ceil(rollout.target_ids.length * (Number(stage.percentage || 100) / 100)));
+  const targetCount = Math.max(
+    1,
+    Math.ceil(rollout.target_ids.length * (Number(stage.percentage || 100) / 100))
+  );
   const already = new Set(rollout.completed_target_ids || []);
-  const stageTargets = rollout.target_ids.filter((targetId) => !already.has(targetId)).slice(0, targetCount);
-  const events = stageTargets.map((targetId) => createHotReloadEvent({ rollout, targetId, stageIndex: nextStage }));
+  const stageTargets = rollout.target_ids
+    .filter((targetId) => !already.has(targetId))
+    .slice(0, targetCount);
+  const events = stageTargets.map((targetId) =>
+    createHotReloadEvent({ rollout, targetId, stageIndex: nextStage })
+  );
   for (const targetId of stageTargets) already.add(targetId);
   rollout.completed_target_ids = [...already];
   rollout.current_stage = nextStage;
-  rollout.status = rollout.completed_target_ids.length >= rollout.target_ids.length ? "completed" : "in_progress";
+  rollout.status =
+    rollout.completed_target_ids.length >= rollout.target_ids.length ? "completed" : "in_progress";
   rollout.stage_results.push({
     stage_index: nextStage,
     label: stage.label,
@@ -5308,7 +6480,8 @@ function createEnrollmentSession(body = {}) {
     status: "waiting_for_lcp",
     verification_uri: `${publicUrl}/device`,
     command: `pollek-lcp enroll --cloud ${publicUrl} --user-code ${userCode}`,
-    spiffe_id_template: "spiffe://local.pollek.cloud/tenant/local/site/{site}/device/{device}/lcp/{lcp}",
+    spiffe_id_template:
+      "spiffe://local.pollek.cloud/tenant/local/site/{site}/device/{device}/lcp/{lcp}",
     expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     created_at: now
   };
@@ -5323,7 +6496,9 @@ function createEnrollmentSession(body = {}) {
   state.fleet.enrollmentSessions.unshift(session);
   state.fleet.enrollmentSessions = state.fleet.enrollmentSessions.slice(0, 25);
   recordAudit("enrollment.created", "enrollment_session", session.id, { user_code: userCode });
-  addTask("device_enrollment", "queued", `Created enrollment code ${userCode}`, { enrollment_id: session.id });
+  addTask("device_enrollment", "queued", `Created enrollment code ${userCode}`, {
+    enrollment_id: session.id
+  });
   return session;
 }
 
@@ -5333,14 +6508,16 @@ function createEnrollmentSession(body = {}) {
 const FLEET_TREE_ROOT_ID = "tenant_local_lab";
 
 function fleetTree() {
-  const tree = [{
-    id: FLEET_TREE_ROOT_ID,
-    parent_id: null,
-    type: "tenant",
-    name: state.tenant?.name || "Tenant",
-    status: "connected",
-    risk: "medium"
-  }];
+  const tree = [
+    {
+      id: FLEET_TREE_ROOT_ID,
+      parent_id: null,
+      type: "tenant",
+      name: state.tenant?.name || "Tenant",
+      status: "connected",
+      risk: "medium"
+    }
+  ];
   const seenDevices = new Set();
   for (const lcp of state.fleet.localControlPlanes) {
     const deviceId = lcp.device_id || `device_${lcp.id}`;
@@ -5389,7 +6566,12 @@ function fleetObjectMap() {
     objects.set(lcp.id, { ...(objects.get(lcp.id) || {}), ...lcp, type: "lcp" });
   }
   for (const bundle of state.fleet.policyBundles) {
-    objects.set(bundle.id, { ...bundle, type: "policy_bundle", status: bundle.status, risk: bundle.coverage < 60 ? "high" : "medium" });
+    objects.set(bundle.id, {
+      ...bundle,
+      type: "policy_bundle",
+      status: bundle.status,
+      risk: bundle.coverage < 60 ? "high" : "medium"
+    });
   }
   for (const entity of state.fleet.localEntities) {
     objects.set(entity.id, {
@@ -5408,7 +6590,9 @@ function fleetSummary() {
   const entities = state.fleet.localEntities;
   const health = entityHealthPage(entities).summary;
   const connected = lcps.filter((item) => item.status === "connected").length;
-  const degraded = lcps.filter((item) => item.status === "degraded" || item.status === "unknown").length;
+  const degraded = lcps.filter(
+    (item) => item.status === "degraded" || item.status === "unknown"
+  ).length;
   const offline = lcps.filter((item) => item.status === "offline").length;
   const totalAgents = lcps.reduce((sum, item) => sum + item.agents, 0);
   const totalTools = lcps.reduce((sum, item) => sum + item.tools, 0);
@@ -5432,9 +6616,13 @@ function fleetSummary() {
     compliance_policy_bundles: state.fleet.compliancePolicyBundles.length,
     policy_drafts: state.fleet.policyDrafts.length,
     policy_sandboxes: state.fleet.policySandboxes.length,
-    pending_approvals: state.fleet.policyDrafts.filter((draft) => draft.status === "requires_human_review" || draft.status === "simulation_passed").length,
-    active_breakglass: state.fleet.breakglassRequests.filter((item) => item.status === "active").length,
-    integrations_configured: state.fleet.integrations.filter((item) => item.status === "configured").length,
+    pending_approvals: state.fleet.policyDrafts.filter(
+      (draft) => draft.status === "requires_human_review" || draft.status === "simulation_passed"
+    ).length,
+    active_breakglass: state.fleet.breakglassRequests.filter((item) => item.status === "active")
+      .length,
+    integrations_configured: state.fleet.integrations.filter((item) => item.status === "configured")
+      .length,
     evidence_exports: state.fleet.evidenceExports.length,
     enrollment_sessions: state.fleet.enrollmentSessions.length,
     audit_events: state.auditEvents.length,
@@ -5481,18 +6669,27 @@ function latestBundleEnvelope(bundle, tenantId, deviceId = null) {
 }
 
 function activePolicyBundle() {
-  return state.fleet.policyBundles.find((item) => item.status === "active")
-    || state.fleet.policyBundles.find((item) => item.status === "available")
-    || state.fleet.policyBundles[0]
-    || null;
+  return (
+    state.fleet.policyBundles.find((item) => item.status === "active") ||
+    state.fleet.policyBundles.find((item) => item.status === "available") ||
+    state.fleet.policyBundles[0] ||
+    null
+  );
 }
 
 function cloudCapabilitySnapshot(tenantId = "local", deviceId = "local") {
-  const lcp = state.fleet.localControlPlanes.find((item) => item.device_id === deviceId || item.id === deviceId)
-    || state.fleet.localControlPlanes.find((item) => item.tenant_id === tenantId)
-    || state.fleet.localControlPlanes[0];
-  const enforcement = state.fleet.localEntities.filter((entity) => entity.entity_type === "enforcement" && (!lcp || entity.lcp_id === lcp.id));
-  const observe = state.fleet.localEntities.filter((entity) => entity.entity_type === "observability" && (!lcp || entity.lcp_id === lcp.id));
+  const lcp =
+    state.fleet.localControlPlanes.find(
+      (item) => item.device_id === deviceId || item.id === deviceId
+    ) ||
+    state.fleet.localControlPlanes.find((item) => item.tenant_id === tenantId) ||
+    state.fleet.localControlPlanes[0];
+  const enforcement = state.fleet.localEntities.filter(
+    (entity) => entity.entity_type === "enforcement" && (!lcp || entity.lcp_id === lcp.id)
+  );
+  const observe = state.fleet.localEntities.filter(
+    (entity) => entity.entity_type === "observability" && (!lcp || entity.lcp_id === lcp.id)
+  );
   return {
     schema_version: "local-capability-snapshot.v2",
     tenant_id: tenantId,
@@ -5512,7 +6709,8 @@ function cloudCapabilitySnapshot(tenantId = "local", deviceId = "local") {
       display_name_en: entity.name,
       status: entity.status,
       domains: entity.observability?.telemetry_streams || [],
-      privacy_note_en: entity.observability?.privacy_note || "Aggregated from Local Pollek telemetry."
+      privacy_note_en:
+        entity.observability?.privacy_note || "Aggregated from Local Pollek telemetry."
     })),
     setup_actions: [],
     contract: {
@@ -5525,14 +6723,23 @@ function cloudCapabilitySnapshot(tenantId = "local", deviceId = "local") {
 }
 
 function registryPage(tenantId, collection) {
-  const entities = state.fleet.localEntities.filter((entity) => entity.tenant_id === tenantId || tenantId === "local");
+  const entities = state.fleet.localEntities.filter(
+    (entity) => entity.tenant_id === tenantId || tenantId === "local"
+  );
   const byCollection = {
     agents: entities.filter((entity) => entity.entity_type === "registered_agent"),
     entities,
-    resources: entities.filter((entity) => entity.class === "resource" || entity.source === "registry/resources"),
-    tools: entities.filter((entity) => entity.class === "tool" || entity.source === "registry/tools")
+    resources: entities.filter(
+      (entity) => entity.class === "resource" || entity.source === "registry/resources"
+    ),
+    tools: entities.filter(
+      (entity) => entity.class === "tool" || entity.source === "registry/tools"
+    )
   };
-  const items = collection === "relationships" ? state.fleet.localEntityRelationships : (byCollection[collection] || []);
+  const items =
+    collection === "relationships"
+      ? state.fleet.localEntityRelationships
+      : byCollection[collection] || [];
   return {
     schema_version: `pollek.cloud.registry-${collection}-page.v1`,
     tenant_id: tenantId,
@@ -5542,10 +6749,13 @@ function registryPage(tenantId, collection) {
 }
 
 function discoveryPage(tenantId, collection = "candidates") {
-  const candidates = state.fleet.localEntities.filter((entity) => (
-    (tenantId === "local" || entity.tenant_id === tenantId)
-    && (entity.entity_type === "found_agent" || entity.status === "found_unregistered" || entity.source === "discovery/candidates")
-  ));
+  const candidates = state.fleet.localEntities.filter(
+    (entity) =>
+      (tenantId === "local" || entity.tenant_id === tenantId) &&
+      (entity.entity_type === "found_agent" ||
+        entity.status === "found_unregistered" ||
+        entity.source === "discovery/candidates")
+  );
   return {
     schema_version: `pollek.cloud.discovery-${collection}-page.v1`,
     tenant_id: tenantId,
@@ -5559,7 +6769,9 @@ function registerEnrolledLcp(device, body = {}) {
   const lcpId = body.lcp_id || body.lcpId || `lcp_${device.id}`;
   const now = new Date().toISOString();
   const osFamily = normalizeOsFamily(body.os_family || body.osFamily || device.os || "unknown");
-  const existing = state.fleet.localControlPlanes.find((item) => item.id === lcpId && item.tenant_id === tenantId);
+  const existing = state.fleet.localControlPlanes.find(
+    (item) => item.id === lcpId && item.tenant_id === tenantId
+  );
   const record = {
     id: lcpId,
     tenant_id: tenantId,
@@ -5592,7 +6804,9 @@ function registerEnrolledLcp(device, body = {}) {
 function applyProbeToFleet(probe, capabilitySnapshot) {
   const lcp = state.fleet.localControlPlanes.find((item) => item.id === "lcp_local");
   if (!lcp) return;
-  const contractProbe = probe.results.find((item) => item.name === "lcp_cloud_probe_to_pollek_cloud");
+  const contractProbe = probe.results.find(
+    (item) => item.name === "lcp_cloud_probe_to_pollek_cloud"
+  );
   const snapshot = capabilitySnapshot?.body;
   lcp.status = probe.ok ? "connected" : "degraded";
   lcp.risk = probe.ok ? "medium" : "high";
@@ -5601,8 +6815,12 @@ function applyProbeToFleet(probe, capabilitySnapshot) {
   lcp.capability_snapshot = snapshot || null;
   if (snapshot?.device_id) lcp.device_runtime_id = snapshot.device_id;
   if (Array.isArray(snapshot?.control_methods)) {
-    const available = snapshot.control_methods.filter((method) => method.status === "available").length;
-    const needsSetup = snapshot.control_methods.filter((method) => String(method.status).startsWith("needs_")).length;
+    const available = snapshot.control_methods.filter(
+      (method) => method.status === "available"
+    ).length;
+    const needsSetup = snapshot.control_methods.filter((method) =>
+      String(method.status).startsWith("needs_")
+    ).length;
     lcp.capability_summary = `${available} available methods, ${needsSetup} setup actions`;
     lcp.policy_coverage = Math.max(lcp.policy_coverage, probe.ok ? 72 : lcp.policy_coverage);
   }
@@ -5624,7 +6842,7 @@ async function readBody(req) {
   if (contentType.includes("application/json")) {
     try {
       return JSON.parse(raw);
-    } catch (error) {
+    } catch {
       throw httpError(400, "invalid_json_body", "invalid_json_body");
     }
   }
@@ -5667,8 +6885,9 @@ async function fetchJson(url, options = {}) {
 }
 
 function resolveLcpTarget(body = {}) {
-  const localLcp = state.fleet.localControlPlanes.find((item) => item.id === (body.lcp_id || "lcp_local"))
-    || state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+  const localLcp =
+    state.fleet.localControlPlanes.find((item) => item.id === (body.lcp_id || "lcp_local")) ||
+    state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
   if (!localLcp) throw new Error("lcp_not_found");
   const endpoint = String(localLcp.endpoint || defaultLcpUrl).replace(/\/+$/, "");
   const requested = body.lcpUrl ? String(body.lcpUrl).replace(/\/+$/, "") : endpoint;
@@ -5685,14 +6904,17 @@ function resolveLcpTarget(body = {}) {
 }
 
 function bundleForDispatch(bundleId) {
-  return state.fleet.policyBundles.find((item) => item.id === bundleId)
-    || state.fleet.policyBundles.find((item) => item.status === "active")
-    || state.fleet.policyBundles[0];
+  return (
+    state.fleet.policyBundles.find((item) => item.id === bundleId) ||
+    state.fleet.policyBundles.find((item) => item.status === "active") ||
+    state.fleet.policyBundles[0]
+  );
 }
 
 function connectionUpdatePayload({ lcp, action, bundle, body = {} }) {
-  const profile = state.fleet.connectionProfiles.find((item) => item.applies_to?.lcp_ids?.includes(lcp.id))
-    || state.fleet.connectionProfiles[0];
+  const profile =
+    state.fleet.connectionProfiles.find((item) => item.applies_to?.lcp_ids?.includes(lcp.id)) ||
+    state.fleet.connectionProfiles[0];
   return {
     schema_version: "pollek.cloud.connection-update.v1",
     tenant_id: "local",
@@ -5712,16 +6934,20 @@ function connectionUpdatePayload({ lcp, action, bundle, body = {} }) {
     action,
     connection_profile: profile,
     trust_scopes: state.fleet.tenantTrustScopes.filter((scope) => scope.tenant_id === "local"),
-    service_endpoints: state.fleet.serviceEndpoints.filter((endpoint) => endpoint.tenant_id === "local"),
-    policy_bundle: bundle ? {
-      bundle_id: bundle.id,
-      name: bundle.name,
-      revision: bundle.revision,
-      manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/manifest`,
-      latest_url: `${publicUrl}/v1/tenants/local/bundles/latest`,
-      hot_reload: Boolean(bundle.hot_reload ?? true),
-      signed: Boolean(bundle.signed ?? true)
-    } : null,
+    service_endpoints: state.fleet.serviceEndpoints.filter(
+      (endpoint) => endpoint.tenant_id === "local"
+    ),
+    policy_bundle: bundle
+      ? {
+          bundle_id: bundle.id,
+          name: bundle.name,
+          revision: bundle.revision,
+          manifest_url: `${publicUrl}/v1/policy-bundles/${encodeURIComponent(bundle.id)}/manifest`,
+          latest_url: `${publicUrl}/v1/tenants/local/bundles/latest`,
+          hot_reload: Boolean(bundle.hot_reload ?? true),
+          signed: Boolean(bundle.signed ?? true)
+        }
+      : null,
     runtime_configuration: {
       reconcile_seconds: Math.round(lcpEntityWatch.interval_ms / 1000),
       hybrid_sync_mode: lcpEntityWatch.mode,
@@ -5758,12 +6984,23 @@ async function dispatchControlToLcp(body = {}, action = "config.update") {
         method,
         timeoutMs: 5000,
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(pathName === "/v1/tenants/local/pdp/cloud" ? {
-          ...payload,
-          control_envelope: envelope
-        } : controlMessage)
+        body: JSON.stringify(
+          pathName === "/v1/tenants/local/pdp/cloud"
+            ? {
+                ...payload,
+                control_envelope: envelope
+              }
+            : controlMessage
+        )
       });
-      results.push({ path: pathName, method, ok: result.ok, status: result.status, latency_ms: result.latency_ms, body: redactSensitive(result.body) });
+      results.push({
+        path: pathName,
+        method,
+        ok: result.ok,
+        status: result.status,
+        latency_ms: result.latency_ms,
+        body: redactSensitive(result.body)
+      });
     } catch (error) {
       results.push({ path: pathName, method, ok: false, error: String(error) });
     }
@@ -5771,9 +7008,12 @@ async function dispatchControlToLcp(body = {}, action = "config.update") {
 
   const applied = results.filter((item) => item.ok);
   const unsupported = results.filter((item) => item.status === 404 || item.status === 405);
-  const status = applied.length && unsupported.length ? "partially_applied"
-    : applied.length ? "applied"
-      : "failed";
+  const status =
+    applied.length && unsupported.length
+      ? "partially_applied"
+      : applied.length
+        ? "applied"
+        : "failed";
   const record = {
     id: `dispatch_${crypto.randomUUID()}`,
     schema_version: "pollek.cloud.cloud-to-local-dispatch.v1",
@@ -5812,7 +7052,13 @@ async function dispatchControlToLcp(body = {}, action = "config.update") {
     state.fleet.hotReloadEvents = state.fleet.hotReloadEvents.slice(0, 50);
     broadcastSse("hot_reload.event", hotReload);
   }
-  recordAudit("cloud_to_local.dispatch", "lcp", lcp.id, { action, status, dispatch_id: record.id, bundle_id: record.bundle_id, unsupported_paths: record.unsupported_paths });
+  recordAudit("cloud_to_local.dispatch", "lcp", lcp.id, {
+    action,
+    status,
+    dispatch_id: record.id,
+    bundle_id: record.bundle_id,
+    unsupported_paths: record.unsupported_paths
+  });
   recordEvent({
     event_id: `evt_${crypto.randomUUID()}`,
     tenant_id: "local",
@@ -5821,7 +7067,12 @@ async function dispatchControlToLcp(body = {}, action = "config.update") {
     severity: status === "failed" ? "warning" : "info",
     payload: { dispatch_id: record.id, action, status, lcp_id: lcp.id, bundle_id: record.bundle_id }
   });
-  addTask("cloud_to_local_dispatch", status === "failed" ? "failed" : "completed", `Cloud-to-Local ${action}: ${status}`, { dispatch_id: record.id, lcp_id: lcp.id });
+  addTask(
+    "cloud_to_local_dispatch",
+    status === "failed" ? "failed" : "completed",
+    `Cloud-to-Local ${action}: ${status}`,
+    { dispatch_id: record.id, lcp_id: lcp.id }
+  );
   broadcastSse("cloud_to_local.dispatched", { dispatch: record, summary: fleetSummary() });
   scheduleRuntimePersist(`cloud_to_local.${action}`);
   return record;
@@ -5840,9 +7091,13 @@ function collectContractPaths(contract) {
 function contractDriftReport(contract, openApi) {
   const contractPaths = new Set(collectContractPaths(contract));
   const openApiPaths = new Set(Object.keys(openApi.paths || {}));
-  const missing_openapi_paths = [...contractPaths].filter((apiPath) => !openApiPaths.has(apiPath)).sort();
+  const missing_openapi_paths = [...contractPaths]
+    .filter((apiPath) => !openApiPaths.has(apiPath))
+    .sort();
   const extra_openapi_paths = [...openApiPaths]
-    .filter((apiPath) => !contractPaths.has(apiPath) && !contractDriftAllowedRuntimePaths.has(apiPath))
+    .filter(
+      (apiPath) => !contractPaths.has(apiPath) && !contractDriftAllowedRuntimePaths.has(apiPath)
+    )
     .sort();
   return {
     schema_version: "pollek.cloud.contract-drift-report.v1",
@@ -5981,7 +7236,9 @@ const mtlsMode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_MTLS_
   : "off";
 // Header carrying the SPIFFE ID verified by a trusted mTLS-terminating ingress. The ingress
 // MUST overwrite/strip this from untrusted client input (documented in the Phase-B hand-off).
-const mtlsIdentityHeader = (process.env.POLLEK_MTLS_IDENTITY_HEADER || "x-pollek-spiffe-id").toLowerCase();
+const mtlsIdentityHeader = (
+  process.env.POLLEK_MTLS_IDENTITY_HEADER || "x-pollek-spiffe-id"
+).toLowerCase();
 // Boundary-class identity enforcement for console/admin (human) boundaries. Machine
 // (DEK-facing) boundaries are governed by the Keycloak JWT gate; public boundaries are open.
 // Default off keeps current behavior; enabling requires the console to send its session token
@@ -5994,12 +7251,26 @@ const sessionMode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_SE
 // health, event streams, and the signed trust anchors which are safe to read by location).
 function isPublicApiPath(pathname) {
   const publicExact = new Set([
-    "/health", "/.well-known/pollek-contract", "/contracts/openapi.json", "/api/cloud/status",
-    "/api/persistence/status", "/api/persistence/flush", "/api/contract-hub/drift",
-    "/api/events", "/api/events/replay", "/api/hot-reload/stream", "/api/entities/watch",
-    "/oauth/device_authorization", "/oauth/token", "/enroll",
-    "/v1/signup/tenant", "/v1/invitations/accept",
-    "/v1/auth/login", "/v1/auth/callback", "/v1/auth/logout", "/v1/auth/session"
+    "/health",
+    "/.well-known/pollek-contract",
+    "/contracts/openapi.json",
+    "/api/cloud/status",
+    "/api/persistence/status",
+    "/api/persistence/flush",
+    "/api/contract-hub/drift",
+    "/api/events",
+    "/api/events/replay",
+    "/api/hot-reload/stream",
+    "/api/entities/watch",
+    "/oauth/device_authorization",
+    "/oauth/token",
+    "/enroll",
+    "/v1/signup/tenant",
+    "/v1/invitations/accept",
+    "/v1/auth/login",
+    "/v1/auth/callback",
+    "/v1/auth/logout",
+    "/v1/auth/session"
   ]);
   if (publicExact.has(pathname)) return true;
   if (pathname.startsWith("/contracts/")) return true;
@@ -6017,7 +7288,9 @@ function requestHasValidSession(req) {
   const token = auth.slice("Bearer ".length).trim();
   if (!token) return false;
   const hashed = tokenHash(token);
-  return (state.fleet.authSessions || []).some((item) => item.token_hash === hashed && item.status === "active");
+  return (state.fleet.authSessions || []).some(
+    (item) => item.token_hash === hashed && item.status === "active"
+  );
 }
 
 function deviceSpiffeId(tenantId, deviceId, agentId = null) {
@@ -6033,7 +7306,10 @@ function parseSpiffeId(uri) {
   const slash = withoutScheme.indexOf("/");
   if (slash < 0) return null;
   const trust = `spiffe://${withoutScheme.slice(0, slash)}`;
-  const segments = withoutScheme.slice(slash + 1).split("/").filter(Boolean);
+  const segments = withoutScheme
+    .slice(slash + 1)
+    .split("/")
+    .filter(Boolean);
   const parsed = { trust_domain: trust, tenant_id: null, device_id: null, agent_id: null };
   for (let i = 0; i + 1 < segments.length; i += 2) {
     const key = segments[i];
@@ -6062,39 +7338,69 @@ function requestSpiffeId(req) {
 // intentionally excluded: a device enrolls in order to obtain its SVID (chicken-and-egg).
 function isMtlsProtectedPath(pathname) {
   if (pathname === "/enroll") return false;
-  return /^\/v1\/telemetry\//.test(pathname)
-    || /^\/v1\/metrics$/.test(pathname)
-    || /^\/v1\/tenants\/[^/]+\/(telemetry|registry|discovery|lcp|logs|bundles|browser-extension|capability-snapshot)/.test(pathname)
-    || /^\/v1\/tenants\/[^/]+\/devices\/[^/]+\//.test(pathname)
-    || /^\/api\/(entities\/(ingest|sync)|lcp\/(usage-ledgers|change-batches))$/.test(pathname);
+  return (
+    /^\/v1\/telemetry\//.test(pathname) ||
+    /^\/v1\/metrics$/.test(pathname) ||
+    /^\/v1\/tenants\/[^/]+\/(telemetry|registry|discovery|lcp|logs|bundles|browser-extension|capability-snapshot)/.test(
+      pathname
+    ) ||
+    /^\/v1\/tenants\/[^/]+\/devices\/[^/]+\//.test(pathname) ||
+    /^\/api\/(entities\/(ingest|sync)|lcp\/(usage-ledgers|change-batches))$/.test(pathname)
+  );
 }
 
 // Enforce the mTLS/SVID stance for a request. Returns { allowed, rejection } — when not
 // allowed, rejection = { status, body } for the caller to send. Off mode always allows.
 function evaluateMtls(req, pathname, expectedTenantId) {
-  if (mtlsMode === "off" || !isMtlsProtectedPath(pathname)) return { allowed: true, mode: mtlsMode, enforced: false };
+  if (mtlsMode === "off" || !isMtlsProtectedPath(pathname))
+    return { allowed: true, mode: mtlsMode, enforced: false };
   const spiffeUri = requestSpiffeId(req);
   const parsed = spiffeUri ? parseSpiffeId(spiffeUri) : null;
-  const tenantMatches = Boolean(parsed && expectedTenantId && parsed.tenant_id === expectedTenantId);
+  const tenantMatches = Boolean(
+    parsed && expectedTenantId && parsed.tenant_id === expectedTenantId
+  );
   const identityPresent = Boolean(parsed && parsed.tenant_id && parsed.device_id);
   const problem = !identityPresent
     ? "svid_required"
-    : (expectedTenantId && !tenantMatches ? "svid_tenant_mismatch" : null);
-  if (!problem) return { allowed: true, mode: mtlsMode, enforced: true, spiffe_id: spiffeUri, parsed };
+    : expectedTenantId && !tenantMatches
+      ? "svid_tenant_mismatch"
+      : null;
+  if (!problem)
+    return { allowed: true, mode: mtlsMode, enforced: true, spiffe_id: spiffeUri, parsed };
   if (mtlsMode === "monitor") {
     recordAudit("mtls.identity_warning", "transport", pathname, {
-      problem, presented_spiffe_id: spiffeUri || null, expected_tenant_id: expectedTenantId || null, mode: "monitor"
+      problem,
+      presented_spiffe_id: spiffeUri || null,
+      expected_tenant_id: expectedTenantId || null,
+      mode: "monitor"
     });
-    return { allowed: true, mode: "monitor", enforced: true, warning: problem, spiffe_id: spiffeUri, parsed };
+    return {
+      allowed: true,
+      mode: "monitor",
+      enforced: true,
+      warning: problem,
+      spiffe_id: spiffeUri,
+      parsed
+    };
   }
   const status = problem === "svid_required" ? 401 : 403;
   recordAudit("mtls.identity_rejected", "transport", pathname, {
-    problem, presented_spiffe_id: spiffeUri || null, expected_tenant_id: expectedTenantId || null, mode: "enforce"
+    problem,
+    presented_spiffe_id: spiffeUri || null,
+    expected_tenant_id: expectedTenantId || null,
+    mode: "enforce"
   });
   return {
     allowed: false,
     mode: "enforce",
-    rejection: { status, body: { error: problem, expected_tenant_id: expectedTenantId || null, trust_domain: trustDomain } }
+    rejection: {
+      status,
+      body: {
+        error: problem,
+        expected_tenant_id: expectedTenantId || null,
+        trust_domain: trustDomain
+      }
+    }
   };
 }
 
@@ -6116,7 +7422,9 @@ function spiffeBundleStatus() {
     schema_version: "pollek.trust.spiffe-bundle.v1",
     trust_domain: trustDomain,
     status: configured ? "configured" : "pending_spire_provisioning",
-    spire_server: spireServerAddress ? { address: spireServerAddress, port: spireServerPort } : null,
+    spire_server: spireServerAddress
+      ? { address: spireServerAddress, port: spireServerPort }
+      : null,
     mtls_mode: mtlsMode,
     trust_bundle_pem: bundlePem || null
   };
@@ -6166,7 +7474,9 @@ async function handleApi(req, res) {
     const tenantInPath = pathname.match(/^\/v1\/tenants\/([^/]+)\//);
     const expectedTenant = tenantInPath
       ? decodeURIComponent(tenantInPath[1])
-      : (typeof req.headers["x-pollek-tenant-id"] === "string" ? req.headers["x-pollek-tenant-id"] : null);
+      : typeof req.headers["x-pollek-tenant-id"] === "string"
+        ? req.headers["x-pollek-tenant-id"]
+        : null;
     const decision = evaluateMtls(req, pathname, expectedTenant);
     if (!decision.allowed) {
       sendJson(res, decision.rejection.status, decision.rejection.body);
@@ -6182,29 +7492,40 @@ async function handleApi(req, res) {
   if (keycloak.isEnabled() && isMtlsProtectedPath(pathname)) {
     const cfg = keycloak.config();
     const authHeader = String(req.headers.authorization || "");
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
+    const bearer = authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length).trim()
+      : "";
     const looksJwt = bearer.split(".").length === 3;
     const tenantInPath = pathname.match(/^\/v1\/tenants\/([^/]+)\//);
     const expectedTenant = tenantInPath
       ? decodeURIComponent(tenantInPath[1])
-      : (typeof req.headers["x-pollek-tenant-id"] === "string" ? req.headers["x-pollek-tenant-id"] : null);
+      : typeof req.headers["x-pollek-tenant-id"] === "string"
+        ? req.headers["x-pollek-tenant-id"]
+        : null;
     let problem = null;
     if (looksJwt) {
       const verified = await keycloak.verifyToken(bearer, cfg);
       if (!verified.valid) problem = `jwt_${verified.reason}`;
       else if (expectedTenant && !verified.tenant_id) problem = "jwt_missing_tenant_claim";
-      else if (expectedTenant && verified.tenant_id !== expectedTenant) problem = "jwt_tenant_mismatch";
+      else if (expectedTenant && verified.tenant_id !== expectedTenant)
+        problem = "jwt_tenant_mismatch";
     } else if (cfg.mode === "enforce") {
       problem = bearer ? "jwt_not_a_jwt" : "jwt_required";
     }
     if (problem) {
       if (cfg.mode === "enforce") {
         const status = problem === "jwt_tenant_mismatch" ? 403 : 401;
-        recordAudit("iam.jwt_rejected", "transport", pathname, { problem, expected_tenant_id: expectedTenant || null });
+        recordAudit("iam.jwt_rejected", "transport", pathname, {
+          problem,
+          expected_tenant_id: expectedTenant || null
+        });
         sendJson(res, status, { error: problem, expected_tenant_id: expectedTenant || null });
         return true;
       }
-      recordAudit("iam.jwt_warning", "transport", pathname, { problem, expected_tenant_id: expectedTenant || null });
+      recordAudit("iam.jwt_warning", "transport", pathname, {
+        problem,
+        expected_tenant_id: expectedTenant || null
+      });
     }
   }
 
@@ -6222,14 +7543,25 @@ async function handleApi(req, res) {
     }
   }
 
-  if (req.method === "GET" && (pathname === "/api/events" || pathname === "/api/hot-reload/stream")) {
-    openEventStream(req, res, pathname === "/api/hot-reload/stream" ? "hot-reload" : "contract-hub");
+  if (
+    req.method === "GET" &&
+    (pathname === "/api/events" || pathname === "/api/hot-reload/stream")
+  ) {
+    openEventStream(
+      req,
+      res,
+      pathname === "/api/hot-reload/stream" ? "hot-reload" : "contract-hub"
+    );
     return true;
   }
 
   if (req.method === "GET" && pathname === "/api/events/replay") {
     const channel = url.searchParams.get("channel") || "contract-hub";
-    const lastEventId = url.searchParams.get("since") || url.searchParams.get("last_event_id") || req.headers["last-event-id"] || "";
+    const lastEventId =
+      url.searchParams.get("since") ||
+      url.searchParams.get("last_event_id") ||
+      req.headers["last-event-id"] ||
+      "";
     const entries = replayStreamEntries({
       channel,
       lastEventId,
@@ -6316,7 +7648,10 @@ async function handleApi(req, res) {
         users
       });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "role_user_seed_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "role_user_seed_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6330,7 +7665,10 @@ async function handleApi(req, res) {
         ...result
       });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "tenant_signup_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "tenant_signup_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6344,7 +7682,10 @@ async function handleApi(req, res) {
         ...result
       });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "invitation_accept_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "invitation_accept_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6375,9 +7716,21 @@ async function handleApi(req, res) {
     try {
       const tenantId = url.searchParams.get("tenant_id") || "local";
       const email = url.searchParams.get("email") || "local-admin@pollek.local";
-      const account = ensureAccount({ email, display_name: url.searchParams.get("name") || "Local Admin" });
-      upsertTenantMember({ tenant_id: tenantId, account_id: account.id, roles: ["admin"], invited_by: "oidc-callback-dev" });
-      const sessionBundle = createAuthSession({ tenant_id: tenantId, account_id: account.id, method: "oidc-callback-dev" });
+      const account = ensureAccount({
+        email,
+        display_name: url.searchParams.get("name") || "Local Admin"
+      });
+      upsertTenantMember({
+        tenant_id: tenantId,
+        account_id: account.id,
+        roles: ["admin"],
+        invited_by: "oidc-callback-dev"
+      });
+      const sessionBundle = createAuthSession({
+        tenant_id: tenantId,
+        account_id: account.id,
+        method: "oidc-callback-dev"
+      });
       recordAudit("auth.login", "auth_session", sessionBundle.session.id, {
         tenant_id: tenantId,
         actor_id: account.id,
@@ -6389,7 +7742,10 @@ async function handleApi(req, res) {
         session: safeSession(sessionBundle.session, sessionBundle.token)
       });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "auth_callback_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "auth_callback_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6409,7 +7765,11 @@ async function handleApi(req, res) {
       });
       scheduleRuntimePersist("auth.logout");
     }
-    sendJson(res, 200, { schema_version: "pollek.cloud.logout-response.v1", ok: true, session_id: session?.id || null });
+    sendJson(res, 200, {
+      schema_version: "pollek.cloud.logout-response.v1",
+      ok: true,
+      session_id: session?.id || null
+    });
     return true;
   }
 
@@ -6463,7 +7823,10 @@ async function handleApi(req, res) {
         ...result
       });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "invitation_create_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "invitation_create_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6520,7 +7883,10 @@ async function handleApi(req, res) {
       scheduleRuntimePersist("member.roles_updated");
       sendJson(res, 200, { schema_version: "pollek.cloud.member-role-update.v1", member });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "member_role_update_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "member_role_update_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6548,11 +7914,22 @@ async function handleApi(req, res) {
     }
     member.status = "removed";
     member.removed_at = nowIso();
-    state.fleet.memberRoleAssignments = (state.fleet.memberRoleAssignments || [])
-      .filter((item) => !(item.tenant_id === tenantId && item.account_id === accountId));
-    state.fleet.authorizationTuples = (state.fleet.authorizationTuples || [])
-      .filter((tuple) => !(tuple.tenant_id === tenantId && tuple.principal === `user:${accountId}` && tuple.object === `tenant:${tenantId}`));
-    recordAudit("member.removed", "tenant_member", member.id, { tenant_id: tenantId, actor_id: body.actor_id || "acc_local_admin", account_id: accountId });
+    state.fleet.memberRoleAssignments = (state.fleet.memberRoleAssignments || []).filter(
+      (item) => !(item.tenant_id === tenantId && item.account_id === accountId)
+    );
+    state.fleet.authorizationTuples = (state.fleet.authorizationTuples || []).filter(
+      (tuple) =>
+        !(
+          tuple.tenant_id === tenantId &&
+          tuple.principal === `user:${accountId}` &&
+          tuple.object === `tenant:${tenantId}`
+        )
+    );
+    recordAudit("member.removed", "tenant_member", member.id, {
+      tenant_id: tenantId,
+      actor_id: body.actor_id || "acc_local_admin",
+      account_id: accountId
+    });
     scheduleRuntimePersist("member.removed");
     sendJson(res, 200, { schema_version: "pollek.cloud.member-remove.v1", member, authorization });
     return true;
@@ -6566,7 +7943,10 @@ async function handleApi(req, res) {
       const tuple = createAuthorizationTuple({ ...body, tenant_id: tenantId });
       sendJson(res, 201, { schema_version: "pollek.cloud.authorization-tuple-write.v1", tuple });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "authorization_tuple_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "authorization_tuple_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6577,7 +7957,10 @@ async function handleApi(req, res) {
       const decision = checkAuthorization(body);
       sendJson(res, 200, { decision });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "authorization_check_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "authorization_check_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6614,21 +7997,33 @@ async function handleApi(req, res) {
         actor_id: body.actor_id || "acc_local_admin",
         provider_type: provider.provider_type
       });
-      addTask("identity_provider_configure", "completed", `Configured ${provider.display_name}`, { tenant_id: tenantId, provider_id: provider.id });
+      addTask("identity_provider_configure", "completed", `Configured ${provider.display_name}`, {
+        tenant_id: tenantId,
+        provider_id: provider.id
+      });
       scheduleRuntimePersist("idp.configured");
-      sendJson(res, 200, { schema_version: "pollek.cloud.identity-provider-update.v1", provider: redactedIdentityProvider(provider) });
+      sendJson(res, 200, {
+        schema_version: "pollek.cloud.identity-provider-update.v1",
+        provider: redactedIdentityProvider(provider)
+      });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "identity_provider_update_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "identity_provider_update_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
 
   if (pathname === "/scim/v2/Users" || pathname === "/scim/v2/Groups") {
-    const tenantId = req.headers["x-pollek-tenant-id"] || url.searchParams.get("tenant_id") || "local";
+    const tenantId =
+      req.headers["x-pollek-tenant-id"] || url.searchParams.get("tenant_id") || "local";
     const isUsers = pathname.endsWith("Users");
     const collectionKey = isUsers ? "scimUsers" : "scimGroups";
     if (req.method === "GET") {
-      const resources = (state.fleet[collectionKey] || []).filter((item) => item.tenant_id === tenantId);
+      const resources = (state.fleet[collectionKey] || []).filter(
+        (item) => item.tenant_id === tenantId
+      );
       sendJson(res, 200, {
         schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
         totalResults: resources.length,
@@ -6646,7 +8041,11 @@ async function handleApi(req, res) {
           ...body,
           id,
           tenant_id: tenantId,
-          schemas: body.schemas || [isUsers ? "urn:ietf:params:scim:schemas:core:2.0:User" : "urn:ietf:params:scim:schemas:core:2.0:Group"],
+          schemas: body.schemas || [
+            isUsers
+              ? "urn:ietf:params:scim:schemas:core:2.0:User"
+              : "urn:ietf:params:scim:schemas:core:2.0:Group"
+          ],
           meta: {
             resourceType: isUsers ? "User" : "Group",
             created: nowIso(),
@@ -6655,32 +8054,61 @@ async function handleApi(req, res) {
         };
         state.fleet[collectionKey].unshift(resource);
         if (isUsers && resource.userName) {
-          const account = ensureAccount({ email: resource.userName, display_name: resource.displayName || resource.userName });
-          upsertTenantMember({ tenant_id: tenantId, account_id: account.id, roles: ["viewer"], invited_by: "scim" });
+          const account = ensureAccount({
+            email: resource.userName,
+            display_name: resource.displayName || resource.userName
+          });
+          upsertTenantMember({
+            tenant_id: tenantId,
+            account_id: account.id,
+            roles: ["viewer"],
+            invited_by: "scim"
+          });
         }
-        recordAudit(`scim.${isUsers ? "user" : "group"}_provisioned`, isUsers ? "scim_user" : "scim_group", id, { tenant_id: tenantId, actor_id: "scim" });
+        recordAudit(
+          `scim.${isUsers ? "user" : "group"}_provisioned`,
+          isUsers ? "scim_user" : "scim_group",
+          id,
+          { tenant_id: tenantId, actor_id: "scim" }
+        );
         scheduleRuntimePersist("scim.provisioned");
         sendJson(res, 201, resource);
       } catch (error) {
-        sendJson(res, error.statusCode || 400, { error: "scim_write_failed", detail: error instanceof Error ? error.message : String(error) });
+        sendJson(res, error.statusCode || 400, {
+          error: "scim_write_failed",
+          detail: error instanceof Error ? error.message : String(error)
+        });
       }
       return true;
     }
   }
 
-  const billingSubscriptionMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/billing\/subscription$/);
+  const billingSubscriptionMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/billing\/subscription$/
+  );
   if ((req.method === "GET" || req.method === "POST") && billingSubscriptionMatch) {
     const tenantId = decodeURIComponent(billingSubscriptionMatch[1]);
     if (req.method === "GET") {
       const { subscription, plan } = planForTenant(tenantId);
-      sendJson(res, 200, { schema_version: "pollek.cloud.billing-subscription.v1", tenant_id: tenantId, subscription, plan });
+      sendJson(res, 200, {
+        schema_version: "pollek.cloud.billing-subscription.v1",
+        tenant_id: tenantId,
+        subscription,
+        plan
+      });
       return true;
     }
     try {
       const body = await readBody(req);
       const planId = body.plan_id || "plan_enterprise_cloud";
-      const existing = (state.fleet.subscriptions || []).find((item) => item.tenant_id === tenantId && item.status !== "cancelled");
-      const subscription = existing || { id: `sub_${slugify(tenantId)}_${crypto.randomBytes(4).toString("hex")}`, tenant_id: tenantId, created_at: nowIso() };
+      const existing = (state.fleet.subscriptions || []).find(
+        (item) => item.tenant_id === tenantId && item.status !== "cancelled"
+      );
+      const subscription = existing || {
+        id: `sub_${slugify(tenantId)}_${crypto.randomBytes(4).toString("hex")}`,
+        tenant_id: tenantId,
+        created_at: nowIso()
+      };
       Object.assign(subscription, {
         plan_id: planId,
         status: body.status || "active",
@@ -6696,11 +8124,23 @@ async function handleApi(req, res) {
         actor_id: body.actor_id || "acc_local_admin",
         plan_id: planId
       });
-      addTask("billing_subscription_update", "completed", `Updated subscription ${subscription.id}`, { tenant_id: tenantId, subscription_id: subscription.id });
+      addTask(
+        "billing_subscription_update",
+        "completed",
+        `Updated subscription ${subscription.id}`,
+        { tenant_id: tenantId, subscription_id: subscription.id }
+      );
       scheduleRuntimePersist("billing.subscription_updated");
-      sendJson(res, 200, { schema_version: "pollek.cloud.billing-subscription-update.v1", subscription, plan: planForTenant(tenantId).plan });
+      sendJson(res, 200, {
+        schema_version: "pollek.cloud.billing-subscription-update.v1",
+        subscription,
+        plan: planForTenant(tenantId).plan
+      });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "billing_subscription_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "billing_subscription_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6712,7 +8152,10 @@ async function handleApi(req, res) {
     return true;
   }
 
-  const costTokenRangeFromQuery = () => ({ from: url.searchParams.get("from"), to: url.searchParams.get("to") });
+  const costTokenRangeFromQuery = () => ({
+    from: url.searchParams.get("from"),
+    to: url.searchParams.get("to")
+  });
 
   if (req.method === "GET" && pathname === "/api/reports/cost-tokens/overview") {
     const tenantParam = url.searchParams.get("tenant_id");
@@ -6724,7 +8167,11 @@ async function handleApi(req, res) {
   if (req.method === "GET" && pathname === "/api/reports/cost-tokens") {
     const tenantParam = url.searchParams.get("tenant_id");
     const tenantId = tenantParam && tenantParam !== "all" ? tenantParam : null;
-    const report = costTokenReport(tenantId, url.searchParams.get("group_by") || "device", costTokenRangeFromQuery());
+    const report = costTokenReport(
+      tenantId,
+      url.searchParams.get("group_by") || "device",
+      costTokenRangeFromQuery()
+    );
     if ((url.searchParams.get("format") || "json") === "csv") {
       sendText(res, 200, costTokenReportCsv(report), "text/csv");
       return true;
@@ -6733,16 +8180,31 @@ async function handleApi(req, res) {
     return true;
   }
 
-  const tenantCostTokenOverviewMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/reports\/cost-tokens\/overview$/);
+  const tenantCostTokenOverviewMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/reports\/cost-tokens\/overview$/
+  );
   if (req.method === "GET" && tenantCostTokenOverviewMatch) {
-    sendJson(res, 200, costTokenOverview(decodeURIComponent(tenantCostTokenOverviewMatch[1]), costTokenRangeFromQuery()));
+    sendJson(
+      res,
+      200,
+      costTokenOverview(
+        decodeURIComponent(tenantCostTokenOverviewMatch[1]),
+        costTokenRangeFromQuery()
+      )
+    );
     return true;
   }
 
-  const tenantCostTokenReportMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/reports\/cost-tokens$/);
+  const tenantCostTokenReportMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/reports\/cost-tokens$/
+  );
   if (req.method === "GET" && tenantCostTokenReportMatch) {
     const tenantId = decodeURIComponent(tenantCostTokenReportMatch[1]);
-    const report = costTokenReport(tenantId, url.searchParams.get("group_by") || "device", costTokenRangeFromQuery());
+    const report = costTokenReport(
+      tenantId,
+      url.searchParams.get("group_by") || "device",
+      costTokenRangeFromQuery()
+    );
     if ((url.searchParams.get("format") || "json") === "csv") {
       sendText(res, 200, costTokenReportCsv(report), "text/csv");
       return true;
@@ -6758,7 +8220,12 @@ async function handleApi(req, res) {
     sendJson(res, 200, {
       schema_version: "pollek.cloud.billing-invoice-page.v1",
       tenant_id: tenantId,
-      invoices: [invoice, ...(state.fleet.invoices || []).filter((item) => item.tenant_id === tenantId && item.id !== invoice.id)]
+      invoices: [
+        invoice,
+        ...(state.fleet.invoices || []).filter(
+          (item) => item.tenant_id === tenantId && item.id !== invoice.id
+        )
+      ]
     });
     return true;
   }
@@ -6785,9 +8252,15 @@ async function handleApi(req, res) {
         provider: method.provider
       });
       scheduleRuntimePersist("billing.payment_method_added");
-      sendJson(res, 201, { schema_version: "pollek.cloud.payment-method-created.v1", payment_method: { ...method, reference_hash: method.reference_hash.slice(0, 12) } });
+      sendJson(res, 201, {
+        schema_version: "pollek.cloud.payment-method-created.v1",
+        payment_method: { ...method, reference_hash: method.reference_hash.slice(0, 12) }
+      });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "payment_method_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "payment_method_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6800,7 +8273,10 @@ async function handleApi(req, res) {
       const license = issueOfflineLicense(tenantId, body);
       sendJson(res, 201, { schema_version: "pollek.cloud.offline-license-issued.v1", license });
     } catch (error) {
-      sendJson(res, error.statusCode || 400, { error: "license_issue_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, error.statusCode || 400, {
+        error: "license_issue_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6809,8 +8285,11 @@ async function handleApi(req, res) {
   if (req.method === "POST" && billingWebhookMatch) {
     const provider = decodeURIComponent(billingWebhookMatch[1]);
     const body = await readBody(req);
-    const eventId = body.id || req.headers["x-pollek-event-id"] || `billing_evt_${crypto.randomUUID()}`;
-    const exists = (state.fleet.billingEvents || []).some((item) => item.provider === provider && item.provider_event_id === eventId);
+    const eventId =
+      body.id || req.headers["x-pollek-event-id"] || `billing_evt_${crypto.randomUUID()}`;
+    const exists = (state.fleet.billingEvents || []).some(
+      (item) => item.provider === provider && item.provider_event_id === eventId
+    );
     const tenantId = body.tenant_id || body.data?.tenant_id || "local";
     const event = {
       id: `billing_event_${crypto.randomUUID()}`,
@@ -6823,9 +8302,17 @@ async function handleApi(req, res) {
       received_at: nowIso()
     };
     if (!exists) state.fleet.billingEvents.unshift(event);
-    recordAudit("billing.webhook_received", "billing_event", event.id, { tenant_id: tenantId, actor_id: provider, event_type: event.event_type, duplicate: exists });
+    recordAudit("billing.webhook_received", "billing_event", event.id, {
+      tenant_id: tenantId,
+      actor_id: provider,
+      event_type: event.event_type,
+      duplicate: exists
+    });
     scheduleRuntimePersist("billing.webhook_received");
-    sendJson(res, exists ? 200 : 202, { schema_version: "pollek.cloud.billing-webhook-ack.v1", event });
+    sendJson(res, exists ? 200 : 202, {
+      schema_version: "pollek.cloud.billing-webhook-ack.v1",
+      event
+    });
     return true;
   }
 
@@ -6856,11 +8343,16 @@ async function handleApi(req, res) {
   }
 
   const tenantScopedChangeBatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/lcp\/change-batches$/);
-  if (req.method === "POST" && (pathname === "/api/lcp/change-batches" || tenantScopedChangeBatch)) {
+  if (
+    req.method === "POST" &&
+    (pathname === "/api/lcp/change-batches" || tenantScopedChangeBatch)
+  ) {
     try {
       const body = await readBody(req);
       const { record, run, cursor } = ingestLcpChangeBatch(body, {
-        tenantIdFromPath: tenantScopedChangeBatch ? decodeURIComponent(tenantScopedChangeBatch[1]) : null
+        tenantIdFromPath: tenantScopedChangeBatch
+          ? decodeURIComponent(tenantScopedChangeBatch[1])
+          : null
       });
       sendJson(res, record.rejected_count ? 207 : 202, {
         schema_version: "pollek.cloud.lcp-change-batch-ack.v1",
@@ -6873,7 +8365,13 @@ async function handleApi(req, res) {
         summary: fleetSummary(),
         security: {
           mode: "signed-outbox-delta-dev",
-          required_production_controls: ["oauth_audience", "spiffe_svid", "mtls_certificate_bound_token", "content_hash", "replay_window"]
+          required_production_controls: [
+            "oauth_audience",
+            "spiffe_svid",
+            "mtls_certificate_bound_token",
+            "content_hash",
+            "replay_window"
+          ]
         }
       });
     } catch (error) {
@@ -6895,7 +8393,10 @@ async function handleApi(req, res) {
         dispatch
       });
     } catch (error) {
-      sendJson(res, 400, { error: "config_dispatch_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, 400, {
+        error: "config_dispatch_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6909,7 +8410,10 @@ async function handleApi(req, res) {
         dispatch
       });
     } catch (error) {
-      sendJson(res, 400, { error: "hot_reload_dispatch_failed", detail: error instanceof Error ? error.message : String(error) });
+      sendJson(res, 400, {
+        error: "hot_reload_dispatch_failed",
+        detail: error instanceof Error ? error.message : String(error)
+      });
     }
     return true;
   }
@@ -6979,7 +8483,13 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && pathname === "/enroll") {
     const body = await readBody(req);
-    const deviceId = body.device_id || `dev_${crypto.createHash("sha256").update(body.hostname || crypto.randomUUID()).digest("hex").slice(0, 16)}`;
+    const deviceId =
+      body.device_id ||
+      `dev_${crypto
+        .createHash("sha256")
+        .update(body.hostname || crypto.randomUUID())
+        .digest("hex")
+        .slice(0, 16)}`;
     const tenantId = "local";
     const device = {
       id: deviceId,
@@ -7006,7 +8516,10 @@ async function handleApi(req, res) {
       severity: "info",
       payload: device
     });
-    addTask("device_enrollment", "completed", `Enrolled ${device.hostname}`, { device_id: deviceId, lcp_id: lcp.id });
+    addTask("device_enrollment", "completed", `Enrolled ${device.hostname}`, {
+      device_id: deviceId,
+      lcp_id: lcp.id
+    });
     const bundle = spiffeBundleStatus();
     sendJson(res, 200, {
       join_token: `join_${crypto.randomUUID()}`,
@@ -7078,16 +8591,20 @@ async function handleApi(req, res) {
     }
 
     try {
-      capabilitySnapshot = await fetchJson(`${lcpUrl}/v1/tenants/local/devices/local/capability-snapshot-v2`, {
-        headers: authHeader
-      });
+      capabilitySnapshot = await fetchJson(
+        `${lcpUrl}/v1/tenants/local/devices/local/capability-snapshot-v2`,
+        {
+          headers: authHeader
+        }
+      );
       results.push({ name: "lcp_capability_snapshot_v2", ...capabilitySnapshot });
     } catch (error) {
       results.push({ name: "lcp_capability_snapshot_v2", ok: false, error: String(error) });
     }
 
-    const ok = results.some((item) => item.name === "lcp_contract_discovery" && item.ok)
-      && results.some((item) => item.name === "lcp_cloud_probe_to_pollek_cloud" && item.ok);
+    const ok =
+      results.some((item) => item.name === "lcp_contract_discovery" && item.ok) &&
+      results.some((item) => item.name === "lcp_cloud_probe_to_pollek_cloud" && item.ok);
     const probe = {
       id: `probe_${crypto.randomUUID()}`,
       ok,
@@ -7099,17 +8616,36 @@ async function handleApi(req, res) {
     state.probes.unshift(probe);
     state.probes = state.probes.slice(0, 20);
     applyProbeToFleet(probe, capabilitySnapshot);
-    addTask("lcp_protocol_probe", ok ? "completed" : "failed", ok ? "Local Control Plane cloud protocol probe succeeded" : "Local Control Plane cloud protocol probe needs attention", { lcp_url: lcpUrl });
+    addTask(
+      "lcp_protocol_probe",
+      ok ? "completed" : "failed",
+      ok
+        ? "Local Control Plane cloud protocol probe succeeded"
+        : "Local Control Plane cloud protocol probe needs attention",
+      { lcp_url: lcpUrl }
+    );
     sendJson(res, ok ? 200 : 502, probe);
     return true;
   }
 
   if (req.method === "GET" && pathname === "/api/fleet") {
     const objects = Object.fromEntries(fleetObjectMap());
-    const localEntitiesPage = pageSlice(state.fleet.localEntities, url.searchParams.get("local_entities_limit") || defaultApiPageLimit);
-    const relationshipsPage = pageSlice(state.fleet.localEntityRelationships, url.searchParams.get("relationships_limit") || maxApiPageLimit);
-    const usageRecordsPage = pageSlice(state.fleet.usageRecords || [], url.searchParams.get("usage_records_limit") || 30);
-    const auditEventsPage = pageSlice(state.auditEvents || [], url.searchParams.get("audit_limit") || 30);
+    const localEntitiesPage = pageSlice(
+      state.fleet.localEntities,
+      url.searchParams.get("local_entities_limit") || defaultApiPageLimit
+    );
+    const relationshipsPage = pageSlice(
+      state.fleet.localEntityRelationships,
+      url.searchParams.get("relationships_limit") || maxApiPageLimit
+    );
+    const usageRecordsPage = pageSlice(
+      state.fleet.usageRecords || [],
+      url.searchParams.get("usage_records_limit") || 30
+    );
+    const auditEventsPage = pageSlice(
+      state.auditEvents || [],
+      url.searchParams.get("audit_limit") || 30
+    );
     const eventPage = pageSlice(state.events || [], url.searchParams.get("events_limit") || 30);
     sendJson(res, 200, {
       cloud_url: publicUrl,
@@ -7143,7 +8679,10 @@ async function handleApi(req, res) {
       account_identities: state.fleet.accountIdentities || [],
       tenant_members: state.fleet.tenantMembers || [],
       member_role_assignments: state.fleet.memberRoleAssignments || [],
-      invitations: (state.fleet.invitations || []).map((invite) => ({ ...invite, token_hash: undefined })),
+      invitations: (state.fleet.invitations || []).map((invite) => ({
+        ...invite,
+        token_hash: undefined
+      })),
       auth_sessions: (state.fleet.authSessions || []).map((session) => safeSession(session)),
       identity_providers: (state.fleet.identityProviders || []).map(redactedIdentityProvider),
       scim_users: state.fleet.scimUsers || [],
@@ -7155,7 +8694,10 @@ async function handleApi(req, res) {
       usage_counters: refreshAllTenantUsage(),
       usage_records: usageRecordsPage.rows,
       invoices: state.fleet.invoices || [],
-      payment_methods: (state.fleet.paymentMethods || []).map((method) => ({ ...method, reference_hash: method.reference_hash?.slice(0, 12) })),
+      payment_methods: (state.fleet.paymentMethods || []).map((method) => ({
+        ...method,
+        reference_hash: method.reference_hash?.slice(0, 12)
+      })),
       licenses: state.fleet.licenses || [],
       billing_events: (state.fleet.billingEvents || []).slice(0, 30),
       device_users: state.fleet.deviceUsers,
@@ -7188,11 +8730,36 @@ async function handleApi(req, res) {
       },
       security_posture: securityPostureStatus(),
       response_limits: {
-        local_entities: { total: localEntitiesPage.total, returned: localEntitiesPage.returned, limit: localEntitiesPage.limit, truncated: localEntitiesPage.truncated },
-        local_entity_relationships: { total: relationshipsPage.total, returned: relationshipsPage.returned, limit: relationshipsPage.limit, truncated: relationshipsPage.truncated },
-        usage_records: { total: usageRecordsPage.total, returned: usageRecordsPage.returned, limit: usageRecordsPage.limit, truncated: usageRecordsPage.truncated },
-        events: { total: eventPage.total, returned: eventPage.returned, limit: eventPage.limit, truncated: eventPage.truncated },
-        audit_events: { total: auditEventsPage.total, returned: auditEventsPage.returned, limit: auditEventsPage.limit, truncated: auditEventsPage.truncated }
+        local_entities: {
+          total: localEntitiesPage.total,
+          returned: localEntitiesPage.returned,
+          limit: localEntitiesPage.limit,
+          truncated: localEntitiesPage.truncated
+        },
+        local_entity_relationships: {
+          total: relationshipsPage.total,
+          returned: relationshipsPage.returned,
+          limit: relationshipsPage.limit,
+          truncated: relationshipsPage.truncated
+        },
+        usage_records: {
+          total: usageRecordsPage.total,
+          returned: usageRecordsPage.returned,
+          limit: usageRecordsPage.limit,
+          truncated: usageRecordsPage.truncated
+        },
+        events: {
+          total: eventPage.total,
+          returned: eventPage.returned,
+          limit: eventPage.limit,
+          truncated: eventPage.truncated
+        },
+        audit_events: {
+          total: auditEventsPage.total,
+          returned: auditEventsPage.returned,
+          limit: auditEventsPage.limit,
+          truncated: auditEventsPage.truncated
+        }
       },
       contract: await contractDiscovery()
     });
@@ -7200,9 +8767,14 @@ async function handleApi(req, res) {
   }
 
   const tenantLcpUsageLedgerMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/lcp\/usage-ledgers$/);
-  if (req.method === "POST" && (pathname === "/api/lcp/usage-ledgers" || tenantLcpUsageLedgerMatch)) {
+  if (
+    req.method === "POST" &&
+    (pathname === "/api/lcp/usage-ledgers" || tenantLcpUsageLedgerMatch)
+  ) {
     const body = await readBody(req);
-    const tenantId = tenantLcpUsageLedgerMatch ? decodeURIComponent(tenantLcpUsageLedgerMatch[1]) : (body.tenant_id || "local");
+    const tenantId = tenantLcpUsageLedgerMatch
+      ? decodeURIComponent(tenantLcpUsageLedgerMatch[1])
+      : body.tenant_id || "local";
     try {
       const result = ingestLcpUsageLedger({ ...body, tenant_id: tenantId });
       sendJson(res, 202, result);
@@ -7242,7 +8814,8 @@ async function handleApi(req, res) {
     const q = (url.searchParams.get("q") || "").toLowerCase();
     const entities = state.fleet.localEntities.filter((entity) => {
       if (type !== "all" && entity.entity_type !== type && entity.class !== type) return false;
-      if (deviceId && entity.device_id !== deviceId && entity.device_name !== deviceId) return false;
+      if (deviceId && entity.device_id !== deviceId && entity.device_name !== deviceId)
+        return false;
       if (userId && entity.user_id !== userId && entity.user_subject !== userId) return false;
       if (lcpId && entity.lcp_id !== lcpId) return false;
       if (q && !JSON.stringify(entity).toLowerCase().includes(q)) return false;
@@ -7261,7 +8834,9 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && pathname === "/api/entities/health") {
     const type = url.searchParams.get("type") || "all";
-    const entities = state.fleet.localEntities.filter((entity) => type === "all" || entity.entity_type === type || entity.class === type);
+    const entities = state.fleet.localEntities.filter(
+      (entity) => type === "all" || entity.entity_type === type || entity.class === type
+    );
     sendJson(res, 200, entityHealthPage(entities));
     return true;
   }
@@ -7320,9 +8895,13 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && pathname === "/api/entities/sync") {
     const body = await readBody(req);
-    const localLcp = state.fleet.localControlPlanes.find((item) => item.id === (body.lcp_id || "lcp_local"))
-      || state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
-    const lcpUrl = (body.lcpUrl || localLcp?.endpoint || "http://127.0.0.1:43891").replace(/\/+$/, "");
+    const localLcp =
+      state.fleet.localControlPlanes.find((item) => item.id === (body.lcp_id || "lcp_local")) ||
+      state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+    const lcpUrl = (body.lcpUrl || localLcp?.endpoint || "http://127.0.0.1:43891").replace(
+      /\/+$/,
+      ""
+    );
     const headers = body.token ? { authorization: `Bearer ${body.token}` } : {};
     const pulled = await pullLocalEntitySnapshot(lcpUrl, headers);
     const count = ingestLocalEntitySnapshot(pulled.snapshot, {
@@ -7343,8 +8922,16 @@ async function handleApi(req, res) {
     };
     state.fleet.localEntitySyncRuns.unshift(run);
     state.fleet.localEntitySyncRuns = state.fleet.localEntitySyncRuns.slice(0, 20);
-    recordAudit("local_entities.synced", "lcp", run.lcp_id, { status: run.status, entity_count: count });
-    addTask("local_entity_sync", pulled.ok ? "completed" : "failed", pulled.ok ? `Synced ${count} Local Pollek entities` : "Local Pollek entity sync failed", run);
+    recordAudit("local_entities.synced", "lcp", run.lcp_id, {
+      status: run.status,
+      entity_count: count
+    });
+    addTask(
+      "local_entity_sync",
+      pulled.ok ? "completed" : "failed",
+      pulled.ok ? `Synced ${count} Local Pollek entities` : "Local Pollek entity sync failed",
+      run
+    );
     sendJson(res, pulled.ok ? 200 : 502, { ok: pulled.ok, run, summary: fleetSummary() });
     return true;
   }
@@ -7375,7 +8962,9 @@ async function handleApi(req, res) {
     sendJson(res, 200, {
       schema_version: "pollek.cloud.authorization-tuples-page.v1",
       tenant_id: tenantId,
-      tuples: (state.fleet.authorizationTuples || []).filter((tuple) => tuple.tenant_id === tenantId)
+      tuples: (state.fleet.authorizationTuples || []).filter(
+        (tuple) => tuple.tenant_id === tenantId
+      )
     });
     return true;
   }
@@ -7411,7 +9000,9 @@ async function handleApi(req, res) {
     sendJson(res, 200, {
       schema_version: "pollek.cloud.authorization-decisions-page.v1",
       tenant_id: tenantId,
-      decisions: (state.fleet.authorizationDecisions || []).filter((decision) => decision.tenant_id === tenantId)
+      decisions: (state.fleet.authorizationDecisions || []).filter(
+        (decision) => decision.tenant_id === tenantId
+      )
     });
     return true;
   }
@@ -7432,12 +9023,16 @@ async function handleApi(req, res) {
       profiles,
       entitlements: state.tenant.entitlements,
       enterprise_features: {
-        compliance_policy_bundles: state.tenant.entitlements.includes("enterprise.compliance_policy_bundles"),
+        compliance_policy_bundles: state.tenant.entitlements.includes(
+          "enterprise.compliance_policy_bundles"
+        ),
         policy_sandbox: state.tenant.entitlements.includes("enterprise.policy_sandbox"),
         breakglass: state.tenant.entitlements.includes("enterprise.breakglass")
       },
       trust_scopes: state.fleet.tenantTrustScopes.filter((scope) => scope.tenant_id === tenantId),
-      service_endpoints: state.fleet.serviceEndpoints.filter((endpoint) => endpoint.tenant_id === tenantId),
+      service_endpoints: state.fleet.serviceEndpoints.filter(
+        (endpoint) => endpoint.tenant_id === tenantId
+      ),
       compliance_bundle_channels: state.fleet.compliancePolicyBundles.map((bundle) => ({
         id: bundle.id,
         name: bundle.name,
@@ -7493,7 +9088,14 @@ async function handleApi(req, res) {
         replay: "/api/events/replay",
         resume_parameters: ["since", "last_event_id", "replay"],
         replay_window_events: eventStreamReplayWindow,
-        event_types: ["connected", "keepalive", "task.updated", "telemetry.event", "hot_reload.event", "local_entities.updated"]
+        event_types: [
+          "connected",
+          "keepalive",
+          "task.updated",
+          "telemetry.event",
+          "hot_reload.event",
+          "local_entities.updated"
+        ]
       }
     });
     return true;
@@ -7561,11 +9163,18 @@ async function handleApi(req, res) {
       return true;
     }
     if (!body.tenant_id) {
-      sendJson(res, 400, { error: "tenant_context_required", detail: "Signing writes tenant-owned bundle evidence and requires body.tenant_id." });
+      sendJson(res, 400, {
+        error: "tenant_context_required",
+        detail: "Signing writes tenant-owned bundle evidence and requires body.tenant_id."
+      });
       return true;
     }
     if (bundle.tenant_id && bundle.tenant_id !== body.tenant_id) {
-      sendJson(res, 403, { error: "tenant_mismatch", bundle_tenant_id: bundle.tenant_id, tenant_id: body.tenant_id });
+      sendJson(res, 403, {
+        error: "tenant_mismatch",
+        bundle_tenant_id: bundle.tenant_id,
+        tenant_id: body.tenant_id
+      });
       return true;
     }
     const authorization = checkAuthorization({
@@ -7579,14 +9188,16 @@ async function handleApi(req, res) {
       sendJson(res, 403, { error: "authorization_denied", authorization });
       return true;
     }
-    const approvalRecord = body.approval_record || defaultApprovalRecordForBundle(bundle, {
-      id: body.approval_id || `approval_${bundle.id}_${crypto.randomUUID().slice(0, 8)}`,
-      tenant_id: body.tenant_id,
-      approved_by: body.approved_by || "local-dev-security-admin",
-      approved_at: new Date().toISOString(),
-      source: body.approval_source || "manual_bundle_sign",
-      reason: body.reason || "Manual policy bundle signing approval."
-    });
+    const approvalRecord =
+      body.approval_record ||
+      defaultApprovalRecordForBundle(bundle, {
+        id: body.approval_id || `approval_${bundle.id}_${crypto.randomUUID().slice(0, 8)}`,
+        tenant_id: body.tenant_id,
+        approved_by: body.approved_by || "local-dev-security-admin",
+        approved_at: new Date().toISOString(),
+        source: body.approval_source || "manual_bundle_sign",
+        reason: body.reason || "Manual policy bundle signing approval."
+      });
     if (approvalRecord.status !== "approved") {
       sendJson(res, 409, { error: "approved_record_required", approval: approvalRecord });
       return true;
@@ -7632,7 +9243,9 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && pathname === "/api/compliance/policy-bundles/simulate") {
     const body = await readBody(req);
-    const bundle = state.fleet.compliancePolicyBundles.find((item) => item.id === body.bundle_id) || state.fleet.compliancePolicyBundles[0];
+    const bundle =
+      state.fleet.compliancePolicyBundles.find((item) => item.id === body.bundle_id) ||
+      state.fleet.compliancePolicyBundles[0];
     const run = createPolicySandboxRun({
       mode: "enterprise-compliance-bundle-simulation",
       engine: bundle.target_engines[0],
@@ -7653,7 +9266,10 @@ async function handleApi(req, res) {
       return true;
     }
     if (!state.tenant.entitlements.includes("enterprise.compliance_policy_bundles")) {
-      sendJson(res, 403, { error: "enterprise_entitlement_required", entitlement: "enterprise.compliance_policy_bundles" });
+      sendJson(res, 403, {
+        error: "enterprise_entitlement_required",
+        entitlement: "enterprise.compliance_policy_bundles"
+      });
       return true;
     }
     const authorization = checkAuthorization({
@@ -7678,16 +9294,28 @@ async function handleApi(req, res) {
       hot_reload: true,
       compliance_bundle_id: source.id,
       frameworks: source.frameworks,
-      control_level: source.default_mode === "enforce" ? "Enforce" : source.default_mode === "approval" ? "Approval" : "Warn",
+      control_level:
+        source.default_mode === "enforce"
+          ? "Enforce"
+          : source.default_mode === "approval"
+            ? "Approval"
+            : "Warn",
       policies: source.controls.map((control) => ({ control, engines: source.target_engines })),
-      approval_record: defaultApprovalRecordForBundle({ id: `bnd_${source.id}`, tenant_id: body.tenant_id || "local", compliance_bundle_id: source.id }, {
-        id: `approval_${source.id}_${crypto.randomUUID().slice(0, 8)}`,
-        tenant_id: body.tenant_id || "local",
-        approved_by: body.approved_by || "local-dev-compliance-admin",
-        approved_at: new Date().toISOString(),
-        source: "enterprise_compliance_bundle",
-        reason: body.reason || `Deploy enterprise compliance bundle ${source.name}`
-      }),
+      approval_record: defaultApprovalRecordForBundle(
+        {
+          id: `bnd_${source.id}`,
+          tenant_id: body.tenant_id || "local",
+          compliance_bundle_id: source.id
+        },
+        {
+          id: `approval_${source.id}_${crypto.randomUUID().slice(0, 8)}`,
+          tenant_id: body.tenant_id || "local",
+          approved_by: body.approved_by || "local-dev-compliance-admin",
+          approved_at: new Date().toISOString(),
+          source: "enterprise_compliance_bundle",
+          reason: body.reason || `Deploy enterprise compliance bundle ${source.name}`
+        }
+      ),
       created_at: new Date().toISOString()
     };
     const signature = signPolicyBundle(policyBundle, policyBundle.approval_record);
@@ -7698,15 +9326,30 @@ async function handleApi(req, res) {
       wave_strategy: body.wave_strategy || "enterprise-compliance-canary"
     });
     state.fleet.rolloutPlans.unshift(rollout);
-    recordAudit("compliance_bundle.deployed", "compliance_bundle", source.id, { bundle_id: policyBundle.id, rollout_id: rollout.id, signature_id: signature.id });
-    const task = addTask("compliance_bundle_deploy", "queued", `Prepared enterprise compliance bundle ${source.name}`, {
-      compliance_bundle_id: source.id,
+    recordAudit("compliance_bundle.deployed", "compliance_bundle", source.id, {
       bundle_id: policyBundle.id,
       rollout_id: rollout.id,
-      signature_id: signature.id,
-      payload_hash: signature.payload_hash
+      signature_id: signature.id
     });
-    sendJson(res, 201, { compliance_bundle: source, policy_bundle: policyBundle, authorization, rollout, task });
+    const task = addTask(
+      "compliance_bundle_deploy",
+      "queued",
+      `Prepared enterprise compliance bundle ${source.name}`,
+      {
+        compliance_bundle_id: source.id,
+        bundle_id: policyBundle.id,
+        rollout_id: rollout.id,
+        signature_id: signature.id,
+        payload_hash: signature.payload_hash
+      }
+    );
+    sendJson(res, 201, {
+      compliance_bundle: source,
+      policy_bundle: policyBundle,
+      authorization,
+      rollout,
+      task
+    });
     return true;
   }
 
@@ -7733,7 +9376,11 @@ async function handleApi(req, res) {
       return true;
     }
     if (draft.status !== "simulation_passed" && draft.status !== "approved") {
-      sendJson(res, 409, { error: "simulation_required", detail: "Run simulation before approval.", draft });
+      sendJson(res, 409, {
+        error: "simulation_required",
+        detail: "Run simulation before approval.",
+        draft
+      });
       return true;
     }
     const authorization = checkAuthorization({
@@ -7760,21 +9407,42 @@ async function handleApi(req, res) {
       draft_id: draft.id,
       signed: false,
       hot_reload: true,
-      policies: [{ draft_id: draft.id, title: draft.title, engine: draft.recommended_engine, policy_ir: draft.policy_ir }],
-      approval_record: defaultApprovalRecordForBundle({ id: `bnd_${draft.id}`, tenant_id: body.tenant_id || draft.tenant_id || "local", draft_id: draft.id }, {
-        id: `approval_${draft.id}_${crypto.randomUUID().slice(0, 8)}`,
-        tenant_id: body.tenant_id || draft.tenant_id || "local",
-        approved_by: body.approved_by || "local-dev-security-admin",
-        approved_at: draft.approved_at,
-        source: "policy_draft_approval",
-        reason: body.reason || "AI-assisted policy draft approved after simulation."
-      })
+      policies: [
+        {
+          draft_id: draft.id,
+          title: draft.title,
+          engine: draft.recommended_engine,
+          policy_ir: draft.policy_ir
+        }
+      ],
+      approval_record: defaultApprovalRecordForBundle(
+        {
+          id: `bnd_${draft.id}`,
+          tenant_id: body.tenant_id || draft.tenant_id || "local",
+          draft_id: draft.id
+        },
+        {
+          id: `approval_${draft.id}_${crypto.randomUUID().slice(0, 8)}`,
+          tenant_id: body.tenant_id || draft.tenant_id || "local",
+          approved_by: body.approved_by || "local-dev-security-admin",
+          approved_at: draft.approved_at,
+          source: "policy_draft_approval",
+          reason: body.reason || "AI-assisted policy draft approved after simulation."
+        }
+      )
     };
     const signature = signPolicyBundle(bundle, bundle.approval_record);
     state.fleet.policyBundles.unshift(bundle);
     state.fleet.relationships.push({ from: draft.id, to: bundle.id, label: "publishes" });
-    recordAudit("policy_draft.approved", "policy_draft", draft.id, { bundle_id: bundle.id, signature_id: signature.id });
-    const task = addTask("policy_approval", "completed", `Approved policy draft: ${draft.title}`, { draft_id: draft.id, bundle_id: bundle.id, signature_id: signature.id });
+    recordAudit("policy_draft.approved", "policy_draft", draft.id, {
+      bundle_id: bundle.id,
+      signature_id: signature.id
+    });
+    const task = addTask("policy_approval", "completed", `Approved policy draft: ${draft.title}`, {
+      draft_id: draft.id,
+      bundle_id: bundle.id,
+      signature_id: signature.id
+    });
     sendJson(res, 200, { draft, bundle, authorization, task, rollout_required: true });
     return true;
   }
@@ -7808,7 +9476,9 @@ async function handleApi(req, res) {
     return true;
   }
 
-  const breakglassActionMatch = pathname.match(/^\/api\/breakglass\/([^/]+)\/(approve|reject|close)$/);
+  const breakglassActionMatch = pathname.match(
+    /^\/api\/breakglass\/([^/]+)\/(approve|reject|close)$/
+  );
   if (req.method === "POST" && breakglassActionMatch) {
     const id = decodeURIComponent(breakglassActionMatch[1]);
     const action = breakglassActionMatch[2];
@@ -7844,7 +9514,13 @@ async function handleApi(req, res) {
     const events = state.events.filter((event) => {
       if (severity !== "all" && event.severity !== severity) return false;
       if (type && !String(event.event_type).includes(type)) return false;
-      if (objectId && event.device_id !== objectId && event.payload?.lcp_id !== objectId && event.payload?.object_id !== objectId) return false;
+      if (
+        objectId &&
+        event.device_id !== objectId &&
+        event.payload?.lcp_id !== objectId &&
+        event.payload?.object_id !== objectId
+      )
+        return false;
       if (text && !JSON.stringify(event).toLowerCase().includes(text)) return false;
       return true;
     });
@@ -7869,7 +9545,9 @@ async function handleApi(req, res) {
         detail: body.detail || "Synthetic Cloud-side telemetry sample while LCP build is pending."
       }
     });
-    recordAudit("telemetry.sample_ingested", "telemetry_event", event.event_id, { event_type: event.event_type });
+    recordAudit("telemetry.sample_ingested", "telemetry_event", event.event_id, {
+      event_type: event.event_type
+    });
     sendJson(res, 202, { accepted: true, event });
     return true;
   }
@@ -7882,12 +9560,20 @@ async function handleApi(req, res) {
       sendJson(res, 404, { error: "integration_not_found", integration_id: integrationId });
       return true;
     }
-    const task = completeTask(addTask("integration_test", "running", `Tested ${integration.name}`, {
-      integration_id: integration.id,
+    const task = completeTask(
+      addTask("integration_test", "running", `Tested ${integration.name}`, {
+        integration_id: integration.id,
+        status: integration.status
+      })
+    );
+    recordAudit("integration.tested", "integration", integration.id, {
       status: integration.status
-    }));
-    recordAudit("integration.tested", "integration", integration.id, { status: integration.status });
-    sendJson(res, 200, { integration, task, result: integration.status === "configured" ? "ok" : "configuration_required" });
+    });
+    sendJson(res, 200, {
+      integration,
+      task,
+      result: integration.status === "configured" ? "ok" : "configuration_required"
+    });
     return true;
   }
 
@@ -7920,11 +9606,16 @@ async function handleApi(req, res) {
     const body = await readBody(req);
     const rollout = createRolloutPlan(body);
     state.fleet.rolloutPlans.unshift(rollout);
-    const task = addTask("bundle_rollout", "queued", `Created rollout for ${rollout.target_ids.length} Local Control Planes`, {
-      rollout_id: rollout.id,
-      bundle_id: rollout.bundle_id,
-      target_ids: rollout.target_ids
-    });
+    const task = addTask(
+      "bundle_rollout",
+      "queued",
+      `Created rollout for ${rollout.target_ids.length} Local Control Planes`,
+      {
+        rollout_id: rollout.id,
+        bundle_id: rollout.bundle_id,
+        target_ids: rollout.target_ids
+      }
+    );
     recordEvent({
       event_id: `evt_${crypto.randomUUID()}`,
       tenant_id: "local",
@@ -7945,7 +9636,9 @@ async function handleApi(req, res) {
     return true;
   }
 
-  const rolloutActionMatch = pathname.match(/^\/api\/rollouts\/([^/]+)\/(advance|pause|resume|cancel)$/);
+  const rolloutActionMatch = pathname.match(
+    /^\/api\/rollouts\/([^/]+)\/(advance|pause|resume|cancel)$/
+  );
   if (req.method === "POST" && rolloutActionMatch) {
     const rolloutId = decodeURIComponent(rolloutActionMatch[1]);
     const action = rolloutActionMatch[2];
@@ -7971,8 +9664,13 @@ async function handleApi(req, res) {
       rollout.status = "cancelled";
       rollout.updated_at = new Date().toISOString();
     }
-    recordAudit(`rollout.${action}`, "rollout", rollout.id, { status: rollout.status, bundle_id: rollout.bundle_id });
-    addTask("bundle_rollout", "completed", `Rollout ${action}: ${rollout.bundle_id}`, { rollout_id: rollout.id });
+    recordAudit(`rollout.${action}`, "rollout", rollout.id, {
+      status: rollout.status,
+      bundle_id: rollout.bundle_id
+    });
+    addTask("bundle_rollout", "completed", `Rollout ${action}: ${rollout.bundle_id}`, {
+      rollout_id: rollout.id
+    });
     sendJson(res, 200, result || { rollout, events: [] });
     return true;
   }
@@ -7989,11 +9687,13 @@ async function handleApi(req, res) {
       download_url: `/api/evidence/exports/latest`
     };
     state.fleet.evidenceExports.unshift(exportRecord);
-    const task = completeTask(addTask("evidence_export", "running", "Generated tenant evidence package", {
-      evidence_export_id: exportRecord.id,
-      scope: exportRecord.scope,
-      format: exportRecord.format
-    }));
+    const task = completeTask(
+      addTask("evidence_export", "running", "Generated tenant evidence package", {
+        evidence_export_id: exportRecord.id,
+        scope: exportRecord.scope,
+        format: exportRecord.format
+      })
+    );
     recordEvent({
       event_id: `evt_${crypto.randomUUID()}`,
       tenant_id: "local",
@@ -8048,15 +9748,24 @@ async function handleApi(req, res) {
       object,
       relationships: state.fleet.relationships.filter((rel) => rel.from === id || rel.to === id),
       alarms: state.fleet.alarms.filter((alarm) => alarm.object_id === id),
-      tasks: state.tasks.filter((task) => task.details?.object_id === id || task.details?.lcp_url === object.endpoint).slice(0, 20)
+      tasks: state.tasks
+        .filter(
+          (task) => task.details?.object_id === id || task.details?.lcp_url === object.endpoint
+        )
+        .slice(0, 20)
     });
     return true;
   }
 
   if (req.method === "POST" && pathname === "/api/fleet/probe-visible") {
-    const localLcp = state.fleet.localControlPlanes.find((item) => item.endpoint.startsWith("http://127.0.0.1"));
+    const localLcp = state.fleet.localControlPlanes.find((item) =>
+      item.endpoint.startsWith("http://127.0.0.1")
+    );
     if (!localLcp) {
-      sendJson(res, 404, { error: "no_loopback_lcp", detail: "No loopback Local Control Plane is configured for dev probing." });
+      sendJson(res, 404, {
+        error: "no_loopback_lcp",
+        detail: "No loopback Local Control Plane is configured for dev probing."
+      });
       return true;
     }
     sendJson(res, 200, {
@@ -8107,11 +9816,17 @@ async function handleApi(req, res) {
 
   const telemetryEntityMatch = pathname.match(/^\/v1\/telemetry\/(resources|tools|identities)$/);
   if (req.method === "GET" && telemetryEntityMatch) {
-    sendJson(res, 200, telemetryEntityPage(telemetryEntityMatch[1], url.searchParams.get("tenant_id") || "local"));
+    sendJson(
+      res,
+      200,
+      telemetryEntityPage(telemetryEntityMatch[1], url.searchParams.get("tenant_id") || "local")
+    );
     return true;
   }
 
-  const tenantTelemetryReadMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/telemetry\/(observations|resources|tools|identities|guard-events)$/);
+  const tenantTelemetryReadMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/telemetry\/(observations|resources|tools|identities|guard-events)$/
+  );
   if (req.method === "GET" && tenantTelemetryReadMatch) {
     const tenantId = decodeURIComponent(tenantTelemetryReadMatch[1]);
     const kind = tenantTelemetryReadMatch[2];
@@ -8119,25 +9834,44 @@ async function handleApi(req, res) {
       sendJson(res, 200, guardEventsPage(tenantId));
       return true;
     }
-    sendJson(res, 200, kind === "observations" ? observationTelemetryPage(tenantId) : telemetryEntityPage(kind, tenantId));
+    sendJson(
+      res,
+      200,
+      kind === "observations"
+        ? observationTelemetryPage(tenantId)
+        : telemetryEntityPage(kind, tenantId)
+    );
     return true;
   }
 
-  const tenantDecisionLogsMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/telemetry\/decision-logs$/)
-    || pathname.match(/^\/v1\/tenants\/([^/]+)\/logs\/decisions$/);
+  const tenantDecisionLogsMatch =
+    pathname.match(/^\/v1\/tenants\/([^/]+)\/telemetry\/decision-logs$/) ||
+    pathname.match(/^\/v1\/tenants\/([^/]+)\/logs\/decisions$/);
   if (req.method === "GET" && tenantDecisionLogsMatch) {
-    sendJson(res, 200, telemetryLogPage(decodeURIComponent(tenantDecisionLogsMatch[1]), ["decision_log", "decision"], "decisions"));
+    sendJson(
+      res,
+      200,
+      telemetryLogPage(
+        decodeURIComponent(tenantDecisionLogsMatch[1]),
+        ["decision_log", "decision"],
+        "decisions"
+      )
+    );
     return true;
   }
 
-  const tenantLogsMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/logs\/(tool-invocations|resource-access|policy-deployments|pep-health)$/);
+  const tenantLogsMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/logs\/(tool-invocations|resource-access|policy-deployments|pep-health)$/
+  );
   if (req.method === "GET" && tenantLogsMatch) {
     const tenantId = decodeURIComponent(tenantLogsMatch[1]);
     const logKind = tenantLogsMatch[2];
     const logPages = {
-      "tool-invocations": () => telemetryLogPage(tenantId, ["tool_invocation", "tool_usage"], "tool_invocations"),
+      "tool-invocations": () =>
+        telemetryLogPage(tenantId, ["tool_invocation", "tool_usage"], "tool_invocations"),
       "resource-access": () => telemetryLogPage(tenantId, ["resource_access"], "resource_accesses"),
-      "policy-deployments": () => telemetryLogPage(tenantId, ["policy_deployment"], "policy_deployments"),
+      "policy-deployments": () =>
+        telemetryLogPage(tenantId, ["policy_deployment"], "policy_deployments"),
       "pep-health": () => telemetryLogPage(tenantId, ["pep_binding_status"], "pep_health")
     };
     sendJson(res, 200, logPages[logKind]());
@@ -8148,7 +9882,9 @@ async function handleApi(req, res) {
   if (req.method === "GET" && tenantTelemetryExportMatch) {
     const tenantId = decodeURIComponent(tenantTelemetryExportMatch[1]);
     const format = url.searchParams.get("format") || "json";
-    const envelopes = telemetryEnvelopesFor(tenantId, (envelope) => TELEMETRY_EXPORT_EVENT_TYPES.includes(envelope.event_type));
+    const envelopes = telemetryEnvelopesFor(tenantId, (envelope) =>
+      TELEMETRY_EXPORT_EVENT_TYPES.includes(envelope.event_type)
+    );
     if (format === "csv") {
       sendText(res, 200, exportTelemetryCsv(envelopes, tenantId), "text/csv");
       return true;
@@ -8174,30 +9910,42 @@ async function handleApi(req, res) {
     const body = await readBody(req);
     const response = recordTelemetryPayload(req, body, {
       kind: tenantTelemetryIngestMatch ? "event" : telemetryIngestKinds.get(pathname),
-      tenantIdFromPath: tenantTelemetryIngestMatch ? decodeURIComponent(tenantTelemetryIngestMatch[1]) : null,
+      tenantIdFromPath: tenantTelemetryIngestMatch
+        ? decodeURIComponent(tenantTelemetryIngestMatch[1])
+        : null,
       sourcePath: pathname
     });
     sendJson(res, 202, response);
     return true;
   }
 
-  const browserExtensionEventMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/browser-extension\/events$/);
+  const browserExtensionEventMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/browser-extension\/events$/
+  );
   if (req.method === "POST" && browserExtensionEventMatch) {
     const tenantId = decodeURIComponent(browserExtensionEventMatch[1]);
     const body = await readBody(req);
-    const response = recordTelemetryPayload(req, {
-      ...body,
-      event_type: body.event_type || "browser_extension.event.v1",
-      schema_version: body.schema_version || "browser-extension-event.v1"
-    }, { kind: "browser_extension", tenantIdFromPath: tenantId, sourcePath: pathname });
+    const response = recordTelemetryPayload(
+      req,
+      {
+        ...body,
+        event_type: body.event_type || "browser_extension.event.v1",
+        schema_version: body.schema_version || "browser-extension-event.v1"
+      },
+      { kind: "browser_extension", tenantIdFromPath: tenantId, sourcePath: pathname }
+    );
     sendJson(res, 202, response);
     return true;
   }
 
-  const browserExtensionStatusMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/browser-extension\/status$/);
+  const browserExtensionStatusMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/browser-extension\/status$/
+  );
   if (req.method === "GET" && browserExtensionStatusMatch) {
     const tenantId = decodeURIComponent(browserExtensionStatusMatch[1]);
-    const events = telemetryEventsFor(tenantId, (event) => String(event.event_type || "").startsWith("browser_extension."));
+    const events = telemetryEventsFor(tenantId, (event) =>
+      String(event.event_type || "").startsWith("browser_extension.")
+    );
     sendJson(res, 200, {
       schema_version: "pollek.cloud.browser-extension-status.v1",
       tenant_id: tenantId,
@@ -8214,25 +9962,50 @@ async function handleApi(req, res) {
 
   const capabilitySnapshotMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/capability-snapshot$/);
   if (req.method === "GET" && capabilitySnapshotMatch) {
-    sendJson(res, 200, cloudCapabilitySnapshot(decodeURIComponent(capabilitySnapshotMatch[1]), "local"));
+    sendJson(
+      res,
+      200,
+      cloudCapabilitySnapshot(decodeURIComponent(capabilitySnapshotMatch[1]), "local")
+    );
     return true;
   }
 
-  const deviceCapabilitySnapshotMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/devices\/([^/]+)\/capability-snapshot-v2$/);
+  const deviceCapabilitySnapshotMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/devices\/([^/]+)\/capability-snapshot-v2$/
+  );
   if (req.method === "GET" && deviceCapabilitySnapshotMatch) {
-    sendJson(res, 200, cloudCapabilitySnapshot(decodeURIComponent(deviceCapabilitySnapshotMatch[1]), decodeURIComponent(deviceCapabilitySnapshotMatch[2])));
+    sendJson(
+      res,
+      200,
+      cloudCapabilitySnapshot(
+        decodeURIComponent(deviceCapabilitySnapshotMatch[1]),
+        decodeURIComponent(deviceCapabilitySnapshotMatch[2])
+      )
+    );
     return true;
   }
 
-  const registryPageMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/registry\/(agents|entities|relationships|resources|tools)$/);
+  const registryPageMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/registry\/(agents|entities|relationships|resources|tools)$/
+  );
   if (req.method === "GET" && registryPageMatch) {
-    sendJson(res, 200, registryPage(decodeURIComponent(registryPageMatch[1]), registryPageMatch[2]));
+    sendJson(
+      res,
+      200,
+      registryPage(decodeURIComponent(registryPageMatch[1]), registryPageMatch[2])
+    );
     return true;
   }
 
-  const discoveryPageMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/discovery\/(candidates|entities)$/);
+  const discoveryPageMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/discovery\/(candidates|entities)$/
+  );
   if (req.method === "GET" && discoveryPageMatch) {
-    sendJson(res, 200, discoveryPage(decodeURIComponent(discoveryPageMatch[1]), discoveryPageMatch[2]));
+    sendJson(
+      res,
+      200,
+      discoveryPage(decodeURIComponent(discoveryPageMatch[1]), discoveryPageMatch[2])
+    );
     return true;
   }
 
@@ -8243,7 +10016,14 @@ async function handleApi(req, res) {
     const items = Array.isArray(body.items) ? body.items : [];
     const deviceId = body.device_id || req.headers["x-pollek-device-id"] || "unknown";
     const lcpId = body.lcp_id || req.headers["x-pollek-lcp-id"] || "lcp_local";
-    const snapshot = { agents: [], tools: [], resources: [], entities: [], relationships: [], agent_inventory: [] };
+    const snapshot = {
+      agents: [],
+      tools: [],
+      resources: [],
+      entities: [],
+      relationships: [],
+      agent_inventory: []
+    };
     const telemetryItems = [];
     for (const item of items) {
       const itemType = String(item?.type || item?.object_type || "entity");
@@ -8267,7 +10047,11 @@ async function handleApi(req, res) {
       user_subject: body.user_subject || "unknown"
     });
     const telemetryResult = telemetryItems.length
-      ? recordTelemetryPayload(req, { tenant_id: tenantId, device_id: deviceId, events: telemetryItems }, { kind: "registry_sync", tenantIdFromPath: tenantId, sourcePath: pathname })
+      ? recordTelemetryPayload(
+          req,
+          { tenant_id: tenantId, device_id: deviceId, events: telemetryItems },
+          { kind: "registry_sync", tenantIdFromPath: tenantId, sourcePath: pathname }
+        )
       : null;
     const run = {
       id: `entity_sync_${crypto.randomUUID()}`,
@@ -8282,14 +10066,24 @@ async function handleApi(req, res) {
     };
     state.fleet.localEntitySyncRuns.unshift(run);
     state.fleet.localEntitySyncRuns = state.fleet.localEntitySyncRuns.slice(0, 20);
-    recordAudit("registry.sync_ingested", "lcp", lcpId, { tenant_id: tenantId, item_count: items.length, entity_count: entityCount, telemetry_count: telemetryItems.length });
+    recordAudit("registry.sync_ingested", "lcp", lcpId, {
+      tenant_id: tenantId,
+      item_count: items.length,
+      entity_count: entityCount,
+      telemetry_count: telemetryItems.length
+    });
     recordEvent({
       event_id: `evt_${crypto.randomUUID()}`,
       tenant_id: tenantId,
       device_id: deviceId,
       event_type: "registry.sync.v1",
       severity: "info",
-      payload: { item_count: items.length, entity_count: entityCount, telemetry_count: telemetryItems.length, sample: redactSensitive(items.slice(0, 5)) }
+      payload: {
+        item_count: items.length,
+        entity_count: entityCount,
+        telemetry_count: telemetryItems.length,
+        sample: redactSensitive(items.slice(0, 5))
+      }
     });
     scheduleRuntimePersist("registry.sync");
     sendJson(res, 202, {
@@ -8299,7 +10093,11 @@ async function handleApi(req, res) {
       item_count: items.length,
       ingested_entities: entityCount,
       telemetry: telemetryResult
-        ? { accepted: telemetryResult.accepted, rejected: telemetryResult.rejected, duplicates: telemetryResult.duplicates }
+        ? {
+            accepted: telemetryResult.accepted,
+            rejected: telemetryResult.rejected,
+            duplicates: telemetryResult.duplicates
+          }
         : { accepted: 0, rejected: 0, duplicates: 0 }
     });
     return true;
@@ -8317,16 +10115,25 @@ async function handleApi(req, res) {
     return true;
   }
 
-  const deviceLatestBundleMatch = pathname.match(/^\/v1\/tenants\/([^/]+)\/devices\/([^/]+)\/bundles\/latest$/);
+  const deviceLatestBundleMatch = pathname.match(
+    /^\/v1\/tenants\/([^/]+)\/devices\/([^/]+)\/bundles\/latest$/
+  );
   if (req.method === "POST" && deviceLatestBundleMatch) {
     const tenantId = decodeURIComponent(deviceLatestBundleMatch[1]);
     const deviceId = decodeURIComponent(deviceLatestBundleMatch[2]);
     const bundle = activePolicyBundle();
     if (!bundle) {
-      sendJson(res, 404, { error: "policy_bundle_not_found", tenant_id: tenantId, device_id: deviceId });
+      sendJson(res, 404, {
+        error: "policy_bundle_not_found",
+        tenant_id: tenantId,
+        device_id: deviceId
+      });
       return true;
     }
-    recordAudit("policy_bundle.latest_requested", "device", deviceId, { tenant_id: tenantId, bundle_id: bundle.id });
+    recordAudit("policy_bundle.latest_requested", "device", deviceId, {
+      tenant_id: tenantId,
+      bundle_id: bundle.id
+    });
     sendJson(res, 200, latestBundleEnvelope(bundle, tenantId, deviceId));
     return true;
   }
@@ -8356,11 +10163,16 @@ async function handleApi(req, res) {
       tenant_id: bundleTenantId(bundle),
       artifact_hash: artifactHash
     });
-    sendJson(res, 200, { ...artifact, artifact_hash: artifactHash }, {
-      etag: `"sha256:${artifactHash}"`,
-      "x-pollek-artifact-sha256": artifactHash,
-      "cache-control": "public, immutable, max-age=31536000"
-    });
+    sendJson(
+      res,
+      200,
+      { ...artifact, artifact_hash: artifactHash },
+      {
+        etag: `"sha256:${artifactHash}"`,
+        "x-pollek-artifact-sha256": artifactHash,
+        "cache-control": "public, immutable, max-age=31536000"
+      }
+    );
     return true;
   }
 
@@ -8388,12 +10200,15 @@ async function handleApi(req, res) {
   if (req.method === "POST" && pathname === "/v1/trust/revocations") {
     const body = await readBody(req);
     try {
-      const actor = typeof body.actor_id === "string" && body.actor_id ? body.actor_id : "acc_local_admin";
+      const actor =
+        typeof body.actor_id === "string" && body.actor_id ? body.actor_id : "acc_local_admin";
       const list = addRevocations(body, actor);
       sendJson(res, 201, list);
     } catch (error) {
       const status = error?.statusCode || 400;
-      sendJson(res, status, { error: error instanceof Error ? error.message : "revocation_failed" });
+      sendJson(res, status, {
+        error: error instanceof Error ? error.message : "revocation_failed"
+      });
     }
     return true;
   }
@@ -8423,7 +10238,7 @@ async function handleApi(req, res) {
 }
 
 function serveStatic(req, res) {
-  const { url, pathname } = parsePath(req);
+  const { pathname } = parsePath(req);
   let requested = pathname === "/" ? "/index.html" : pathname;
   if (requested === "/device") requested = "/index.html";
   const safePath = path.normalize(requested).replace(/^(\.\.[/\\])+/, "");
@@ -8501,5 +10316,7 @@ server.listen(port, host, () => {
   console.log(`Pollek Cloud dev console: ${publicUrl}`);
   console.log(`Contract Hub: ${publicUrl}/.well-known/pollek-contract`);
   console.log(`Runtime persistence: ${persistence.enabled ? persistence.file_path : "disabled"}`);
-  console.log(`LCP entity/config watch: ${lcpEntityWatch.enabled ? `${lcpEntityWatch.lcp_url} every ${lcpEntityWatch.interval_ms}ms` : "disabled"}`);
+  console.log(
+    `LCP entity/config watch: ${lcpEntityWatch.enabled ? `${lcpEntityWatch.lcp_url} every ${lcpEntityWatch.interval_ms}ms` : "disabled"}`
+  );
 });

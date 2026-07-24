@@ -26,9 +26,9 @@ export function assertBackendSupported() {
   const backend = signerBackend();
   if (backend !== "local") {
     throw new Error(
-      `POLLEK_SIGNER_BACKEND="${backend}" is not wired yet. Only "local" is operational. `
-      + "The Cosmian KMS backend awaits live TTLV sign/verify contract validation; refusing to "
-      + "start rather than sign with the in-process key and mislabel it as KMS-backed."
+      `POLLEK_SIGNER_BACKEND="${backend}" is not wired yet. Only "local" is operational. ` +
+        "The Cosmian KMS backend awaits live TTLV sign/verify contract validation; refusing to " +
+        "start rather than sign with the in-process key and mislabel it as KMS-backed."
     );
   }
   return backend;
@@ -37,7 +37,11 @@ export function assertBackendSupported() {
 // Stable keyid for a raw 32-byte ed25519 public key (base64url), matching the Cloud's
 // bundleSigningKeyId formula and the DEK relying-party expectation.
 export function keyIdForRawB64(rawB64) {
-  const fingerprint = crypto.createHash("sha256").update(Buffer.from(rawB64, "base64url")).digest("hex").slice(0, 16);
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update(Buffer.from(rawB64, "base64url"))
+    .digest("hex")
+    .slice(0, 16);
   return `pollek-cloud-ed25519-${fingerprint}`;
 }
 
@@ -50,7 +54,10 @@ function publicKeyFromRawB64(rawB64) {
 // still accepts signatures made with them, so a bundle signed just before rotation stays valid.
 export function retiredVerificationKeys(env = process.env.POLLEK_TRUST_RETIRED_PUBKEYS || "") {
   const out = [];
-  for (const raw of String(env).split(/[,\s]+/).map((s) => s.trim()).filter(Boolean)) {
+  for (const raw of String(env)
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)) {
     try {
       out.push({ keyid: keyIdForRawB64(raw), raw_base64url: raw, key: publicKeyFromRawB64(raw) });
     } catch {
