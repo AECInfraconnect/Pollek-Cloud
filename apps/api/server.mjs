@@ -27,7 +27,6 @@ import {
   publicUrl,
   defaultLcpUrl,
   maxJsonBodyBytes,
-  maxAuditPayloadBytes,
   defaultApiPageLimit,
   maxApiPageLimit,
   requestBudgetWindowMs,
@@ -54,6 +53,7 @@ import {
   scheduleRuntimePersist,
   loadRuntimeState
 } from "./persistence.mjs";
+import { recordAudit, redactSensitive } from "./audit.mjs";
 
 // Ephemeral ed25519 signing identity for bundle/trust documents (runtime crypto, not config).
 const bundleSigningKeyPair = crypto.generateKeyPairSync("ed25519");
@@ -2607,37 +2607,6 @@ function signControlEnvelope(fields) {
   return crypto.createHmac("sha256", signingKey).update(stableJson(fields)).digest("base64url");
 }
 
-function redactSensitive(value) {
-  if (Array.isArray(value)) return value.slice(0, 100).map((item) => redactSensitive(item));
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => {
-      const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (/token|secret|password|private|credential|authorization|apikey|cookie/.test(normalized))
-        return [key, "[redacted]"];
-      if (["reference", "paymentreference", "providerreference"].includes(normalized))
-        return [key, "[redacted]"];
-      return [key, redactSensitive(item)];
-    })
-  );
-}
-
-function safeAuditPayload(payload = {}) {
-  const redacted = redactSensitive(payload);
-  const encoded = stableJson(redacted);
-  if (Buffer.byteLength(encoded, "utf8") <= maxAuditPayloadBytes) return redacted;
-  return {
-    truncated: true,
-    payload_hash: sha256(encoded),
-    byte_length: Buffer.byteLength(encoded, "utf8"),
-    keys:
-      redacted && typeof redacted === "object" && !Array.isArray(redacted)
-        ? Object.keys(redacted).sort()
-        : [],
-    preview: typeof redacted === "string" ? redacted.slice(0, 1024) : undefined
-  };
-}
-
 function securityPostureStatus() {
   const loopbackOnly =
     defaultLcpUrl.startsWith("http://127.0.0.1") || defaultLcpUrl.startsWith("http://localhost");
@@ -3499,24 +3468,6 @@ function telemetryIngestStatus() {
     recent_batches: (state.fleet.telemetryBatchReceipts || []).slice(0, 20),
     recent_rejections: (state.fleet.telemetryRejections || []).slice(0, 10)
   };
-}
-
-function recordAudit(action, targetType, targetId, payload = {}) {
-  const safePayload = safeAuditPayload(payload);
-  const event = {
-    id: `audit_${crypto.randomUUID()}`,
-    tenant_id: safePayload.tenant_id || payload.tenant_id || "local",
-    actor_id: safePayload.actor_id || payload.actor_id || "local-dev-admin",
-    action,
-    target_type: targetType,
-    target_id: targetId,
-    payload: safePayload,
-    occurred_at: new Date().toISOString()
-  };
-  state.auditEvents.unshift(event);
-  state.auditEvents = state.auditEvents.slice(0, 100);
-  scheduleRuntimePersist(`audit.${action}`);
-  return event;
 }
 
 function normalizeItems(payload) {

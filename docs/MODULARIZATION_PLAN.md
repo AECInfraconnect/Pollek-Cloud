@@ -63,6 +63,10 @@ feature extraction therefore depends on first exposing those as importable singl
     only module that touches `db` and the durable snapshot; `server.mjs` no longer imports `db`.
     Verified against real Postgres (migrations, snapshot round-trip, RLS isolation) plus the
     file-snapshot path.
+  - `audit.mjs` **(done)** — sensitive-value redaction (`redactSensitive`) and the append-only
+    audit log (`recordAudit`, internal `safeAuditPayload`). Extracted before the bigger domain
+    slices because nearly all of them call `recordAudit`; giving audit its own module keeps the
+    dependency direction one-way (`trust`/`identity`/`billing` → `audit`) and avoids cycles.
   - Remaining slices: `trust.mjs` (signing, trust-policy/allowlist/revocation,
     provenance/SBOM/attestation), `telemetry.mjs` (ingest + read views), `reports.mjs`
     (cost/token), `entities.mjs` (registry/discovery/entities), `policy.mjs`
@@ -77,5 +81,5 @@ feature extraction therefore depends on first exposing those as importable singl
 
 ## Status
 
-Phases 1, 0, 2, 3 complete; Phase 4 underway (`persistence.mjs` done). Next Phase-4 slice:
-`trust.mjs`. Each slice ships as an independent PR behind a green gate.
+Phases 1, 0, 2, 3 complete; Phase 4 underway (`persistence.mjs`, `audit.mjs` done). Next Phase-4
+slice: `trust.mjs`. Each slice ships as an independent PR behind a green gate.
