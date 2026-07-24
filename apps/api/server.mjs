@@ -2,7 +2,6 @@ import { createServer } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import * as db from "./db.mjs";
 import * as keycloak from "./keycloak.mjs";
@@ -19,111 +18,45 @@ import {
   tenantRecordId,
   issueOpaqueToken
 } from "./lib/util.mjs";
+import {
+  webDir,
+  contractPath,
+  openApiPath,
+  cloudVersion,
+  contractVersion,
+  contractArtifactPaths,
+  stateFilePath,
+  port,
+  host,
+  publicUrl,
+  defaultLcpUrl,
+  maxJsonBodyBytes,
+  maxAuditPayloadBytes,
+  defaultApiPageLimit,
+  maxApiPageLimit,
+  requestBudgetWindowMs,
+  requestBudgetMax,
+  compactJsonResponses,
+  exposeInternalErrors,
+  lcpReconcileIntervalMs,
+  maxTelemetryEnvelopes,
+  maxTelemetryBatchReceipts,
+  maxTelemetryRejections,
+  eventStreamReplayWindow,
+  trustDomain,
+  spireServerAddress,
+  spireServerPort,
+  mtlsMode,
+  mtlsIdentityHeader,
+  sessionMode
+} from "./config.mjs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.resolve(__dirname, "../..");
-const webDir = path.join(rootDir, "apps/web/static");
-const contractPath = path.join(rootDir, "packages/contracts/pollek-contract.json");
-const openApiPath = path.join(rootDir, "packages/contracts/openapi.json");
-// Single source of truth for contract-derived constants (version, etc.). The contract JSON
-// is the authority; nothing else hardcodes the version.
-const contractDocument = JSON.parse(readFileSync(contractPath, "utf8"));
-const cloudVersion = contractDocument.cloud_version;
-const contractVersion = contractDocument.contract_version;
-const contractArtifactPaths = new Map([
-  ["/contracts/events.schema.json", path.join(rootDir, "packages/contracts/events.schema.json")],
-  [
-    "/contracts/bundle-manifest.schema.json",
-    path.join(rootDir, "packages/contracts/bundle-manifest.schema.json")
-  ],
-  [
-    "/contracts/telemetry-envelope.schema.json",
-    path.join(rootDir, "packages/contracts/telemetry-envelope.schema.json")
-  ],
-  [
-    "/contracts/lcp-usage-ledger.schema.json",
-    path.join(rootDir, "packages/contracts/lcp-usage-ledger.schema.json")
-  ],
-  [
-    "/contracts/bundle-provenance.schema.json",
-    path.join(rootDir, "packages/contracts/bundle-provenance.schema.json")
-  ],
-  [
-    "/contracts/trust-policy.schema.json",
-    path.join(rootDir, "packages/contracts/trust-policy.schema.json")
-  ],
-  [
-    "/contracts/revocation-list.schema.json",
-    path.join(rootDir, "packages/contracts/revocation-list.schema.json")
-  ],
-  [
-    "/contracts/signer-allowlist.schema.json",
-    path.join(rootDir, "packages/contracts/signer-allowlist.schema.json")
-  ],
-  [
-    "/contracts/fixtures/lcp-usage-ledger/windows.json",
-    path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/windows.json")
-  ],
-  [
-    "/contracts/fixtures/lcp-usage-ledger/macos.json",
-    path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/macos.json")
-  ],
-  [
-    "/contracts/fixtures/lcp-usage-ledger/linux.json",
-    path.join(rootDir, "packages/contracts/fixtures/lcp-usage-ledger/linux.json")
-  ]
-]);
-const stateFilePath =
-  process.env.POLLEK_CLOUD_STATE_FILE || path.join(rootDir, "pollek-cloud-dev-state.json");
-
-const port = Number(process.env.PORT || process.env.POLLEK_CLOUD_DEV_PORT || 8790);
-const host =
-  process.env.POLLEK_CLOUD_DEV_HOST ||
-  process.env.HOST ||
-  (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
-const publicUrl =
-  process.env.POLLEK_CLOUD_PUBLIC_URL ||
-  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "") ||
-  `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`;
-const defaultLcpUrl = process.env.POLLEK_LCP_URL || "http://127.0.0.1:43891";
-const maxJsonBodyBytes = Number(process.env.POLLEK_CLOUD_MAX_JSON_BODY_BYTES || 1024 * 1024);
-const maxAuditPayloadBytes = Number(process.env.POLLEK_CLOUD_MAX_AUDIT_PAYLOAD_BYTES || 32 * 1024);
-const defaultApiPageLimit = Number(process.env.POLLEK_CLOUD_DEFAULT_API_PAGE_LIMIT || 1000);
-const maxApiPageLimit = Number(process.env.POLLEK_CLOUD_MAX_API_PAGE_LIMIT || 5000);
-const requestBudgetWindowMs = Number(process.env.POLLEK_CLOUD_RATE_WINDOW_MS || 60000);
-const requestBudgetMax = Number(process.env.POLLEK_CLOUD_RATE_MAX || 900);
-const compactJsonResponses = process.env.POLLEK_CLOUD_PRETTY_JSON !== "1";
-const exposeInternalErrors =
-  process.env.NODE_ENV !== "production" || process.env.POLLEK_CLOUD_EXPOSE_ERRORS === "1";
-const lcpReconcileIntervalMs = Math.max(
-  30000,
-  Number(
-    process.env.POLLEK_LCP_RECONCILE_INTERVAL_MS ||
-      process.env.POLLEK_LCP_WATCH_INTERVAL_MS ||
-      300000
-  )
-);
-const maxTelemetryEnvelopes = Math.max(
-  100,
-  Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_EVENTS || 5000)
-);
-const maxTelemetryBatchReceipts = Math.max(
-  20,
-  Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_BATCHES || 200)
-);
-const maxTelemetryRejections = Math.max(
-  20,
-  Number(process.env.POLLEK_CLOUD_MAX_TELEMETRY_REJECTIONS || 200)
-);
+// Ephemeral ed25519 signing identity for bundle/trust documents (runtime crypto, not config).
 const bundleSigningKeyPair = crypto.generateKeyPairSync("ed25519");
 const bundleSigningPublicKeyPem = bundleSigningKeyPair.publicKey.export({
   type: "spki",
   format: "pem"
 });
-const eventStreamReplayWindow = Math.max(
-  200,
-  Number(process.env.POLLEK_EVENT_STREAM_REPLAY_WINDOW || 500)
-);
 const sseClients = new Set();
 const contractDriftAllowedRuntimePaths = new Set([
   "/health",
@@ -2466,9 +2399,7 @@ function kmsHealth() {
 }
 
 // --- Cloud-Phase-1 trust-spine primitives -------------------------------------------------
-// One SPIFFE trust domain per Cloud deployment (DEK alignment §1). Tenant lives in the SVID
-// path, not the trust domain.
-const trustDomain = process.env.POLLEK_TRUST_DOMAIN || "spiffe://pollek.io";
+// One SPIFFE trust domain per Cloud deployment (DEK alignment §1); see config.mjs `trustDomain`.
 
 // Stable ed25519 signer identity. The keyid is the fingerprint of the raw 32-byte public key
 // so it matches signatures[].keyid on the DEK side (ed25519-dalek verify_strict over the raw
@@ -7182,25 +7113,8 @@ async function contractDiscovery() {
 //   spiffe://<trust_domain>/tenant/<tenant_id>/device/<device_id>[/agent/<agent_id>]
 // `trustDomain` is the deployment identifier (default spiffe://pollek.io) and is NOT a URL;
 // reachable URLs use publicUrl (the Railway domain).
-const spireServerAddress = process.env.SPIRE_SERVER_ADDRESS || null;
-const spireServerPort = Number(process.env.SPIRE_SERVER_PORT || 8081);
-// mTLS enforcement stance for DEK-facing endpoints: off (dev, bearer only) -> monitor
-// (observe + record mismatches, still allow) -> enforce (fail-closed at the identity layer).
-const mtlsMode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_MTLS_MODE || "")
-  ? process.env.POLLEK_MTLS_MODE
-  : "off";
-// Header carrying the SPIFFE ID verified by a trusted mTLS-terminating ingress. The ingress
-// MUST overwrite/strip this from untrusted client input (documented in the Phase-B hand-off).
-const mtlsIdentityHeader = (
-  process.env.POLLEK_MTLS_IDENTITY_HEADER || "x-pollek-spiffe-id"
-).toLowerCase();
-// Boundary-class identity enforcement for console/admin (human) boundaries. Machine
-// (DEK-facing) boundaries are governed by the Keycloak JWT gate; public boundaries are open.
-// Default off keeps current behavior; enabling requires the console to send its session token
-// on every call (see docs/CLOUD_APP_PROGRESS).
-const sessionMode = ["off", "monitor", "enforce"].includes(process.env.POLLEK_SESSION_MODE || "")
-  ? process.env.POLLEK_SESSION_MODE
-  : "off";
+// mTLS/SPIRE/session enforcement configuration lives in config.mjs (spireServerAddress,
+// spireServerPort, mtlsMode, mtlsIdentityHeader, sessionMode).
 
 // Public boundaries: never require a human/machine identity (auth bootstrap, discovery,
 // health, event streams, and the signed trust anchors which are safe to read by location).

@@ -44,9 +44,11 @@ feature extraction therefore depends on first exposing those as importable singl
   (Phases 2–5) no longer break tests for cosmetic reasons. The front-end `assert.match(app, …)`
   pins in `app.js` are untouched — they belong to **Phase 6** and don't block server work; they
   need a browser-driven (Playwright) test to convert.
-- **Phase 2:** `apps/api/config.mjs` — env-derived constants (ports, limits, `publicUrl`,
-  `trustDomain`, enforcement modes, `contractDocument`, `cloudVersion`) as named exports.
-  Then move config-coupled pure-ish helpers (`parsePath`, `boundedInt`, `pageSlice`).
+- **Phase 2 (done):** `apps/api/config.mjs` — all env- and contract-derived constants (paths,
+  `port`/`host`/`publicUrl`, request/telemetry limits, flags, `contractDocument`/`cloudVersion`/
+  `contractVersion`, `contractArtifactPaths`, `trustDomain`, SPIRE/mTLS/session enforcement
+  modes) as named exports, imported by `server.mjs`. Runtime crypto (the ephemeral bundle
+  signing keypair) and state-shape/policy constants stay with their owners. No behavior change.
 - **Phase 3:** `apps/api/state.mjs` — the `state` object, `createFleetState`,
   `persistedFleetKeys`, and small state accessors, as an importable singleton.
 - **Phase 4:** feature modules that import `state`/`config`/`util`, one cohesive slice per PR:
@@ -64,6 +66,7 @@ feature extraction therefore depends on first exposing those as importable singl
 
 ## Status
 
-Phases 1 and 0 complete. The server-side source-string assertions no longer stand in the way,
-so **Phase 2 (`config.mjs`)** is the recommended next step. Each subsequent phase ships as an
+Phases 1, 0, and 2 complete. **Phase 3 (`state.mjs`)** is next: lift the module-scoped `state`
+object, `createFleetState`, `persistedFleetKeys`, and small state accessors into an importable
+singleton so the feature modules in Phase 4 can share it. Each subsequent phase ships as an
 independent PR behind a green gate.
