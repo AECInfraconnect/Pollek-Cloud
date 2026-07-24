@@ -49,8 +49,12 @@ feature extraction therefore depends on first exposing those as importable singl
   `contractVersion`, `contractArtifactPaths`, `trustDomain`, SPIRE/mTLS/session enforcement
   modes) as named exports, imported by `server.mjs`. Runtime crypto (the ephemeral bundle
   signing keypair) and state-shape/policy constants stay with their owners. No behavior change.
-- **Phase 3:** `apps/api/state.mjs` — the `state` object, `createFleetState`,
-  `persistedFleetKeys`, and small state accessors, as an importable singleton.
+- **Phase 3 (done):** `apps/api/state.mjs` — the `state` singleton, `createFleetState`,
+  `persistedFleetKeys`, and the static product catalogs that seed it (`ROLE_TEST_USER_TEMPLATES`,
+  `ADAPTER_CATALOG`, `SANDBOX_PROFILES`, `COMPLIANCE_POLICY_BUNDLES`), as an importable module.
+  `state` is mutated in place and never reassigned, so every module shares one object graph; the
+  behavioral suite's ingest→read-back tests prove the cross-module mutation works. No behavior
+  change.
 - **Phase 4:** feature modules that import `state`/`config`/`util`, one cohesive slice per PR:
   `trust.mjs` (signing, trust-policy/allowlist/revocation, provenance/SBOM/attestation),
   `persistence.mjs` (snapshot + Postgres write-through wiring), `telemetry.mjs` (ingest +
@@ -66,7 +70,6 @@ feature extraction therefore depends on first exposing those as importable singl
 
 ## Status
 
-Phases 1, 0, and 2 complete. **Phase 3 (`state.mjs`)** is next: lift the module-scoped `state`
-object, `createFleetState`, `persistedFleetKeys`, and small state accessors into an importable
-singleton so the feature modules in Phase 4 can share it. Each subsequent phase ships as an
-independent PR behind a green gate.
+Phases 1, 0, 2, and 3 complete. With `config` and `state` now importable singletons, **Phase 4**
+(cohesive feature modules that import `state`/`config`/`util`, one slice per PR) is next. Each
+subsequent phase ships as an independent PR behind a green gate.
