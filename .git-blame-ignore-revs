@@ -1,0 +1,6 @@
+# Reformatting / large mechanical commits to skip in `git blame`.
+# Configure locally with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub applies this file automatically.)
+
+# Add ESLint + Prettier baseline and format the codebase
+57efda7f552362d151d9cb4b1482ff5c1c398f42
