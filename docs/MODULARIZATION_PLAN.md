@@ -55,12 +55,19 @@ feature extraction therefore depends on first exposing those as importable singl
   `state` is mutated in place and never reassigned, so every module shares one object graph; the
   behavioral suite's ingest→read-back tests prove the cross-module mutation works. No behavior
   change.
-- **Phase 4:** feature modules that import `state`/`config`/`util`, one cohesive slice per PR:
-  `trust.mjs` (signing, trust-policy/allowlist/revocation, provenance/SBOM/attestation),
-  `persistence.mjs` (snapshot + Postgres write-through wiring), `telemetry.mjs` (ingest +
-  read views), `reports.mjs` (cost/token), `entities.mjs` (registry/discovery/entities),
-  `policy.mjs` (drafts/sandbox/compliance/bundles), `identity.mjs` (signup/session/SCIM/IdP),
-  `billing.mjs` (subscriptions/usage/invoices/licenses).
+- **Phase 4 (in progress):** feature modules that import `state`/`config`/`util`/`db`, one
+  cohesive slice per PR. Order runs lowest-coupling first:
+  - `persistence.mjs` **(done)** — the runtime snapshot + Postgres write-through (`persistence`
+    object, `runtimeStateSnapshot`/`applyRuntimeStateSnapshot`, `loadRuntimeState`,
+    `persistRuntimeState`, `scheduleRuntimePersist`, `runtimePersistenceStatus`). This is now the
+    only module that touches `db` and the durable snapshot; `server.mjs` no longer imports `db`.
+    Verified against real Postgres (migrations, snapshot round-trip, RLS isolation) plus the
+    file-snapshot path.
+  - Remaining slices: `trust.mjs` (signing, trust-policy/allowlist/revocation,
+    provenance/SBOM/attestation), `telemetry.mjs` (ingest + read views), `reports.mjs`
+    (cost/token), `entities.mjs` (registry/discovery/entities), `policy.mjs`
+    (drafts/sandbox/compliance/bundles), `identity.mjs` (signup/session/SCIM/IdP), `billing.mjs`
+    (subscriptions/usage/invoices/licenses).
 - **Phase 5:** split the `handleApi` router into per-domain route registrars
   (`routes/*.mjs`) that `server.mjs` composes; keep a thin dispatch in `server.mjs`.
 - **Phase 6 (front-end):** split `app.js` into ES modules under `apps/web/static/js/`
@@ -70,6 +77,5 @@ feature extraction therefore depends on first exposing those as importable singl
 
 ## Status
 
-Phases 1, 0, 2, and 3 complete. With `config` and `state` now importable singletons, **Phase 4**
-(cohesive feature modules that import `state`/`config`/`util`, one slice per PR) is next. Each
-subsequent phase ships as an independent PR behind a green gate.
+Phases 1, 0, 2, 3 complete; Phase 4 underway (`persistence.mjs` done). Next Phase-4 slice:
+`trust.mjs`. Each slice ships as an independent PR behind a green gate.
