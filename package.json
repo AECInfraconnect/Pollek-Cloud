@@ -26,6 +26,10 @@
   "engines": {
     "node": ">=20"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "node apps/api/server.mjs",
     "start": "node apps/api/server.mjs",
@@ -37,8 +41,5 @@
     "contracts:check": "node scripts/check-contract-drift.mjs",
     "contracts:generate": "npm run contracts:openapi && npm run contracts:sdk",
     "audit:foundation": "node --check apps/api/server.mjs && node --check apps/api/db.mjs && node --check apps/api/keycloak.mjs && node --check apps/api/signer.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test"
-  },
-  "dependencies": {
-    "pg": "^8.22.0"
   }
 }

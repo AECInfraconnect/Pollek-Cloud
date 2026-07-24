@@ -1,0 +1,12 @@
+{
+  "name": "@pollek-cloud/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dependency-light JavaScript client SDK generated from the Pollek Cloud contract.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "pollek-cloud-client.mjs",
+  "exports": {
+    ".": "./pollek-cloud-client.mjs"
+  }
+}

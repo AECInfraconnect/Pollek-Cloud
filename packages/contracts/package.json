@@ -1,0 +1,7 @@
+{
+  "name": "@pollek-cloud/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pollek Cloud Contract Hub: contract discovery, TypeSpec source, generated OpenAPI, JSON schemas, and fixtures.",
+  "license": "UNLICENSED"
+}

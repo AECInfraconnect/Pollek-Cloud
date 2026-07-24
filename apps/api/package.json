@@ -1,0 +1,15 @@
+{
+  "name": "@pollek-cloud/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pollek Cloud control-plane API and Contract Hub server.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
+  }
+}

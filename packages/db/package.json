@@ -1,0 +1,7 @@
+{
+  "name": "@pollek-cloud/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pollek Cloud PostgreSQL migrations (tenant-scoped, row-level-security enabled).",
+  "license": "UNLICENSED"
+}
