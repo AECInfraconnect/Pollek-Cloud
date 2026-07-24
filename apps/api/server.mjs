@@ -2273,6 +2273,24 @@ function addRevocations(entry = {}, actor = "acc_local_admin") {
   return revocationListDocument();
 }
 
+// Whether a bundle is hit by the current revocation deny-list (by revision, signer keyid, or
+// manifest/artifact digest). Read-side status for operators; the DEK gate enforces it too.
+function bundleRevocationStatus(bundle, manifest) {
+  const store = state.fleet.trustRevocations || {};
+  const revokedRevisions = new Set(store.revoked_revisions || []);
+  const revokedKeyIds = new Set(store.revoked_key_ids || []);
+  const revokedDigests = new Set((store.revoked_bundle_digests || []).map((d) => String(d).replace(/^sha256:/, "")));
+  const reasons = [];
+  if (bundle?.revision && revokedRevisions.has(bundle.revision)) reasons.push("revoked_revision");
+  const signerKeyids = (manifest?.signatures || []).map((s) => s.keyid || s.key_id).filter(Boolean);
+  if (signerKeyids.some((k) => revokedKeyIds.has(k))) reasons.push("revoked_signer");
+  const digests = [manifest?.payload_hash, bundle?.manifest_hash, bundle?.artifact_hash]
+    .filter(Boolean)
+    .map((d) => String(d).replace(/^sha256:/, ""));
+  if (digests.some((d) => revokedDigests.has(d))) reasons.push("revoked_digest");
+  return { revoked: reasons.length > 0, reasons, revocation_epoch: store.revocation_epoch || 0 };
+}
+
 // Trust & Provenance read view for the console dashboard.
 function trustProvenanceView() {
   const bundles = state.fleet.policyBundles || [];
@@ -2286,6 +2304,7 @@ function trustProvenanceView() {
       generation: manifest.generation,
       control_level: bundle.control_level || manifest.target?.control_level || null,
       signed_fields: manifest.signed_fields,
+      revocation: bundleRevocationStatus(bundle, manifest),
       manifest_hash: manifest.payload_hash,
       verification_status: manifest.verification?.status || "unsigned",
       data_sha256: manifest.data_sha256,

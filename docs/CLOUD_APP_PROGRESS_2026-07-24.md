@@ -100,6 +100,17 @@ Per `docs/HANDOFF_CODEX_RAILWAY_SECURITY_GATES_2026-07-24.md` (Cloud application
 Negative tests added for both the missing and non-numeric `exp` cases. This satisfies JWT
 rollout acceptance item 5 before any production enforcement.
 
+## Delivered — revocation reflected in the Trust & Provenance view
+
+The Cloud published a signed revocation list but its own console view did not show whether a
+bundle was actually revoked. Now the Trust & Provenance view (`GET /api/trust/provenance`) and
+the console Trust tab compute per-bundle `revocation` status against the current deny-list
+(by revision, signer keyid, or manifest/artifact digest) and mark revoked bundles clearly.
+This is a read-side status for operators; it does not alter the DEK-consumed signed manifest
+(the manifest contract is unchanged), and the DEK gate remains the enforcement point. Tested:
+deploy a bundle, revoke its revision via the signed revocation path, and the view flips to
+`revoked: true` with reason `revoked_revision`.
+
 ## Explicitly NOT done (unchanged from the hand-off)
 
 - **SPIRE** not deployed — blocked on ADR 0001. `SPIRE_*` vars stay unset.

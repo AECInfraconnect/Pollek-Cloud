@@ -3217,12 +3217,14 @@ function renderTrust() {
     refs.trustBundleList.innerHTML = `<div class="detail-row trace-row"><span><strong>No signed bundles yet</strong><small>Deploy a policy bundle through the gated compliance flow to see its provenance here.</small></span></div>`;
   }
   for (const bundle of bundles) {
+    const revoked = Boolean(bundle.revocation && bundle.revocation.revoked);
     const row = document.createElement("div");
-    row.className = `detail-row trace-row ${trustVerificationStatusClass(bundle.verification_status)}`;
+    row.className = `detail-row trace-row ${revoked ? "bad" : trustVerificationStatusClass(bundle.verification_status)}`;
+    const revokedNote = revoked ? ` | REVOKED (${escapeHtml((bundle.revocation.reasons || []).join(", "))})` : "";
     row.innerHTML = `
       <span>
         <strong>${escapeHtml(bundle.bundle_id || "bundle")}</strong>
-        <small>${escapeHtml(bundle.tenant_id || "")} | rev ${escapeHtml(bundle.revision || "?")} | gen ${escapeHtml(String(bundle.generation ?? "?"))} | ${escapeHtml(bundle.verification_status || "unsigned")}</small>
+        <small>${escapeHtml(bundle.tenant_id || "")} | rev ${escapeHtml(bundle.revision || "?")} | gen ${escapeHtml(String(bundle.generation ?? "?"))} | ${escapeHtml(bundle.verification_status || "unsigned")}${revokedNote}</small>
       </span>
       <code>${escapeHtml(JSON.stringify({
         signed_fields: bundle.signed_fields,

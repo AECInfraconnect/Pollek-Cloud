@@ -2262,3 +2262,29 @@ test("session gate is off by default (status reports off, console boundary open)
     assert.equal((await api(baseUrl, "/api/fleet")).response.status, 200);
   });
 });
+
+// --- Revocation reflected in the Trust & Provenance view ----------------------------------
+
+test("trust provenance view reflects a revoked bundle revision", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const bundleId = await deployRealBundle(baseUrl);
+    let view = (await api(baseUrl, "/api/trust/provenance")).payload;
+    let entry = view.bundles.find((b) => b.bundle_id === bundleId);
+    assert.ok(entry, "deployed bundle present");
+    assert.equal(entry.revocation.revoked, false, "not revoked initially");
+    const revision = entry.revision;
+    assert.ok(revision, "bundle has a revision");
+
+    // Revoke that revision through the real signed revocation path.
+    const revoke = await api(baseUrl, "/v1/trust/revocations", {
+      method: "POST",
+      body: { revoked_revisions: [revision], reason: "compromised bundle revision" }
+    });
+    assert.equal(revoke.response.status, 201);
+
+    view = (await api(baseUrl, "/api/trust/provenance")).payload;
+    entry = view.bundles.find((b) => b.bundle_id === bundleId);
+    assert.equal(entry.revocation.revoked, true, "now flagged revoked");
+    assert.ok(entry.revocation.reasons.includes("revoked_revision"));
+  });
+});
