@@ -7,6 +7,18 @@ import crypto from "node:crypto";
 import * as db from "./db.mjs";
 import * as keycloak from "./keycloak.mjs";
 import * as signer from "./signer.mjs";
+import {
+  httpError,
+  mapToEntries,
+  entriesToMap,
+  stableJson,
+  sha256,
+  slugify,
+  nowIso,
+  daysFromNow,
+  tenantRecordId,
+  issueOpaqueToken
+} from "./lib/util.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
@@ -733,13 +745,6 @@ function sendText(res, status, text, contentType = "text/plain; charset=utf-8") 
 
 const requestBudgetBuckets = new Map();
 
-function httpError(statusCode, message, code = message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  error.code = code;
-  return error;
-}
-
 function clientBudgetKey(req) {
   const forwardedFor = String(req.headers["x-forwarded-for"] || "")
     .split(",")[0]
@@ -783,18 +788,6 @@ function enforceRequestBudget(req, res) {
     }
   );
   return false;
-}
-
-function mapToEntries(map) {
-  return [...map.entries()].map(([key, value]) => ({ key, value }));
-}
-
-function entriesToMap(entries = []) {
-  const map = new Map();
-  for (const entry of entries) {
-    if (entry && Object.hasOwn(entry, "key")) map.set(entry.key, entry.value);
-  }
-  return map;
 }
 
 function runtimePersistenceStatus() {
@@ -1005,44 +998,6 @@ function scheduleRuntimePersist(reason = "mutation") {
     persistTimer = null;
     void persistRuntimeState(reason);
   }, 40);
-}
-
-function stableJson(value) {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
-  return `{${Object.keys(value)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
-    .join(",")}}`;
-}
-
-function sha256(value) {
-  return crypto.createHash("sha256").update(String(value)).digest("hex");
-}
-
-function slugify(value, fallback = "tenant") {
-  const slug = String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-  return slug || `${fallback}-${crypto.randomBytes(3).toString("hex")}`;
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function daysFromNow(days) {
-  return new Date(Date.now() + Number(days || 0) * 86400000).toISOString();
-}
-
-function tenantRecordId(slug) {
-  return `tenant_${slugify(slug).replace(/-/g, "_")}`;
-}
-
-function issueOpaqueToken(prefix = "tok") {
-  return `${prefix}_${crypto.randomBytes(32).toString("base64url")}`;
 }
 
 function tokenHash(token) {
