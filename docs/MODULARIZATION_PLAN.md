@@ -33,9 +33,17 @@ feature extraction therefore depends on first exposing those as importable singl
 - **Phase 1 (done):** extract pure, state-free helpers to `apps/api/lib/util.mjs`
   (`stableJson`, `sha256`, `slugify`, time helpers, map/entry helpers, id helpers, `httpError`)
   with direct unit tests in `test/util.test.mjs`. Establishes the `apps/api/lib/` pattern.
-- **Phase 0 (next, enabler):** replace the ~130 source-string `assert.match(server, …)`
-  assertions with behavioral tests (hit the endpoint / call the behavior) so later moves don't
-  break tests for cosmetic reasons. This is the unblocker for everything below.
+- **Phase 0 (done, enabler):** replaced the ~130 source-string `assert.match(server, …)`
+  assertions with behavioral tests. The two big route-pin tests became a single data-driven
+  `API_ROUTE_MANIFEST` test that boots the server and proves each of ~79 routes is dispatched by
+  the API layer (JSON/SSE response) rather than falling through to the static handler; the
+  Railway `PORT`/`RAILWAY_PUBLIC_DOMAIN` pins became a boot-with-env test asserting the injected
+  port binds and the public domain drives advertised URLs. Function-name pins were dropped where
+  a dedicated behavioral test already covers the behavior. One cheap source guard is kept on
+  purpose: `assert.doesNotMatch(server, /dev-placeholder/)` (signing hygiene). Server-side moves
+  (Phases 2–5) no longer break tests for cosmetic reasons. The front-end `assert.match(app, …)`
+  pins in `app.js` are untouched — they belong to **Phase 6** and don't block server work; they
+  need a browser-driven (Playwright) test to convert.
 - **Phase 2:** `apps/api/config.mjs` — env-derived constants (ports, limits, `publicUrl`,
   `trustDomain`, enforcement modes, `contractDocument`, `cloudVersion`) as named exports.
   Then move config-coupled pure-ish helpers (`parsePath`, `boundedInt`, `pageSlice`).
@@ -56,6 +64,6 @@ feature extraction therefore depends on first exposing those as importable singl
 
 ## Status
 
-Phase 1 complete. Phase 0 is the recommended next step because it unblocks Phases 2–5 without
-fighting the source-string assertions. Each subsequent phase ships as an independent PR behind
-a green gate.
+Phases 1 and 0 complete. The server-side source-string assertions no longer stand in the way,
+so **Phase 2 (`config.mjs`)** is the recommended next step. Each subsequent phase ships as an
+independent PR behind a green gate.

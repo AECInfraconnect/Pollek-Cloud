@@ -109,18 +109,49 @@ async function api(baseUrl, pathName, { method = "GET", body, headers = {} } = {
 
 test("railway deployment config is production-ready", async () => {
   const railway = JSON.parse(await readFile("railway.json", "utf8"));
-  const server = await readFile("apps/api/server.mjs", "utf8");
   const envExample = await readFile(".env.example", "utf8");
 
   assert.equal(railway.deploy.startCommand, "npm start");
   assert.equal(railway.deploy.healthcheckPath, "/health");
   assert.equal(railway.deploy.restartPolicyType, "ON_FAILURE");
-  assert.match(server, /process.env.PORT/);
-  assert.match(server, /process.env.RAILWAY_PUBLIC_DOMAIN/);
-  assert.ok(server.includes('process.env.PORT ? "0.0.0.0"'));
   assert.match(envExample, /KEYCLOAK_BASE_URL=/);
   assert.match(envExample, /OIDC_ISSUER=/);
   assert.match(envExample, /COSMIAN_KMS_URL=/);
+});
+
+test("server honors PORT and RAILWAY_PUBLIC_DOMAIN for Railway deploys", async (t) => {
+  // Behavioral replacement for the old source-string pins on the port/publicUrl wiring: boot the
+  // real server with the Railway-provided env and prove it (a) binds the injected PORT on all
+  // interfaces (reachable via loopback) and (b) advertises the public domain in the URLs it
+  // hands out. Keeps working when this config moves out of server.mjs (modularization Phase 2).
+  const stateDir = await mkdtemp(path.join(tmpdir(), "pollek-cloud-test-"));
+  const port = 19000 + Math.floor(Math.random() * 3000);
+  const domain = "pollek-cloud-test.up.railway.app";
+  const child = spawn(process.execPath, ["apps/api/server.mjs"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      RAILWAY_PUBLIC_DOMAIN: domain,
+      POLLEK_CLOUD_STATE_FILE: path.join(stateDir, "state.json"),
+      POLLEK_LCP_WATCH_ENABLED: "false"
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+  t.after(async () => {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+    await rm(stateDir, { recursive: true, force: true });
+  });
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const health = await waitForJson(`${baseUrl}/health`);
+  assert.equal(health.response.status, 200, stderr);
+  const login = await waitForJson(`${baseUrl}/v1/auth/login?tenant_id=local`);
+  assert.equal(login.payload.redirect_uri, `https://${domain}/v1/auth/callback`);
 });
 
 test("contract discovery declares required cloud protocol features", async () => {
@@ -650,148 +681,154 @@ test("identity and billing migration keeps tenant ownership explicit", async () 
   assert.doesNotMatch(migration, /CREATE TABLE IF NOT EXISTS device_users/);
 });
 
-test("dev server exposes fleet inventory endpoints", async () => {
-  const server = await readFile("apps/api/server.mjs", "utf8");
+// Behavioral route coverage. Every entry is a real API route the console/DEK depend on; the
+// test boots the server and proves each one is dispatched by the API layer (handleApi) rather
+// than falling through to the static file handler. This replaces the old, brittle
+// assert.match(server, /pathname === .../) source-string pins, which broke whenever a handler
+// was moved between modules even though behavior was identical. Parameterized segments use a
+// "sample" placeholder; the assertion only checks that the route is dispatched, not the
+// business result (which the domain-specific tests below and elsewhere cover).
+const API_ROUTE_MANIFEST = [
+  // Fleet inventory + probes (exercises the fleet store and applyProbeToFleet).
+  ["GET", "/api/fleet"],
+  ["GET", "/api/fleet/objects/sample"],
+  ["POST", "/api/fleet/probe-visible"],
+  ["POST", "/api/lcp/probe"],
+  // Fleet operations.
+  ["POST", "/api/rollouts"],
+  ["POST", "/api/rollouts/sample/advance"],
+  ["POST", "/api/evidence/exports"],
+  ["GET", "/api/evidence/exports/latest"],
+  ["GET", "/api/policy/providers"],
+  ["POST", "/api/policy/assist"],
+  ["GET", "/api/policy/packs"],
+  ["POST", "/api/policy/drafts/sample/simulate"],
+  ["POST", "/api/policy/drafts/sample/approve"],
+  ["GET", "/api/policy/sandbox"],
+  ["GET", "/api/enrollments"],
+  ["GET", "/api/telemetry/query"],
+  ["POST", "/api/telemetry/sample"],
+  // Entity registry / discovery.
+  ["GET", "/api/entities"],
+  ["GET", "/api/entities/summary"],
+  ["GET", "/api/entities/health"],
+  ["POST", "/api/entities/dedupe"],
+  ["POST", "/api/entities/ingest"],
+  ["POST", "/api/entities/sync"],
+  ["GET", "/api/entities/watch"],
+  // LCP bridge (change batches, config/hot-reload dispatch, usage ledgers).
+  ["POST", "/api/lcp/change-batches"],
+  ["POST", "/v1/tenants/sample/lcp/change-batches"],
+  ["POST", "/api/lcp/config/dispatch"],
+  ["POST", "/api/lcp/hot-reload/dispatch"],
+  ["POST", "/api/lcp/usage-ledgers"],
+  ["POST", "/v1/tenants/sample/lcp/usage-ledgers"],
+  // Catalog / trust / services / integrations.
+  ["GET", "/api/adapters/catalog"],
+  ["GET", "/api/trust/scopes"],
+  ["GET", "/api/services/endpoints"],
+  ["GET", "/api/integrations/summary"],
+  // Authorization model.
+  ["GET", "/api/authz/model"],
+  ["GET", "/api/authz/tuples"],
+  ["POST", "/api/authz/check"],
+  ["GET", "/api/authz/decisions"],
+  // Identity, tenancy, sessions.
+  ["POST", "/v1/signup/tenant"],
+  ["POST", "/v1/invitations/accept"],
+  ["GET", "/v1/auth/login"],
+  ["GET", "/v1/auth/callback"],
+  ["POST", "/v1/auth/logout"],
+  ["GET", "/v1/auth/session"],
+  ["POST", "/v1/tenants/sample/invitations"],
+  ["GET", "/v1/tenants/sample/members"],
+  ["GET", "/v1/tenants/sample/identity-providers"],
+  ["GET", "/scim/v2/Users"],
+  // Billing + KMS.
+  ["GET", "/v1/tenants/sample/billing/usage"],
+  ["POST", "/v1/tenants/sample/billing/license/issue"],
+  ["POST", "/v1/billing/webhooks/sample"],
+  ["GET", "/v1/kms/health"],
+  // Contract hub, persistence, dev fixtures, contract artifacts.
+  ["GET", "/api/contract-hub/connection-updates"],
+  ["GET", "/api/contract-hub/drift"],
+  ["GET", "/api/persistence/status"],
+  ["POST", "/api/persistence/flush"],
+  ["POST", "/api/dev/seed-role-users"],
+  ["GET", "/contracts/openapi.json"],
+  // Event stream (SSE) + replay/snapshot.
+  ["GET", "/api/events", "sse"],
+  ["GET", "/api/events/replay"],
+  ["GET", "/api/hot-reload/stream", "sse"],
+  ["GET", "/api/hot-reload/events"],
+  // Compliance + policy bundle signing/verification/artifacts.
+  ["GET", "/api/compliance/policy-bundles"],
+  ["GET", "/api/compliance/score"],
+  ["POST", "/api/policy-bundles/sample/sign"],
+  ["GET", "/api/policy-bundles/sample/verify"],
+  ["GET", "/v1/policy-bundles/sample/artifact"],
+  ["GET", "/api/breakglass"],
+  // Alarms.
+  ["POST", "/api/alarms/sample/ack"],
+  // Registry pages, discovery pages, browser-extension, capability snapshot, device bundles.
+  ["POST", "/v1/tenants/sample/browser-extension/events"],
+  ["GET", "/v1/tenants/sample/registry/agents"],
+  ["GET", "/v1/tenants/sample/discovery/candidates"],
+  ["GET", "/v1/tenants/sample/capability-snapshot"],
+  ["POST", "/v1/tenants/sample/devices/sample/bundles/latest"]
+];
 
-  assert.match(server, /pathname === "\/api\/fleet"/);
-  assert.match(server, /\/api\\\/fleet\\\/objects/);
-  assert.match(server, /localControlPlanes/);
-  assert.match(server, /applyProbeToFleet/);
+// Probe a single route: return its status and content-type without consuming the body, so SSE
+// endpoints (which stream indefinitely) don't hang the test. fetch resolves as soon as headers
+// arrive; the AbortController then closes the connection.
+async function probeApiRoute(baseUrl, method, routePath) {
+  const controller = new AbortController();
+  try {
+    const response = await fetch(`${baseUrl}${routePath}`, {
+      method,
+      redirect: "manual",
+      signal: controller.signal,
+      headers: method === "GET" ? {} : { "content-type": "application/json" },
+      body: method === "GET" ? undefined : "{}"
+    });
+    return { status: response.status, contentType: response.headers.get("content-type") || "" };
+  } finally {
+    controller.abort();
+  }
+}
+
+test("every published API route is dispatched by the API layer, not the static fallback", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    for (const [method, routePath] of API_ROUTE_MANIFEST) {
+      const { status, contentType } = await probeApiRoute(baseUrl, method, routePath);
+      // Registered routes answer via sendJson (application/json) or an event stream. Unmatched
+      // API paths fall through to serveStatic, which returns a text/plain "not found" 404 — the
+      // signal that the route is missing regardless of where its handler lives.
+      const dispatched =
+        /application\/json/.test(contentType) || /text\/event-stream/.test(contentType);
+      assert.ok(
+        dispatched,
+        `${method} ${routePath} was not dispatched by handleApi (status ${status}, content-type "${contentType}")`
+      );
+    }
+  });
 });
 
-test("dev server exposes fleet operations endpoints", async () => {
-  const server = await readFile("apps/api/server.mjs", "utf8");
+test("unknown contract artifact returns a structured 404", async (t) => {
+  await withDevServer(t, async (baseUrl) => {
+    const { response, payload } = await api(baseUrl, "/contracts/does-not-exist.json");
+    assert.equal(response.status, 404);
+    assert.equal(payload.error, "contract_artifact_not_found");
+    assert.ok(payload.available_artifacts.includes("/contracts/openapi.json"));
+  });
+});
 
-  assert.match(server, /pathname === "\/api\/rollouts"/);
-  assert.match(server, /pathname === "\/api\/evidence\/exports"/);
-  assert.match(server, /pathname === "\/api\/policy\/providers"/);
-  assert.match(server, /pathname === "\/api\/policy\/assist"/);
-  assert.match(server, /pathname === "\/api\/enrollments"/);
-  assert.match(server, /pathname === "\/api\/telemetry\/query"/);
-  assert.match(server, /pathname === "\/api\/telemetry\/sample"/);
-  assert.match(server, /pathname === "\/api\/entities"/);
-  assert.match(server, /pathname === "\/api\/entities\/summary"/);
-  assert.match(server, /pathname === "\/api\/entities\/health"/);
-  assert.match(server, /pathname === "\/api\/entities\/dedupe"/);
-  assert.match(server, /pathname === "\/api\/entities\/ingest"/);
-  assert.match(server, /pathname === "\/api\/entities\/sync"/);
-  assert.match(server, /pathname === "\/api\/entities\/watch"/);
-  assert.match(server, /pathname === "\/api\/lcp\/change-batches"/);
-  assert.match(server, /\/v1\\\/tenants\\\/\(\[\^\/\]\+\)\\\/lcp\\\/change-batches/);
-  assert.match(server, /pathname === "\/api\/lcp\/config\/dispatch"/);
-  assert.match(server, /pathname === "\/api\/lcp\/hot-reload\/dispatch"/);
-  assert.match(server, /pathname === "\/api\/adapters\/catalog"/);
-  assert.match(server, /pathname === "\/api\/trust\/scopes"/);
-  assert.match(server, /pathname === "\/api\/services\/endpoints"/);
-  assert.match(server, /pathname === "\/api\/authz\/model"/);
-  assert.match(server, /pathname === "\/api\/authz\/tuples"/);
-  assert.match(server, /pathname === "\/api\/authz\/check"/);
-  assert.match(server, /pathname === "\/api\/authz\/decisions"/);
-  assert.match(server, /pathname === "\/v1\/signup\/tenant"/);
-  assert.match(server, /pathname === "\/v1\/invitations\/accept"/);
-  assert.match(server, /pathname === "\/v1\/auth\/login"/);
-  assert.match(server, /pathname === "\/v1\/auth\/callback"/);
-  assert.match(server, /pathname === "\/v1\/auth\/logout"/);
-  assert.match(server, /pathname === "\/v1\/auth\/session"/);
-  assert.match(server, /\/v1\\\/tenants\\\/\(\[\^\/\]\+\)\\\/invitations/);
-  assert.match(server, /\/v1\\\/tenants\\\/\(\[\^\/\]\+\)\\\/members/);
-  assert.match(server, /\/v1\\\/tenants\\\/\(\[\^\/\]\+\)\\\/identity-providers/);
-  assert.match(server, /pathname === "\/scim\/v2\/Users"/);
-  assert.match(server, /\/v1\\\/tenants\\\/\(\[\^\/\]\+\)\\\/billing\\\/usage/);
-  assert.match(server, /\/v1\\\/tenants\\\/\(\[\^\/\]\+\)\\\/billing\\\/license\\\/issue/);
-  assert.match(server, /\/v1\\\/billing\\\/webhooks\\\/\(\[\^\/\]\+\)/);
-  assert.match(server, /pathname === "\/v1\/kms\/health"/);
-  assert.match(server, /pathname === "\/api\/contract-hub\/connection-updates"/);
-  assert.match(server, /pathname === "\/api\/contract-hub\/drift"/);
-  assert.match(server, /pathname === "\/api\/persistence\/status"/);
-  assert.match(server, /pathname === "\/api\/persistence\/flush"/);
-  assert.match(server, /pathname === "\/api\/dev\/seed-role-users"/);
-  assert.match(server, /pathname === "\/contracts\/openapi\.json"/);
-  assert.match(server, /contractArtifactPaths/);
-  assert.match(server, /contract_artifact_not_found/);
-  assert.match(server, /pathname === "\/api\/events"/);
-  assert.match(server, /pathname === "\/api\/events\/replay"/);
-  assert.match(server, /pathname === "\/api\/hot-reload\/stream"/);
-  assert.match(server, /pathname === "\/api\/policy\/sandbox"/);
-  assert.match(server, /pathname === "\/api\/compliance\/policy-bundles"/);
-  assert.match(server, /pathname === "\/api\/compliance\/score"/);
-  assert.match(server, /\/api\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/sign/);
-  assert.match(server, /\/api\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/verify/);
-  assert.match(server, /\/v1\\\/policy-bundles\\\/\(\[\^\/\]\+\)\\\/artifact/);
-  assert.match(server, /pathname === "\/api\/breakglass"/);
-  assert.match(server, /pathname === "\/api\/hot-reload\/events"/);
-  assert.match(server, /function openEventStream/);
-  assert.match(server, /function replayStreamEntries/);
-  assert.match(server, /last-event-id/);
-  assert.match(server, /broadcastSse\("hot_reload\.event"/);
-  assert.match(server, /contractDriftReport/);
-  assert.match(server, /function runtimeStateSnapshot/);
-  assert.match(server, /async function loadRuntimeState/);
-  assert.match(server, /async function persistRuntimeState/);
-  assert.match(server, /function securityPostureStatus/);
-  assert.match(server, /function createControlEnvelope/);
-  assert.match(server, /function signPolicyBundle/);
-  assert.match(server, /function verifyPolicyBundle/);
-  assert.match(server, /function policyBundleArtifact/);
-  assert.match(server, /function authorizationModel/);
-  assert.match(server, /function createAuthorizationTuple/);
-  assert.match(server, /function checkAuthorization/);
-  assert.match(server, /function createTenantSignup/);
-  assert.match(server, /function createInvitation/);
-  assert.match(server, /function acceptInvitation/);
-  assert.match(server, /function tokenHash/);
-  assert.match(server, /function upsertIdentityProvider/);
-  assert.match(server, /function billingUsageSnapshot/);
-  assert.match(server, /function invoicePreview/);
-  assert.match(server, /function ingestLcpUsageLedger/);
-  assert.match(server, /function validateLcpUsageLedger/);
-  assert.match(server, /\/api\/lcp\/usage-ledgers/);
-  assert.match(server, /lcp_usage_ledger\.ingested/);
-  assert.match(server, /function issueOfflineLicense/);
-  assert.match(server, /function kmsHealth/);
-  assert.match(server, /function ensureRoleTestUsers/);
-  assert.match(server, /function setTenantMemberRoles/);
-  assert.match(server, /session_tokens_hashed_at_rest/);
-  assert.match(server, /payment_tokens_hashed_at_rest/);
-  assert.match(server, /function aiPolicyProviders/);
-  assert.match(server, /function redactPromptText/);
-  assert.match(server, /function buildPolicyCitations/);
-  assert.match(server, /function createPolicyFixtures/);
-  // Real ed25519 signing/verification (formatting-tolerant: Prettier may wrap these calls).
-  assert.match(server, /crypto\s*\.\s*sign\(/);
-  assert.match(server, /bundleSigningKeyPair\.privateKey/);
-  // Bundle verification is real ed25519: pinned-key path plus the signer key-set (rotation
-  // overlap) path delegated to signer.verifyAgainstKeys.
-  assert.match(server, /crypto\.verify\(/);
-  assert.match(server, /signature\.public_key_pem/);
-  assert.match(server, /signer\.verifyAgainstKeys\(/);
+test("server signing path contains no placeholder shortcuts", async () => {
+  // Real ed25519 signing/verification is proven behaviorally by the bundle signature tests
+  // below; this is a cheap, formatting-independent guard that a placeholder/stub never silently
+  // regresses the signing path.
+  const server = await readFile("apps/api/server.mjs", "utf8");
   assert.doesNotMatch(server, /dev-placeholder/);
-  assert.match(server, /async function pollLcpEntityWatch/);
-  assert.match(server, /function ingestLcpChangeBatch/);
-  assert.match(server, /function changeCursorFor/);
-  assert.match(server, /lcp_outbox_delta_push/);
-  assert.match(server, /async function dispatchControlToLcp/);
-  assert.match(server, /function allowedControlPaths/);
-  assert.match(server, /pullLocalEntitySnapshot/);
-  assert.match(server, /pullLocalConfigurationSnapshot/);
-  assert.match(server, /ingestLocalEntitySnapshot/);
-  assert.match(server, /\/api\\\/alarms\\\/\(\[\^\/\]\+\)\\\/ack/);
-  assert.match(server, /\/api\\\/policy\\\/drafts\\\/\(\[\^\/\]\+\)\\\/simulate/);
-  assert.match(server, /\/api\\\/policy\\\/drafts\\\/\(\[\^\/\]\+\)\\\/approve/);
-  assert.match(server, /\/api\\\/rollouts\\\/\(\[\^\/\]\+\)\\\/\(advance\|pause\|resume\|cancel\)/);
-  assert.match(server, /pathname === "\/api\/policy\/packs"/);
-  assert.match(server, /pathname === "\/api\/integrations\/summary"/);
-  assert.match(server, /const telemetryIngestKinds = new Map/);
-  assert.match(server, /function recordTelemetryPayload/);
-  assert.match(server, /function cloudCapabilitySnapshot/);
-  assert.match(server, /function registryPage/);
-  assert.match(server, /function discoveryPage/);
-  assert.match(server, /function latestBundleEnvelope/);
-  assert.match(server, /browser-extension\\\/events/);
-  assert.match(server, /registry\\\/\(agents\|entities\|relationships\|resources\|tools\)/);
-  assert.match(server, /discovery\\\/\(candidates\|entities\)/);
-  assert.match(server, /capability-snapshot-v2/);
-  assert.match(server, /devices\\\/\(\[\^\/\]\+\)\\\/bundles\\\/latest/);
 });
 
 test("api foundation enforces security headers, bounded responses, and body limits", async (t) => {
