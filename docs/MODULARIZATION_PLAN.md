@@ -74,10 +74,14 @@ feature extraction therefore depends on first exposing those as importable singl
     *mutation*) stayed in `server.mjs` because it calls `addTask`, which in turn calls the
     still-in-server SSE broadcaster — extracting it would need a cycle; it just imports
     `revocationListDocument` back from `trust.mjs`.
-  - Remaining slices (only the cohesive, lower-coupling ones are planned; the tightly-woven
+  - `reports.mjs` **(done)** — cost & token usage reporting: the full aggregation pipeline
+    (range filtering, per-dimension rollups for device/user/agent/tenant/model/provider, CSV
+    export). The block turned out fully self-contained except the pure `normalizeOsFamily`, which
+    was promoted to `lib/util.mjs` (its proper home; used by three other call sites too) with a
+    unit test.
+  - Remaining (only cohesive, lower-coupling slices are planned; the tightly-woven
     identity/billing/entities trio is intentionally **not** force-split — see Scope note):
-    `reports.mjs` (cost/token) next, then re-evaluate `telemetry.mjs` and the Phase-5 router
-    split.
+    re-evaluate `telemetry.mjs` and the Phase-5 router split.
 - **Phase 5:** split the `handleApi` router into per-domain route registrars
   (`routes/*.mjs`) that `server.mjs` composes; keep a thin dispatch in `server.mjs`.
 - **Phase 6 (front-end):** split `app.js` into ES modules under `apps/web/static/js/`
@@ -87,8 +91,8 @@ feature extraction therefore depends on first exposing those as importable singl
 
 ## Status
 
-Phases 1, 0, 2, 3 complete; Phase 4 underway (`persistence.mjs`, `audit.mjs`, `trust.mjs` done).
-`server.mjs` is down from ~10.3k to ~8.7k lines with a clean one-way module seam
+Phases 1, 0, 2, 3 complete; Phase 4 underway (`persistence.mjs`, `audit.mjs`, `trust.mjs`,
+`reports.mjs` done). `server.mjs` is down from ~10.3k to ~8.3k lines with a clean one-way seam
 (`util` ← everything; `config`/`state` ← features; `persistence`/`audit`/`trust` ← features;
 `db`/`signer`/`keycloak` pre-existing). Next planned slice: `reports.mjs`, then re-evaluate the
 Phase-5 router split. Each slice ships as an independent PR behind a green gate.
