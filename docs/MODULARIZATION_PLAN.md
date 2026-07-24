@@ -67,11 +67,17 @@ feature extraction therefore depends on first exposing those as importable singl
     audit log (`recordAudit`, internal `safeAuditPayload`). Extracted before the bigger domain
     slices because nearly all of them call `recordAudit`; giving audit its own module keeps the
     dependency direction one-way (`trust`/`identity`/`billing` → `audit`) and avoids cycles.
-  - Remaining slices: `trust.mjs` (signing, trust-policy/allowlist/revocation,
-    provenance/SBOM/attestation), `telemetry.mjs` (ingest + read views), `reports.mjs`
-    (cost/token), `entities.mjs` (registry/discovery/entities), `policy.mjs`
-    (drafts/sandbox/compliance/bundles), `identity.mjs` (signup/session/SCIM/IdP), `billing.mjs`
-    (subscriptions/usage/invoices/licenses).
+  - `trust.mjs` **(done)** — the ed25519 signing identity (`bundleSigningKeyPair`) plus every
+    signed document the DEK trust gate consumes: trust-policy, signer-allowlist, revocation list,
+    and per-bundle provenance / SBOM / attestation / manifest / artifact with sign + verify
+    (rotation-overlap + approval delegated to `signer.mjs`). `addRevocations` (the revocation
+    *mutation*) stayed in `server.mjs` because it calls `addTask`, which in turn calls the
+    still-in-server SSE broadcaster — extracting it would need a cycle; it just imports
+    `revocationListDocument` back from `trust.mjs`.
+  - Remaining slices (only the cohesive, lower-coupling ones are planned; the tightly-woven
+    identity/billing/entities trio is intentionally **not** force-split — see Scope note):
+    `reports.mjs` (cost/token) next, then re-evaluate `telemetry.mjs` and the Phase-5 router
+    split.
 - **Phase 5:** split the `handleApi` router into per-domain route registrars
   (`routes/*.mjs`) that `server.mjs` composes; keep a thin dispatch in `server.mjs`.
 - **Phase 6 (front-end):** split `app.js` into ES modules under `apps/web/static/js/`
@@ -81,5 +87,17 @@ feature extraction therefore depends on first exposing those as importable singl
 
 ## Status
 
-Phases 1, 0, 2, 3 complete; Phase 4 underway (`persistence.mjs`, `audit.mjs` done). Next Phase-4
-slice: `trust.mjs`. Each slice ships as an independent PR behind a green gate.
+Phases 1, 0, 2, 3 complete; Phase 4 underway (`persistence.mjs`, `audit.mjs`, `trust.mjs` done).
+`server.mjs` is down from ~10.3k to ~8.7k lines with a clean one-way module seam
+(`util` ← everything; `config`/`state` ← features; `persistence`/`audit`/`trust` ← features;
+`db`/`signer`/`keycloak` pre-existing). Next planned slice: `reports.mjs`, then re-evaluate the
+Phase-5 router split. Each slice ships as an independent PR behind a green gate.
+
+## Scope note (deliberate stopping discipline)
+
+Not every named module will be force-extracted. The infrastructure/cross-cutting seam is done and
+is where the readability payoff is highest. The `identity` / `billing` / `entities` domain code is
+tightly interwoven (signup touches audit + billing + sessions; enroll touches fleet + entities +
+telemetry), so splitting it mostly relocates coupling across files without improving boundaries,
+at rising regression risk. We extract only cohesive, lower-coupling slices and stop when
+`server.mjs` reads as "core + thin router" rather than chasing a line-count target.
