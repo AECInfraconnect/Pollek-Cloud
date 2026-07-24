@@ -1,0 +1,7 @@
+{
+  "name": "@pollek-cloud/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pollek Cloud enterprise console (static HTML/CSS/JS served by @pollek-cloud/api).",
+  "license": "UNLICENSED"
+}
