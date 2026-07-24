@@ -12,7 +12,8 @@ import {
   nowIso,
   daysFromNow,
   tenantRecordId,
-  issueOpaqueToken
+  issueOpaqueToken,
+  normalizeOsFamily
 } from "../apps/api/lib/util.mjs";
 
 test("httpError carries statusCode and code", () => {
@@ -82,4 +83,15 @@ test("issueOpaqueToken is high-entropy and prefixed", () => {
   const a = issueOpaqueToken("pollek_session");
   assert.match(a, /^pollek_session_[A-Za-z0-9_-]{43}$/);
   assert.notEqual(a, issueOpaqueToken("pollek_session"));
+});
+
+test("normalizeOsFamily maps common OS strings and falls back to unknown", () => {
+  assert.equal(normalizeOsFamily("Windows 11"), "windows");
+  assert.equal(normalizeOsFamily("win32"), "windows");
+  assert.equal(normalizeOsFamily("darwin"), "macos");
+  assert.equal(normalizeOsFamily("macOS 14"), "macos");
+  assert.equal(normalizeOsFamily("Ubuntu 22.04"), "linux");
+  assert.equal(normalizeOsFamily("linux"), "linux");
+  assert.equal(normalizeOsFamily("solaris"), "unknown");
+  assert.equal(normalizeOsFamily(), "unknown");
 });

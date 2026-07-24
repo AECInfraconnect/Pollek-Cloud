@@ -75,3 +75,20 @@ export function tenantRecordId(slug) {
 export function issueOpaqueToken(prefix = "tok") {
   return `${prefix}_${crypto.randomBytes(32).toString("base64url")}`;
 }
+
+/** Normalize an OS string to one of "windows" | "macos" | "linux" | "unknown". */
+export function normalizeOsFamily(value = "unknown") {
+  const normalized = String(value || "unknown")
+    .trim()
+    .toLowerCase();
+  if (normalized.startsWith("win")) return "windows";
+  if (normalized === "darwin" || normalized.startsWith("mac")) return "macos";
+  if (
+    normalized.includes("linux") ||
+    normalized.includes("ubuntu") ||
+    normalized.includes("debian") ||
+    normalized.includes("fedora")
+  )
+    return "linux";
+  return ["windows", "macos", "linux"].includes(normalized) ? normalized : "unknown";
+}
