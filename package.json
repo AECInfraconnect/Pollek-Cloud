@@ -3,20 +3,40 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pollek Cloud commercial control-plane foundation for SaaS and private cloud deployments.",
+  "license": "UNLICENSED",
+  "author": "AEC Infraconnect",
   "type": "module",
+  "homepage": "https://github.com/AECInfraconnect/Pollek-Cloud#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AECInfraconnect/Pollek-Cloud.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AECInfraconnect/Pollek-Cloud/issues"
+  },
+  "keywords": [
+    "pollek",
+    "control-plane",
+    "ai-governance",
+    "policy",
+    "telemetry",
+    "multi-tenant",
+    "contract-hub"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "dev": "node apps/api/server.mjs",
+    "start": "node apps/api/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:lcp": "node scripts/test-lcp-connection.mjs",
+    "smoke:sync": "node scripts/smoke-sync.mjs",
     "contracts:openapi": "node scripts/generate-openapi.mjs",
     "contracts:sdk": "node scripts/generate-sdk.mjs",
     "contracts:check": "node scripts/check-contract-drift.mjs",
-    "dev": "node apps/api/server.mjs",
-    "start": "node apps/api/server.mjs",
-    "test:lcp": "node scripts/test-lcp-connection.mjs",
-    "smoke:sync": "node scripts/smoke-sync.mjs",
-    "audit:foundation": "node --check apps/api/server.mjs && node --check apps/api/db.mjs && node --check apps/api/keycloak.mjs && node --check apps/api/signer.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test",
-    "test": "node --test test/*.test.mjs"
-  },
-  "engines": {
-    "node": ">=20"
+    "contracts:generate": "npm run contracts:openapi && npm run contracts:sdk",
+    "audit:foundation": "node --check apps/api/server.mjs && node --check apps/api/db.mjs && node --check apps/api/keycloak.mjs && node --check apps/api/signer.mjs && node --check apps/web/static/app.js && npm run contracts:check && npm test"
   },
   "dependencies": {
     "pg": "^8.22.0"
